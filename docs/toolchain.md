@@ -15,6 +15,12 @@ Damit ist die Schleife aus Generieren, Prüfen und Korrigieren geschlossen.
 
 > ⚠️ Die Dokumentation von `kicad-sch-api` nennt KiCad 7 und 8. Ob KiCad 9 unterstützt wird, ist vor der Nutzung zu verifizieren. Rückfallebene ist `kicad-skip`, das die S-Expressions direkt manipuliert, oder eine parallele KiCad-8-Installation.
 
+### Recherchestand 27.08.2026 (Backlog T2)
+
+- `kicad-sch-api`, aktuelle Version **0.5.6** (PyPI, 19.11.2025, Python ≥ 3.10). README und Doku nennen weiterhin ausdrücklich nur „KiCAD 7/8"; eine KiCad-9-Zusage gibt es nicht. Das Format der `.kicad_sch` ist zwischen den Versionen weitgehend abwärtskompatibel, ein sauberer Lauf mit KiCad 9 ist damit wahrscheinlich, aber nicht zugesichert.
+- Belastbar ist nur ein echter Schreib-/Lesetest. `tools/setup.sh` führt ihn am Ende automatisch aus: Es erzeugt mit `kicad-sch-api` eine minimale Schaltung und lässt `kicad-cli sch erc` (KiCad 9) sie einlesen. Meldet KiCad ein Formatproblem, setzt das Skript das Schaltplan-Backend auf `kicad-skip` und weist darauf hin.
+- `kicad-skip` (psychogenic/kicad-skip) ist auf „KiCAD 7+" ausgelegt und wird von `setup.sh` immer mitinstalliert, damit der Umstieg keinen zweiten Lauf braucht.
+
 ## 2. Installation
 
 ```bash
