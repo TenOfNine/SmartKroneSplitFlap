@@ -1,0 +1,22 @@
+# Urheberrechtlich geschuetzte Herstellerunterlagen - niemals versionieren
+reference/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# PlatformIO
+.pio/
+
+# KiCad
+*-backups/
+*.kicad_prl
+fp-info-cache
+*.bak
+_autosave-*
+*.net
+gerber/
+
+# Sonstiges
+.DS_Store
