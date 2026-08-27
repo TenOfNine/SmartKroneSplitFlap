@@ -1,0 +1,15 @@
+# Zeilenenden reproduzierbar halten. Die Zielumgebung ist eine Linux-VM,
+# Shell-Skripte und von kicad-sch-api erzeugte Dateien muessen LF behalten.
+* text=auto eol=lf
+
+# Bilder und PDFs sind binaer.
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.pdf  binary
+
+# KiCad-Dateien sind Text mit LF, formattreu zur nativen Ausgabe.
+*.kicad_sch  text eol=lf
+*.kicad_pcb  text eol=lf
+*.kicad_pro  text eol=lf
+*.net        text eol=lf
