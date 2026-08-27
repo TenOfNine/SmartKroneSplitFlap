@@ -4,7 +4,7 @@
 |---|---|
 | Zweck | Gegenprüfung der Schaltplan-Symbolpins gegen die Datenblätter, vor dem Layout |
 | Bezug | CLAUDE.md, harte Regel 5 · Backlog T3 |
-| Status | **wartet auf menschliche Bestätigung** |
+| Status | **freigegeben** (Betreiber, 27.08.2026, im Chat) |
 | Datum | 27.08.2026 |
 
 > Ein erfolgreicher ERC-Lauf beweist nicht, dass eine Pinbelegung stimmt. ERC läuft
@@ -142,7 +142,7 @@ Kein Pin wird dabei umnummeriert oder umbenannt.
 
 | Baustein | Symbol | Ergebnis | Bestätigt von | Datum |
 |---|---|---|---|---|
-| ATtiny1616-SNR | `ATtiny1616-S` | Pinbelegung deckungsgleich mit DS40002204A §4.2 | _offen_ | |
-| TP8485E-SR | `MAX3485` (als `TP8485E-SR`) | Pinbelegung deckungsgleich mit TP8485E Rev. D | _offen_ | |
+| ATtiny1616-SNR | `ATtiny1616-S` | Pinbelegung deckungsgleich mit DS40002204A §4.2 | Betreiber (phi.hoffmann@hotmail.de), im Chat | 27.08.2026 |
+| TP8485E-SR | `MAX3485` (als `TP8485E-SR`) | Pinbelegung deckungsgleich mit TP8485E Rev. D | Betreiber (phi.hoffmann@hotmail.de), im Chat | 27.08.2026 |
 
-Nach Bestätigung wird diese Datei mit Namen und Datum ergänzt und T3 gilt als erledigt.
+T3 gilt damit als erledigt. Die Symbolablage nach Abschnitt 4 wird in T4 umgesetzt.
