@@ -33,8 +33,11 @@ Nächste sinnvolle Schritte:
 - Messungen **O-2, O-5, O-6** an der Anzeigenplatine (Betreiber). Ergebnisse nach
   `docs/messprotokolle/`, dann in Schaltplan und Firmware-Parameter einarbeiten.
 - Master-Firmware: **Selbsttest** (7.3) über eine volle Umdrehung je Modul mit
-  Timing-Auswertung — bislang nur Homing-Broadcast.
-- Inbetriebnahme nach `docs/spezifikation.md` Kapitel 10 mit `tools/busctl.py`.
+  Timing-Auswertung — bislang nur Homing-Broadcast. Und der **Verifikationslauf
+  über `GET_UID`** (4.5.4 / A-13): `busmaster` hat noch kein GET_UID-Kommando,
+  die Seriennummern-Prüfung fehlt.
+- Inbetriebnahme nach `docs/spezifikation.md` Kapitel 10 mit `tools/busctl.py`
+  (dort ist `uid <addr>` schon vorhanden).
 
 ## Umgebung
 

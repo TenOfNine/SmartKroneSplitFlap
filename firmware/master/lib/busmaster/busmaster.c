@@ -148,8 +148,12 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
         return;
     }
 
-    if (bm->pending_cmd == CMD_ENUM_ASSIGN && f->cmd == CMD_ENUM_ASSIGN) {
-        /* ACK der Karte, die die Adresse uebernommen hat. */
+    /* Bei /RE fest auf GND liest der Master sein eigenes Sendeecho zurueck.
+     * Antworten von der eigenen Anfrage unterscheiden sich an der Payload-Laenge:
+     * das ENUM_ASSIGN-ACK ist leer (unser Kommando traegt 1 Byte), die
+     * Statusantwort ist 8 Byte lang (unser GET_STATUS ist leer). */
+    if (bm->pending_cmd == CMD_ENUM_ASSIGN && f->cmd == CMD_ENUM_ASSIGN &&
+        f->payload_len == 0) {
         if (bm->enum_next_addr - 1u < BUSMASTER_MAX_MODULES) {
             bm->mod[bm->enum_next_addr - 1u].online = true;
         }
@@ -163,12 +167,16 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
         return;
     }
 
-    if (f->cmd == bm->pending_cmd && f->addr == bm->pending_addr) {
-        if (f->cmd == CMD_GET_STATUS) {
-            apply_status(bm, f->addr, f->payload, f->payload_len);
-        }
-        bm->awaiting = false;
+    if (f->cmd != bm->pending_cmd || f->addr != bm->pending_addr) {
+        return;
     }
+    if (f->cmd == CMD_GET_STATUS) {
+        if (f->payload_len < 8) {
+            return;  /* eigenes Echo, keine Antwort */
+        }
+        apply_status(bm, f->addr, f->payload, f->payload_len);
+    }
+    bm->awaiting = false;
 }
 
 /* --- Zeitfortschritt ------------------------------------------- */
