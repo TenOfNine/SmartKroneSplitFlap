@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.4 |
+| Version | 0.5 |
 | Datum | 28.08.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11 |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -163,9 +163,9 @@ Verworfene Alternativen: CH32V003 (3,3 V, Pegelwandlung nötig, Vorteil erst ab 
 
 | Pin | Port | Funktion |
 |---|---|---|
-| 9 | PB2 | UART TXD → RS-485-Treiber |
-| 10 | PB1 | UART RXD ← RS-485-Treiber |
-| 8 | PB3 | XDIR → DE + /RE |
+| 9 | PB2 | USART0 TXD → RS-485-Treiber DI |
+| 8 | PB3 | USART0 RXD ← RS-485-Treiber RO |
+| 11 | PB0 | USART0 XDIR → DE (byte-genaue Senderichtung) |
 | 2 | PA4 | Blatt-Impuls, TCB0 Input Capture |
 | 3 | PA5 | Leerbild-Impuls, Port-Interrupt |
 | 4 | PA6 | Nullimpuls, nur Messpunkt, Firmware wertet nicht aus |
@@ -174,9 +174,13 @@ Verworfene Alternativen: CH32V003 (3,3 V, Pegelwandlung nötig, Vorteil erst ab 
 | 18 | PA2 | CHAIN_OUT |
 | 19 | PA3 | Status-LED |
 | 6, 7 | PB5, PB4 | Reserve, herausgeführt auf Testpad TP1 bzw. TP2 |
-| 11–15 | PB0, PC0…PC3 | Reserve, im Schaltplan v0.2 unbeschaltet (kein Pad), siehe `docs/pruefpunkte-t4.md` P-1 |
+| 10, 12–15 | PB1, PC0…PC3 | Reserve, im Schaltplan unbeschaltet (kein Pad). PB1 ist USART0 XCK, im Async-Betrieb ungenutzt. Siehe `docs/pruefpunkte-t4.md` P-1 und `docs/pruefpunkte-t7.md` P-3. |
 | 16 | PA0 | UPDI |
 | 1, 20 | VDD, GND | Versorgung |
+
+USART0 liegt auf der Standard-MUX-Position (`PORTMUX.USART0 = DEFAULT`).
+Die alternative Position (PA1…PA4) ist durch CHAIN, Status-LED und den
+Blattimpuls belegt. Belegt über `pruefpunkte-t7.md` P-3.
 
 **Hinweis zur Beschaltung des Bustreibers:** XDIR steuert ausschließlich DE. Der Empfängerfreigabeeingang /RE wird fest auf GND gelegt, der Empfänger ist also dauerhaft aktiv. Die Karte liest damit ihre eigene Sendung zurück. Die Firmware verwirft dieses Echo im Normalbetrieb und nutzt es zur Kollisionserkennung, siehe 4.5.
 
@@ -712,3 +716,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.1 | 27.08.2026 | Erstfassung. Architektur, Modul-CPU, Busprotokoll, Firmware-Konzept, Zentralsteuerung, Netzteil, Testplan. Offene Punkte O-1 bis O-7 markiert. |
 | 0.3 | 27.08.2026 | Steckerbelegung aus der Originaldokumentation vollständig übernommen: gemeinsame Masse (Pin 1, 3), gemeinsame Versorgung (Pin 5, 6), 42 V~ an Pin 2 und 4, Triac-Eingang an Pin 9, Impulse an Pin 8 und 10 mit fallender auswertender Flanke. Getrennte Potenzialbereiche entfallen, damit auch Optokoppler und isolierter DC/DC-Wandler. Kapitel 4.4 neu gefasst mit Transistorschalter und wählbarer Treiberspannung. Abschnitt 8.4 zur Potenzialfreiheit der Motorspannung ergänzt. O-1, O-3 und O-4 abgeschlossen, O-2 neu formuliert. |
 | 0.4 | 28.08.2026 | Kapitel 4.2: Reserve-Pins präzisiert. Nur PB5/PB4 liegen auf Testpads (TP1/TP2); PB0 und PC0…PC3 bleiben im Schaltplan v0.2 unbeschaltet. Auflösung des Widerspruchs zwischen Schaltplan 6.3 und 6.4, dokumentiert in `docs/pruefpunkte-t4.md`. Zur zweiten Prüfung durch den Betreiber offen. |
+| 0.5 | 28.08.2026 | Kapitel 4.2: RS-485-Pins auf die tatsächliche USART0-Belegung des ATtiny1616 korrigiert (`docs/pruefpunkte-t7.md` P-3, vom Betreiber freigegeben). RXD an PB3 (Pin 8), TXD an PB2 (Pin 9), XDIR an PB0 (Pin 11). PB1 (USART0 XCK) wird Reserve. P-1 und P-2 aus `pruefpunkte-t4.md` als freigegeben vermerkt. |

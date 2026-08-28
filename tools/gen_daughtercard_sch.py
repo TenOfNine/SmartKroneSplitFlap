@@ -169,9 +169,10 @@ NETS: dict[str, list[tuple[str, str]]] = {
     "RS485_A": [("U2", "6"), ("J2", "3"), ("J3", "3"), ("JP3", "1")],
     "RS485_B": [("U2", "7"), ("J2", "5"), ("J3", "5"), ("R16", "2")],
     "RS485_TERM": [("JP3", "2"), ("R16", "1")],
-    "RO": [("U2", "1"), ("U1", "10")],
+    # USART0 auf der Standard-MUX-Position (P-3): RXD=PB3, TXD=PB2, XDIR=PB0.
+    "RO": [("U2", "1"), ("U1", "8")],
     "DI": [("U2", "4"), ("U1", "9")],
-    "DE": [("U2", "3"), ("U1", "8")],
+    "DE": [("U2", "3"), ("U1", "11")],
     "PULSE_BLATT_RAW": [("J1", "10"), ("R1", "2"), ("R2", "1")],
     "PULSE_BLATT": [("R2", "2"), ("C4", "1"), ("D1", "3"), ("U1", "2")],
     "PULSE_LEER_RAW": [("J1", "8"), ("R3", "2"), ("R4", "1")],
@@ -218,8 +219,9 @@ BLOCKS: list[tuple[str, float, float, int, float, float, list[str]]] = [
     ("Testpunkte", 310, 300, 7, 32, 50, ["TP1", "TP2", "TP3", "TP4", "TP5", "TP6", "TP7"]),
 ]
 
-# Bewusst offene Reserve-Pins von U1 (docs/pruefpunkte-t4.md P-1).
-NO_CONNECT_PINS = [("U1", "11"), ("U1", "12"), ("U1", "13"), ("U1", "14"), ("U1", "15")]
+# Bewusst offene Reserve-Pins von U1 (docs/pruefpunkte-t4.md P-1, pruefpunkte-t7.md P-3).
+# PB1 (Pin 10) ist frei, seit DE auf PB0 liegt; PB0 (Pin 11) traegt jetzt DE.
+NO_CONNECT_PINS = [("U1", "10"), ("U1", "12"), ("U1", "13"), ("U1", "14"), ("U1", "15")]
 
 
 def check_netlist_consistency() -> list[str]:

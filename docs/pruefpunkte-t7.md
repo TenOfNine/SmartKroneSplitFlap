@@ -4,7 +4,7 @@
 |---|---|
 | Zweck | Beim Beginn von T7 (Modul-Firmware) ist ein Widerspruch zwischen der Pinbelegung in `spezifikation.md` 4.2 / `schaltplan-daughtercard.md` 6.3 und der tatsächlichen USART0-Verdrahtung des ATtiny1616 aufgefallen. |
 | Bezug | CLAUDE.md Regel 5 (Pinbelegung gegen Datenblatt, menschliche Freigabe) · Backlog T7 |
-| Status | **offen** — blockiert die USART-Anbindung in T7 |
+| Status | **P-3 freigegeben** (Betreiber, im Chat, 28.08.2026), Schaltplan v0.3 / Spez. v0.5 angepasst |
 | Datum | 28.08.2026 |
 
 ---
@@ -61,13 +61,17 @@ unbeschalteten Reserve-Pin, symmetrisch zur bisherigen Behandlung von PB0.
 - `docs/spezifikation.md` 4.2, Anhang D → v0.5
 - `docs/symbolpruefung.md` — NL-Spalte für Pin 8/10/11 (die Datenblattprüfung
   VDD/GND/Portnamen bleibt unberührt)
-- `docs/layout-daughtercard.md` — DE liegt jetzt an PB0 (Pin 11) statt PB3
 
 ### Freigabe
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| _(offen)_ | | |
+| USART0 Standardposition: RO→PB3 (Pin 8), DE→PB0 (Pin 11), PB1 Reserve — **freigegeben** | Betreiber (phi.hoffmann@hotmail.de), im Chat | 28.08.2026 |
+
+Umgesetzt am 28.08.2026: `gen_daughtercard_sch.py` (Netze RO/DE, NO_CONNECT_PINS),
+Schaltplan neu erzeugt (ERC 0/0), `schaltplan-daughtercard.md` v0.3,
+`spezifikation.md` v0.5, `symbolpruefung.md`. `layout-daughtercard.md` benötigte
+keine Änderung — dort ist nur von Zonen die Rede, nicht von einzelnen U1-Pins.
 
 ---
 

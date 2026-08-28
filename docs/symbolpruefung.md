@@ -48,14 +48,14 @@ also das in der Spezifikation gewählte `ATtiny1616-SNR`. Das Schwestersymbol
 | 3  | PA5              | `PA5`            | bidirectional  | PULSE_LEER       | ✅ |
 | 4  | PA6              | `PA6`            | bidirectional  | PULSE_NULL       | ✅ |
 | 5  | PA7              | `PA7`            | bidirectional  | TRIAC_DRV        | ✅ |
-| 6  | PB5              | `PB5`            | bidirectional  | TP1 (Reserve)    | ✅ |
-| 7  | PB4              | `PB4`            | bidirectional  | TP2 (Reserve)    | ✅ |
-| 8  | TOSC1/PB3        | `PB3`            | bidirectional  | DE              | ✅ Pin-Nr. identisch, TOSC1 ist nur Alt-Funktion |
-| 9  | TOSC2/PB2        | `PB2`            | bidirectional  | DI              | ✅ |
-| 10 | PB1              | `PB1`            | bidirectional  | RO              | ✅ |
-| 11 | PB0              | `PB0`            | bidirectional  | TP3 (Reserve)    | ✅ |
-| 12 | PC0              | `PC0`            | bidirectional  | TP4 (Reserve)    | ✅ |
-| 13 | PC1              | `PC1`            | bidirectional  | TP5 (Reserve)    | ✅ |
+| 6  | PB5              | `PB5`            | bidirectional  | TP_PB5 (→ TP1)   | ✅ |
+| 7  | PB4              | `PB4`            | bidirectional  | TP_PB4 (→ TP2)   | ✅ |
+| 8  | TOSC1/PB3        | `PB3`            | bidirectional  | RO (USART0 RXD)  | ✅ Pin-Nr. identisch, TOSC1 ist nur Alt-Funktion |
+| 9  | TOSC2/PB2        | `PB2`            | bidirectional  | DI (USART0 TXD)  | ✅ |
+| 10 | PB1              | `PB1`            | bidirectional  | offen (XCK)      | ✅ |
+| 11 | PB0              | `PB0`            | bidirectional  | DE (USART0 XDIR) | ✅ |
+| 12 | PC0              | `PC0`            | bidirectional  | offen           | ✅ |
+| 13 | PC1              | `PC1`            | bidirectional  | offen           | ✅ |
 | 14 | PC2              | `PC2`            | bidirectional  | offen           | ✅ |
 | 15 | PC3              | `PC3`            | bidirectional  | offen           | ✅ |
 | 16 | PA0/RESET/UPDI   | `~{RESET}/PA0`   | bidirectional  | UPDI            | ✅ |
@@ -149,6 +149,11 @@ bettet Symbole ohnehin immer abgeflacht in die `.kicad_sch` ein, und für das vo
 ab. Die Projektbibliothek enthält daher dieselbe Abflachung. **An Pinnummern,
 Pinnamen und Pintypen ändert das nichts** — die Prüfung in Abschnitt 2 und 3 gilt
 unverändert, per `get_symbol_cache` gegengeprüft (28.08.2026).
+
+Die Spalte „NL" in Abschnitt 2.1 spiegelt die Netzliste 6.3 und wurde für P-1
+(`docs/pruefpunkte-t4.md`, Reserve-Pins) und P-3 (`docs/pruefpunkte-t7.md`,
+USART0-Standardposition) nachgezogen. Die Datenblatt-gegen-Symbol-Prüfung
+(Spalten 2–4) bleibt davon unberührt.
 
 ---
 
