@@ -8,6 +8,7 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 |---|---|---|
 | T1 | Repo initialisiert, Branch `main`, `reference/` ignoriert, auf `github.com/TenOfNine/SmartKroneSplitFlap` (privat) gepusht | `16eaedf`, `d1c6ba8` |
 | T2 | `tools/setup.sh` (KiCad 9, venv mit kicad-sch-api + kicad-skip, PlatformIO, Verifikation inkl. Roundtrip-Test). `.gitattributes` für LF. Recherchestand in `docs/toolchain.md`. | `3f440eb` |
+| T2-Nachtrag | Toolchain auf Ubuntu 24.04 verifiziert: KiCad 9.0.9, Roundtrip erfolgreich, Backend `kicad-sch-api`. Probe in `setup.sh` korrigiert (`.add` statt `add_component`). Details in `docs/toolchain.md`. | `<dieser>` |
 | T3 | `docs/symbolpruefung.md` — Pinprüfung ATtiny1616-S und TP8485E-SR (via MAX3485) gegen Datenblätter, vom Betreiber freigegeben. | `2d67fd3`, `<dieser>` |
 
 ## Nächster Schritt: T4
@@ -26,7 +27,8 @@ Vorarbeiten aus T3, die in T4 einfließen:
 ## Umgebung
 
 - T4–T10 brauchen die Linux-Toolchain (`kicad-cli`, `kicad-sch-api`, `pio`).
-  Zielumgebung Ubuntu 24.04, Einrichtung über `bash tools/setup.sh`.
+  Zielumgebung Ubuntu 24.04, Einrichtung über `bash tools/setup.sh`, verifiziert
+  am 28.08.2026. `kicad-cli` erc/export nur über `xvfb-run -a` aufrufen.
 - Verbindliche Reihenfolge laut `docs/backlog.md`. Bei Widerspruch Spezifikation ↔
   Schaltplan gilt die Netzliste (`docs/schaltplan-daughtercard.md`, Kap. 6).
 - Offene Messungen O-2, O-5, O-6 bleiben Parameter, nichts davon fest einkompilieren.

@@ -21,6 +21,13 @@ Damit ist die Schleife aus Generieren, Prüfen und Korrigieren geschlossen.
 - Belastbar ist nur ein echter Schreib-/Lesetest. `tools/setup.sh` führt ihn am Ende automatisch aus: Es erzeugt mit `kicad-sch-api` eine minimale Schaltung und lässt `kicad-cli sch erc` (KiCad 9) sie einlesen. Meldet KiCad ein Formatproblem, setzt das Skript das Schaltplan-Backend auf `kicad-skip` und weist darauf hin.
 - `kicad-skip` (psychogenic/kicad-skip) ist auf „KiCAD 7+" ausgelegt und wird von `setup.sh` immer mitinstalliert, damit der Umstieg keinen zweiten Lauf braucht.
 
+### Verifikation 28.08.2026 (Backlog T2, abgeschlossen)
+
+- `bash tools/setup.sh` auf Ubuntu 24.04 durchgelaufen: **KiCad 9.0.9** (PPA `9.0.9~ubuntu24.04.1`), `kicad-sch-api` 0.5.6, `kicad-skip` 0.2.5, PlatformIO 6.1.19.
+- Der Roundtrip-Test ist **erfolgreich**: `kicad-sch-api` erzeugt natives KiCad-9-Format (`(version 20250114)`, `(generator "eeschema")`, `generator_version "9.0"`), `kicad-cli sch erc` und `sch export pdf` (jeweils über `xvfb-run -a`) lesen die Datei fehlerfrei. **Backend für T4 ist damit `kicad-sch-api`**, nicht der Rückfall `kicad-skip`.
+- Korrektur an `setup.sh`: Die Roundtrip-Probe rief `sch.components.add_component()` / `add_symbol()` auf. Die Methode heißt in `kicad-sch-api` 0.5.x `sch.components.add(lib_id, …)`. Ohne die Korrektur fiel das Skript fälschlich auf `kicad-skip` zurück und brach mit Exit 1 ab.
+- `kicad-cli`-Unterbefehle mit Qt-Anteil (`sch erc`, `sch export *`, `pcb export *`) brauchen ein Display-Target: `xvfb-run -a kicad-cli …` oder `export QT_QPA_PLATFORM=offscreen`. Eine interaktive Desktop-Session ist nicht nötig.
+
 ## 2. Installation
 
 ```bash

@@ -274,21 +274,32 @@ out = sys.argv[1]
 # hat sich zwischen den 0.x-Versionen geaendert, daher defensiv aufrufen.
 sch = ksa.create_schematic() if hasattr(ksa, "create_schematic") else ksa.Schematic.create()
 
+# Ab kicad-sch-api 0.5.x werden Bauteile ueber sch.components.add(lib_id, ...)
+# angelegt. Aeltere 0.x-Namen (add_component/add_symbol) werden als Rueckfall
+# weiter mitgeprueft, damit das Skript auch mit einer aelteren Bibliothek laeuft.
 added = False
-for adder in ("add_component", "add_symbol"):
-    fn = getattr(sch.components, adder, None) if hasattr(sch, "components") else getattr(sch, adder, None)
-    if callable(fn):
+candidates = []
+if hasattr(sch, "components"):
+    candidates += [getattr(sch.components, n, None) for n in ("add", "add_component", "add_symbol")]
+candidates += [getattr(sch, n, None) for n in ("add_component", "add_symbol")]
+
+for fn in candidates:
+    if not callable(fn):
+        continue
+    try:
+        fn("Device:R", reference="R1", value="10k", position=(50, 50))
+        added = True
+        break
+    except TypeError:
         try:
             fn(lib_id="Device:R", reference="R1", value="10k", position=(50, 50))
             added = True
             break
-        except TypeError:
-            try:
-                fn("Device:R", "R1", "10k", (50, 50))
-                added = True
-                break
-            except Exception:
-                pass
+        except Exception:
+            pass
+    except Exception:
+        pass
+
 if not added:
     print("Konnte kein Bauteil hinzufuegen, API-Signatur unbekannt.", file=sys.stderr)
     sys.exit(4)
