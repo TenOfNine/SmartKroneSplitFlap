@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.5 |
+| Version | 0.6 |
 | Datum | 28.08.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11 |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -166,8 +166,8 @@ Verworfene Alternativen: CH32V003 (3,3 V, Pegelwandlung nötig, Vorteil erst ab 
 | 9 | PB2 | USART0 TXD → RS-485-Treiber DI |
 | 8 | PB3 | USART0 RXD ← RS-485-Treiber RO |
 | 11 | PB0 | USART0 XDIR → DE (byte-genaue Senderichtung) |
-| 2 | PA4 | Blatt-Impuls, TCB0 Input Capture |
-| 3 | PA5 | Leerbild-Impuls, Port-Interrupt |
+| 2 | PA4 | Blatt-Impuls, Flanken-Interrupt (PORTA) |
+| 3 | PA5 | Leerbild-Impuls, Flanken-Interrupt (PORTA) |
 | 4 | PA6 | Nullimpuls, nur Messpunkt, Firmware wertet nicht aus |
 | 5 | PA7 | Triac-Ansteuerung → Transistorschalter auf Pin 9 |
 | 17 | PA1 | CHAIN_IN |
@@ -717,3 +717,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.3 | 27.08.2026 | Steckerbelegung aus der Originaldokumentation vollständig übernommen: gemeinsame Masse (Pin 1, 3), gemeinsame Versorgung (Pin 5, 6), 42 V~ an Pin 2 und 4, Triac-Eingang an Pin 9, Impulse an Pin 8 und 10 mit fallender auswertender Flanke. Getrennte Potenzialbereiche entfallen, damit auch Optokoppler und isolierter DC/DC-Wandler. Kapitel 4.4 neu gefasst mit Transistorschalter und wählbarer Treiberspannung. Abschnitt 8.4 zur Potenzialfreiheit der Motorspannung ergänzt. O-1, O-3 und O-4 abgeschlossen, O-2 neu formuliert. |
 | 0.4 | 28.08.2026 | Kapitel 4.2: Reserve-Pins präzisiert. Nur PB5/PB4 liegen auf Testpads (TP1/TP2); PB0 und PC0…PC3 bleiben im Schaltplan v0.2 unbeschaltet. Auflösung des Widerspruchs zwischen Schaltplan 6.3 und 6.4, dokumentiert in `docs/pruefpunkte-t4.md`. Zur zweiten Prüfung durch den Betreiber offen. |
 | 0.5 | 28.08.2026 | Kapitel 4.2: RS-485-Pins auf die tatsächliche USART0-Belegung des ATtiny1616 korrigiert (`docs/pruefpunkte-t7.md` P-3, vom Betreiber freigegeben). RXD an PB3 (Pin 8), TXD an PB2 (Pin 9), XDIR an PB0 (Pin 11). PB1 (USART0 XCK) wird Reserve. P-1 und P-2 aus `pruefpunkte-t4.md` als freigegeben vermerkt. |
+| 0.6 | 28.08.2026 | T7: Blatt- und Leerbildimpuls werden über einen Flanken-Interrupt auf PORTA ausgewertet statt über TCB0 Input Capture (Kapitel 4.2). TCB0 stellt die 1-ms-Zeitbasis. Bei ≤ 17 Impulsen/s genügt der Software-Zeitstempel; das spart einen Zeitgeber. |

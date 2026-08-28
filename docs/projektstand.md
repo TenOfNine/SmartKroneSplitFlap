@@ -13,19 +13,18 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | T4 | `hardware/daughtercard/daughtercard.kicad_sch` aus der Netzliste generiert (`tools/gen_daughtercard_sch.py`), **ERC 0/0**, PDF + PNG-Vorschau in `docs/`. Projektbibliothek `krone.kicad_sym` mit allen 15 Symbolen. P-1/P-2 vom Betreiber freigegeben (`docs/pruefpunkte-t4.md`). | `c023799`, `8500aa9`, `0521842`, `aebb75a` |
 | T5 | Footprints für alle 48 Bauteile in `FOOTPRINTS` (`gen_daughtercard_sch.py`), gegen `/usr/share/kicad/footprints` geprüft. PCB-Netzliste `--netlist` exportierbar. Platzierungsvorschlag `docs/layout-daughtercard.md`. | `e569300` |
 | T6 | `firmware/module/lib/protocol/` (Rahmen, CRC16/MODBUS, Kommandotabelle) und `lib/enumeration/` (Enumerations-Automat, Rückfall, Kollision), hardwareunabhängig. `pio test -e native`: **39/39** grün. | `b871628` |
-| T7 (P-3) | Befund: RS-485-Pins der Spez. passten nicht zur USART0-Belegung des ATtiny1616. Freigegeben und korrigiert: RO→PB3, DE→PB0, PB1 Reserve. Schaltplan v0.3 (ERC 0/0), Spez. v0.5, `docs/pruefpunkte-t7.md`. | `52a022c`, `<dieser>` |
+| T7 (P-3) | Befund: RS-485-Pins der Spez. passten nicht zur USART0-Belegung des ATtiny1616. Freigegeben und korrigiert: RO→PB3, DE→PB0, PB1 Reserve. Schaltplan v0.3 (ERC 0/0), Spez. v0.5, `docs/pruefpunkte-t7.md`. | `52a022c`, `b008f8a` |
+| T7 | Modul-Firmware ATtiny1616, **bare metal** (avr-libc, kein megaTinyCore). `src/board.h` (Hardwarekonstanten), `src/main.c` (USART0-RS485, TCB0-1ms, PORTA-Flankenint, WDT, Kommando-Dispatch). Neue Libs `lib/motion/` (Spez. 6) und `lib/config/` (Spez. 6.3), hardwareunabhängig. `pio run -e attiny1616`: **5303 B Flash** (< 8 KB), 184 B RAM. `pio test -e native`: **62/62** grün. | `<dieser>` |
 
-## In Arbeit: T7 — Modul-Firmware
+## Nächster Schritt: T8 — Master-Firmware ESP32
 
-Zustandsautomat nach Spezifikation Kapitel 6 (INIT/HOMING/IDLE/MOVING/ERROR),
-USART0 im RS-485-Modus über XDIR (Standard-MUX, RXD=PB3/TXD=PB2/XDIR=PB0),
-Impulsauswertung auf fallende Flanke mit 20 ms Sperrzeit, Blattzahlerkennung,
-EEPROM-Parameter, Watchdog + Laufzeitüberwachung. `pio run -e attiny1616`
-fehlerfrei, Flash < 8 KB. Siehe `docs/backlog.md` T7.
+`firmware/master/`: WLAN-Einrichtung über Captive Portal, Web-UI, REST (7.5),
+MQTT mit Home-Assistant-Auto-Discovery (7.6), NTP-Uhr, Zeichenabbildung (7.4),
+Betriebsarten inkl. Auto-Timeout der Sekundenanzeige. `pio run` fehlerfrei,
+REST-Endpunkte gegen einen simulierten Bus. Siehe `docs/backlog.md` T8.
 
-Hardwarenahe Konstanten gehören in **genau eine** Headerdatei (CLAUDE.md).
-`lib/protocol/` und `lib/enumeration/` sind fertig und getestet — T7 verdrahtet
-sie mit der Hardware. megaTinyCore-Plattform ist installiert.
+Die Protokollschicht `firmware/module/lib/protocol/` ist plattformunabhängiges
+C und lässt sich im Master wiederverwenden (Rahmen/CRC/Kommandotabelle).
 
 ## Umgebung
 
