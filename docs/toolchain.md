@@ -85,11 +85,22 @@ pio test -e native -d firmware/module  # Protokolltests auf dem Host
 | Master | `espressif32` | `esp32dev` | arduino | `esptool`, später OTA |
 | Tests | `native` | — | unity | — |
 
+`pio test -e native` läuft in `firmware/module/` (6 Suiten) und `firmware/master/`
+(5 Suiten) getrennt.
+
 > In T7 fiel die Wahl auf **bare metal** statt megaTinyCore: knapper Flash-Bedarf
 > (rund 5,3 KB gegen 8 KB Grenze), volle Kontrolle über USART0-RS485, TCB0 und
 > Watchdog, und der ganze Firmware-Code bleibt reines C wie `lib/protocol` und
 > `lib/enumeration`. Die Plattformpakete (`toolchain-atmelavr`, Device-Header)
 > kommen weiterhin über `atmelmegaavr`.
+
+> In T8 wurden gegenüber Spezifikation 7.2 dependency-arme Bausteine gewählt:
+> der **eingebaute `WebServer`** statt `ESPAsyncWebServer` (kein `AsyncTCP`,
+> läuft mit arduino-esp32 3.x ohne Patches) und **`Preferences`** (NVS) statt
+> `LittleFS` für die Konfiguration. `WiFiManager` (Captive Portal), `PubSubClient`
+> (MQTT) und `ArduinoJson` bleiben. Das RS-485-Interface nutzt UART2 im
+> Hardware-Halbduplexmodus (`UART_MODE_RS485_HALF_DUPLEX`), DE an GPIO 5.
+> `lib_extra_dirs = ../module/lib` teilt `lib/protocol` mit der Modul-Firmware.
 
 Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstand zwischen TX und RX. Der Widerstand sitzt im Adapter, nicht auf der Daughter Card.
 
