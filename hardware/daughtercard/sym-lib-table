@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "krone")(type "KiCad")(uri "${KIPRJMOD}/symbols/krone.kicad_sym")(options "")(descr "Projektsymbole KRONE REW Daughter Card - siehe docs/symbolpruefung.md"))
+)

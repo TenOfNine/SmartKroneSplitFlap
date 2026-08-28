@@ -48,13 +48,25 @@ pip install kicad-sch-api         # Alternative: kicad-skip
 pip install platformio
 ```
 
+### Bibliothekstabellen headless
+
+`kicad-cli sch erc` und `sch export netlist` loesen Symbole ueber die globale
+`sym-lib-table` (`~/.config/kicad/9.0/sym-lib-table`) auf. Diese Datei legt sonst
+nur die GUI beim ersten Start an. Fehlt sie, meldet ERC fuer jedes Bauteil
+`configuration does not include the symbol library '<lib>'` und findet die Pins
+nicht. `tools/setup.sh` kopiert daher `sym-lib-table` und `fp-lib-table` aus
+`/usr/share/kicad/template/` und traegt die `KICAD9_*_DIR`-Pfade in
+`kicad_common.json` ein. Die Projekt-Bibliothek `krone` liegt zusaetzlich in
+`hardware/daughtercard/sym-lib-table` (projektlokal, wird von KiCad relativ zur
+`.kicad_sch` gefunden).
+
 ## 3. Kommandos
 
 ```bash
-# Schaltplanprüfung und Export
-kicad-cli sch erc --format json -o erc.json hardware/daughtercard/daughtercard.kicad_sch
-kicad-cli sch export netlist --format kicadsexpr -o daughtercard.net <sch>
-kicad-cli sch export pdf -o docs/daughtercard.pdf <sch>
+# Schaltplanprüfung und Export  (erc/export brauchen ein Display -> xvfb-run)
+xvfb-run -a kicad-cli sch erc --format json -o erc.json hardware/daughtercard/daughtercard.kicad_sch
+xvfb-run -a kicad-cli sch export netlist --format kicadsexpr -o daughtercard.net <sch>
+xvfb-run -a kicad-cli sch export pdf -o docs/daughtercard.pdf <sch>
 
 # Fertigungsdaten
 kicad-cli pcb export gerbers -o gerber/ <pcb>
