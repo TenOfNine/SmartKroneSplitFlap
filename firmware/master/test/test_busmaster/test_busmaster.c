@@ -127,6 +127,20 @@ static void poll_and_time_out(uint8_t addr, uint32_t start)
     }
 }
 
+static void test_own_echo_does_not_swallow_response(void)
+{
+    /* Bei /RE auf GND liest der Master sein eigenes GET_STATUS zurueck (leer).
+     * Das darf die echte 8-Byte-Antwort nicht verdraengen. */
+    busmaster_poll_status(&bm, 3, 0);
+    inject(&bm, CMD_GET_STATUS, 3, NULL, 0, 1);   /* eigenes Echo */
+    TEST_ASSERT_TRUE(bm.awaiting);                /* noch nicht quittiert */
+
+    const uint8_t st[8] = { 5, 9, 1, 0, 40, 0, 0, 1 };
+    inject(&bm, CMD_GET_STATUS, 3, st, 8, 2);
+    TEST_ASSERT_FALSE(bm.awaiting);
+    TEST_ASSERT_EQUAL_UINT8(5, bm.mod[2].ist_blatt);
+}
+
 static void test_status_timeout_retries_then_offline(void)
 {
     bm.mod[0].online = true;
@@ -197,6 +211,7 @@ int main(void)
     UNITY_BEGIN();
     RUN_TEST(test_show_emits_set_all_and_go);
     RUN_TEST(test_poll_status_updates_table);
+    RUN_TEST(test_own_echo_does_not_swallow_response);
     RUN_TEST(test_status_timeout_retries_then_offline);
     RUN_TEST(test_enumeration_two_modules);
     RUN_TEST(test_set_config_payload);

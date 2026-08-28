@@ -174,12 +174,6 @@ static void load_config(module_config_t *cfg)
     }
 }
 
-static void save_config_bytes(void)
-{
-    /* nur die vier Nutzerparameter 0..3 (SET_CONFIG traegt 4 Byte, Spez. 5.4);
-     * Byte 4/5 verwaltet die Enumeration. */
-}
-
 static void save_bus_address(uint8_t addr)
 {
     eeprom_update_byte((uint8_t *)(uintptr_t)(EE_CONFIG_ADDR + 4u), addr);
@@ -281,6 +275,7 @@ static module_config_t g_cfg;
 static enum_fsm_t      g_enum;
 static motion_t        g_motion;
 static motion_state_t  g_prev_state;
+static uint32_t        g_identify_until_ms;
 
 static void ack(uint8_t cmd, uint8_t own_addr)
 {
@@ -352,9 +347,10 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
         config_validate(&c);
         uint8_t raw[CONFIG_SIZE];
         config_to_bytes(&c, raw);
+        /* nur die vier Nutzerparameter 0..3 (Spez. 5.4); Byte 4/5 (Busadresse,
+         * T_enum) verwaltet die Enumeration. */
         eeprom_update_block(raw, (void *)(uintptr_t)EE_CONFIG_ADDR, 4);
         g_cfg = c;
-        (void)save_config_bytes;
         ack(CMD_SET_CONFIG, own);
         break;
     }
@@ -365,7 +361,8 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
         break;
     }
     case CMD_IDENTIFY:
-        /* Anzeige uebernimmt die App-Schleife; hier nur bestaetigen. */
+        /* Status-LED fuer payload[0] Sekunden schnell blinken lassen. */
+        g_identify_until_ms = now + (uint32_t)f->payload[0] * 1000u;
         if (unicast) {
             ack(CMD_IDENTIFY, own);
         }
@@ -451,8 +448,19 @@ int main(void)
         /* Ausgaenge */
         pin_set(&PORTA, PIN_TRIAC, motion_triac_gate(&g_motion));
         pin_set(&PORTA, PIN_CHAIN_OUT, g_enum.chain_out_active);
-        pin_set(&PORTA, PIN_LED,
-                (g_motion.state == MOTION_ERROR) ? ((now >> 7) & 1u) : 1u);
+        /* LED: Identify = schnelles Blinken, Fehler = langsames Blinken,
+         * sonst Dauerlicht. */
+        {
+            uint8_t led;
+            if ((int32_t)(g_identify_until_ms - now) > 0) {
+                led = (now >> 6) & 1u;
+            } else if (g_motion.state == MOTION_ERROR) {
+                led = (now >> 8) & 1u;
+            } else {
+                led = 1u;
+            }
+            pin_set(&PORTA, PIN_LED, led);
+        }
 
         /* Position nach jedem Stillstand sichern */
         if (g_motion.state != g_prev_state) {

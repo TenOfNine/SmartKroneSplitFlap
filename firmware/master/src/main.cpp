@@ -81,6 +81,9 @@ static void bus_tx(void *, const uint8_t *data, size_t len)
     /* Hardware-RS485-Halbduplex: der Treiber schaltet DE selbst. */
     uart_write_bytes(RS485_UART, reinterpret_cast<const char *>(data), len);
     uart_wait_tx_done(RS485_UART, pdMS_TO_TICKS(20));
+    /* Das zurueckgelesene Sendeecho verwerfen, bevor die Slave-Antwort
+     * (fruehestens 200 us spaeter, Spez. 5.6) eintrifft. */
+    uart_flush_input(RS485_UART);
 }
 
 static void bus_begin()
