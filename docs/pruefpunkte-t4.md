@@ -2,15 +2,15 @@
 
 | Feld | Wert |
 |---|---|
-| Zweck | In T4 wurden zwei Widersprüche in `schaltplan-daughtercard.md` Kapitel 6 aufgelöst, um die Netzliste in einen ERC-fähigen KiCad-Schaltplan zu überführen. Beide Auflösungen sind **vorläufig** und müssen noch einmal geprüft werden. |
+| Zweck | In T4 wurden zwei Widersprüche in `schaltplan-daughtercard.md` Kapitel 6 aufgelöst, um die Netzliste in einen ERC-fähigen KiCad-Schaltplan zu überführen. |
 | Bezug | CLAUDE.md Regel 1 (nichts erfinden) und Regel 5 (Pinbelegung gegen Datenblatt, menschliche Freigabe) · Backlog T4 |
-| Status | **offen** — wartet auf Freigabe oder Korrektur |
+| Status | **P-1 und P-2 freigegeben** (Betreiber, im Chat, 28.08.2026). Bleibt als Prüfprotokoll erhalten. |
 | Datum | 28.08.2026 |
 
-> Bitte je Punkt entweder **bestätigen** (dann Status hier auf „freigegeben" setzen und in
-> `schaltplan-daughtercard.md` v0.2 / `spezifikation.md` v0.4 den Hinweis auf dieses Dokument
-> stehen lassen) oder **korrigieren** (dann Netzliste anpassen, Schaltplan mit
-> `python tools/gen_daughtercard_sch.py` neu erzeugen).
+> P-1 und P-2 wurden am 28.08.2026 vom Betreiber im Chat bestätigt („das sollte so
+> passen"). Sollte sich bei einer späteren Detailprüfung doch etwas ändern:
+> Netzliste in `tools/gen_daughtercard_sch.py` anpassen, Schaltplan mit
+> `python tools/gen_daughtercard_sch.py --erc --pdf --png` neu erzeugen.
 
 ---
 
@@ -55,7 +55,7 @@ Daraus folgt:
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| _(offen)_ | | |
+| 6.4 gilt, Reserve-GPIOs unbeschaltet — **freigegeben** | Betreiber (phi.hoffmann@hotmail.de), im Chat | 28.08.2026 |
 
 ---
 
@@ -110,7 +110,7 @@ Netzliste 6.1 / 6.2 in v0.2 entsprechend geändert:
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| _(offen)_ | | |
+| BAT54S-Zuordnung A→GND, K→+5V, COM→Signal — **freigegeben** | Betreiber (phi.hoffmann@hotmail.de), im Chat | 28.08.2026 |
 
 ---
 

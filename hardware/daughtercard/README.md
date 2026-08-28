@@ -15,15 +15,16 @@ ERC-Bericht: [`docs/erc-daughtercard.rpt`](../../docs/erc-daughtercard.rpt) (0 F
 |---|---|
 | `symbols/krone.kicad_sym` | **generiert** von `tools/build_krone_symbols.py` aus der KiCad-9-Bibliothek. Alle 15 im Schaltplan verwendeten Symbole, abgeflacht. Nicht von Hand bearbeiten. |
 | `sym-lib-table` | projektlokale Bibliothekstabelle, bindet `krone` über `${KIPRJMOD}` ein |
-| `daughtercard.kicad_sch` | **generiert** von `tools/gen_daughtercard_sch.py` aus der Netzliste in `docs/schaltplan-daughtercard.md` Kapitel 6 |
+| `daughtercard.kicad_sch` | **generiert** von `tools/gen_daughtercard_sch.py` aus Netzliste (`docs/schaltplan-daughtercard.md` Kap. 6) und Footprint-Tabelle (T5) |
 | `daughtercard.kicad_pro` | minimales Projektfile, damit `kicad-cli` die projektlokale `sym-lib-table` findet |
+| `daughtercard.net` | **generiert** (`--netlist`), nicht versioniert. PCB-Netzliste für den Import in den Board-Editor. |
 
 ## Neu erzeugen
 
 ```bash
 source .venv/bin/activate
-python tools/build_krone_symbols.py                 # nur nötig, wenn sich die Symbolauswahl ändert
-python tools/gen_daughtercard_sch.py --erc --pdf --png
+python tools/build_krone_symbols.py                            # nur bei Änderung der Symbolauswahl
+python tools/gen_daughtercard_sch.py --erc --pdf --png --netlist
 ```
 
 | Flag | Ausgabe |
@@ -31,8 +32,15 @@ python tools/gen_daughtercard_sch.py --erc --pdf --png
 | `--erc` | `docs/erc-daughtercard.rpt` |
 | `--pdf` | `docs/daughtercard.pdf` |
 | `--png` | `docs/daughtercard.png` (Vorschau ohne Rahmen, für GitHub) |
+| `--netlist` | `daughtercard.net` (PCB-Netzliste, nicht versioniert) |
 
-Beide Skripte haben einen `--check`- bzw. `--check-only`-Modus für die CI (T10).
+`--check-only` (bzw. `--check` bei `build_krone_symbols.py`) prüft ohne zu schreiben —
+für die CI (T10). Der Check umfasst: jeder Pin an genau einem Netz oder NC, jedes
+Bauteil mit vorhandenem Footprint.
+
+Netznamen tragen im Netlist-Export das KiCad-übliche Wurzelblatt-Präfix (`/+5V`,
+`/GND` …), weil die Rails über lokale Labels laufen. Für den PCB-Import ist das
+unerheblich; wer es ohne Präfix will, stellt die Rails auf Power-Symbole um.
 
 ## Zum Schaltplan
 
@@ -48,7 +56,13 @@ handverlegt. Das ist bewusst so:
 Eine handverlegte, ablesbare Schaltplanseite kann später folgen; sie ist nicht
 Teil von T4.
 
-## Offene Prüfpunkte
+## Layout (T5)
 
-Zwei Netzlisten-Entscheidungen aus T4 stehen noch zur zweiten Prüfung durch den
-Betreiber, siehe [`docs/pruefpunkte-t4.md`](../../docs/pruefpunkte-t4.md).
+Footprints sind allen 48 Bauteilen zugeordnet (`FOOTPRINTS` in
+`tools/gen_daughtercard_sch.py`). Platzierungsvorschlag als Text:
+[`docs/layout-daughtercard.md`](../../docs/layout-daughtercard.md).
+
+## Prüfpunkte
+
+Die zwei Netzlisten-Entscheidungen aus T4 (P-1 Testpads, P-2 BAT54S) sind vom
+Betreiber freigegeben, siehe [`docs/pruefpunkte-t4.md`](../../docs/pruefpunkte-t4.md).

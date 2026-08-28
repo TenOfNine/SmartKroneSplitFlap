@@ -13,11 +13,15 @@ Vorgehen:
   * PWR_FLAG auf die extern gespeisten Versorgungsnetze.
   * No-Connect-Flag auf die bewusst offenen Reserve-Pins von U1.
 
+Jedes Bauteil traegt einen Footprint (FOOTPRINTS, Backlog T5).
+
 Danach:
-  --erc  ERC laufen lassen        -> docs/erc-daughtercard.rpt
-  --pdf  PDF exportieren          -> docs/daughtercard.pdf
-  --png  PNG-Vorschau exportieren -> docs/daughtercard.png (fuer den Schnellcheck
-         auf GitHub; braucht poppler-utils und ein Python mit Pillow)
+  --erc      ERC laufen lassen         -> docs/erc-daughtercard.rpt
+  --pdf      PDF exportieren           -> docs/daughtercard.pdf
+  --png      PNG-Vorschau exportieren  -> docs/daughtercard.png (Schnellcheck auf
+             GitHub; braucht poppler-utils und ein Python mit Pillow)
+  --netlist  PCB-Netzliste exportieren -> hardware/daughtercard/daughtercard.net
+             (.gitignore; Bauartefakt fuer den PCB-Editor)
 
 Zwei Netzlisten-Entscheidungen aus T4 stehen noch zur zweiten Pruefung, siehe
 docs/pruefpunkte-t4.md (P-1 Testpads, P-2 BAT54S-Pinbelegung).
@@ -36,6 +40,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PROJ_DIR = REPO_ROOT / "hardware" / "daughtercard"
 SCH_PATH = PROJ_DIR / "daughtercard.kicad_sch"
 PRO_PATH = PROJ_DIR / "daughtercard.kicad_pro"
+NET_PATH = PROJ_DIR / "daughtercard.net"  # PCB-Netzliste, .gitignore (Bauartefakt)
 PDF_PATH = REPO_ROOT / "docs" / "daughtercard.pdf"
 PNG_PATH = REPO_ROOT / "docs" / "daughtercard.png"
 ERC_PATH = REPO_ROOT / "docs" / "erc-daughtercard.rpt"
@@ -96,6 +101,45 @@ COMPONENTS: dict[str, tuple[str, str, bool]] = {
     "TP5": ("krone:TestPoint", "CHAIN_IN", False),
     "TP6": ("krone:TestPoint", "VSENS", False),
     "TP7": ("krone:TestPoint", "GND", False),
+}
+
+# ---------------------------------------------------------------------------
+# Footprints (Backlog T5). Grundlage: docs/schaltplan-daughtercard.md
+# Kap. 1 (Passive 0805), Kap. 3 (Stueckliste, Bauformabweichungen), Kap. 5.
+# ---------------------------------------------------------------------------
+
+_FP_R0805 = "Resistor_SMD:R_0805_2012Metric"
+_FP_R1206 = "Resistor_SMD:R_1206_3216Metric"
+_FP_C0805 = "Capacitor_SMD:C_0805_2012Metric"
+_FP_SOT23 = "Package_TO_SOT_SMD:SOT-23"
+_FP_IDC10 = "Connector_IDC:IDC-Header_2x05_P2.54mm_Vertical"
+
+FOOTPRINTS: dict[str, str] = {
+    "U1": "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm",
+    "U2": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+    "Q1": _FP_SOT23, "Q2": _FP_SOT23, "Q3": _FP_SOT23,
+    "D1": _FP_SOT23, "D2": _FP_SOT23, "D3": _FP_SOT23,
+    "D4": "LED_SMD:LED_0805_2012Metric",
+    "R1": _FP_R0805, "R2": _FP_R0805, "R3": _FP_R0805, "R4": _FP_R0805,
+    "R5": _FP_R0805, "R6": _FP_R0805, "R7": _FP_R0805, "R8": _FP_R0805,
+    "R9": _FP_R0805, "R10": _FP_R0805, "R11": _FP_R0805, "R12": _FP_R0805,
+    "R13": _FP_R0805, "R15": _FP_R0805,
+    "R14": _FP_R1206,  # Kap. 3.2: 0-Ohm-Bruecke, Bauform 1206
+    "R16": _FP_R1206,  # Kap. 3.2: 120 Ohm, 0,25 W -> 1206
+    "C1": _FP_C0805, "C2": _FP_C0805, "C4": _FP_C0805, "C5": _FP_C0805, "C6": _FP_C0805,
+    "C3": "Capacitor_SMD:C_1206_3216Metric",  # 10 uF/16 V, Reserve; Kap. 3.2 "Keramik oder Tantal"
+    "F1": "Fuse:Fuse_1206_3216Metric",
+    "J1": _FP_IDC10, "J2": _FP_IDC10, "J3": _FP_IDC10,
+    "J4": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
+    "J5": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
+    "J6": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+    "JP1": "Jumper:SolderJumper-2_P1.3mm_Open_Pad1.0x1.5mm",
+    "JP2": "Jumper:SolderJumper-2_P1.3mm_Open_Pad1.0x1.5mm",
+    "JP3": "Jumper:SolderJumper-2_P1.3mm_Open_Pad1.0x1.5mm",
+    "TP1": "TestPoint:TestPoint_Pad_D1.5mm", "TP2": "TestPoint:TestPoint_Pad_D1.5mm",
+    "TP3": "TestPoint:TestPoint_Pad_D1.5mm", "TP4": "TestPoint:TestPoint_Pad_D1.5mm",
+    "TP5": "TestPoint:TestPoint_Pad_D1.5mm", "TP6": "TestPoint:TestPoint_Pad_D1.5mm",
+    "TP7": "TestPoint:TestPoint_Pad_D1.5mm",
 }
 
 # ---------------------------------------------------------------------------
@@ -202,6 +246,7 @@ def check_netlist_consistency() -> list[str]:
             problems.append(f"{key[0]}.{key[1]} ist NC und zugleich in Netz {assigned[key]}")
         assigned[key] = "<NC>"
 
+    fp_root = Path("/usr/share/kicad/footprints")
     for ref, (lib_id, _value, _dnp) in COMPONENTS.items():
         sym = cache.get_symbol(lib_id)
         if sym is None:
@@ -210,6 +255,14 @@ def check_netlist_consistency() -> list[str]:
         for p in sym.pins:
             if (ref, p.number) not in assigned:
                 problems.append(f"{ref}.{p.number} ({p.name}) hat kein Netz")
+
+        fp = FOOTPRINTS.get(ref)
+        if not fp:
+            problems.append(f"{ref} hat keinen Footprint (Backlog T5)")
+        elif fp_root.is_dir():
+            lib, _, mod = fp.partition(":")
+            if not (fp_root / f"{lib}.pretty" / f"{mod}.kicad_mod").is_file():
+                problems.append(f"{ref}: Footprint {fp} nicht in {fp_root}")
     return problems
 
 
@@ -234,7 +287,8 @@ def build_schematic():
 
     def place(ref: str, x: float, y: float) -> None:
         lib_id, value, dnp = COMPONENTS[ref]
-        comp = sch.components.add(lib_id, reference=ref, value=value, position=(x, y))
+        comp = sch.components.add(lib_id, reference=ref, value=value, position=(x, y),
+                                  footprint=FOOTPRINTS.get(ref, ""))
         if dnp:
             comp.set_property("dnp", "true")
         placed[ref] = comp
@@ -361,6 +415,7 @@ def main() -> int:
     ap.add_argument("--erc", action="store_true", help="nach dem Schreiben ERC laufen lassen")
     ap.add_argument("--pdf", action="store_true", help="PDF exportieren (docs/daughtercard.pdf)")
     ap.add_argument("--png", action="store_true", help="PNG-Vorschau exportieren (docs/daughtercard.png); zieht --pdf nach sich")
+    ap.add_argument("--netlist", action="store_true", help="PCB-Netzliste exportieren (hardware/daughtercard/daughtercard.net)")
     ap.add_argument("--check-only", action="store_true", help="nur Netzliste pruefen, nichts schreiben")
     args = ap.parse_args()
 
@@ -396,6 +451,13 @@ def main() -> int:
     if args.png:
         render_png()
         print(f"PNG: {PNG_PATH.relative_to(REPO_ROOT)}")
+    if args.netlist:
+        nl_rc = run([*kicad_cli(), "sch", "export", "netlist", "--format", "kicadsexpr",
+                     "-o", str(NET_PATH), str(SCH_PATH)])
+        ok = nl_rc == 0 and NET_PATH.is_file()
+        print(f"Netzliste: {NET_PATH.relative_to(REPO_ROOT)}"
+              + ("" if ok else f"  FEHLER (rc={nl_rc})"))
+        rc = rc or (0 if ok else 1)
     return rc
 
 

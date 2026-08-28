@@ -6,7 +6,7 @@
 | Version | 0.2 |
 | Datum | 28.08.2026 |
 | Bezug | Technische Spezifikation v0.3 |
-| Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC fehlerfrei. Zwei Korrekturen offen zur zweiten Prüfung durch den Betreiber, siehe `docs/pruefpunkte-t4.md`. |
+| Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC fehlerfrei. Zwei Korrekturen (P-1, P-2) vom Betreiber freigegeben, siehe `docs/pruefpunkte-t4.md`. |
 
 **Zum Gebrauch:** Kapitel 3 bis 6 zusammen ergeben den vollständigen Schaltplan. Kapitel 5 zeigt die Blöcke als Prinzipschaltbild, Kapitel 6 ist die verbindliche Netzliste. Bei Abweichungen zwischen beiden gilt die Netzliste.
 
