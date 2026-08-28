@@ -6,8 +6,10 @@ KiCad-Projekt der Modulsteuerung (eine je Anzeigenmodul).
 
 ![Schaltplan-Vorschau](../../docs/daughtercard.png)
 
+![PCB-Vorplatzierung](../../docs/pcb-daughtercard.png)
+
 Vollauflösung: [`docs/daughtercard.pdf`](../../docs/daughtercard.pdf) ·
-ERC-Bericht: [`docs/erc-daughtercard.rpt`](../../docs/erc-daughtercard.rpt) (0 Fehler, 0 Warnungen)
+ERC: 0 Fehler / 0 Warnungen (`gen_daughtercard_sch.py --erc`, in der CI geprüft)
 
 ## Dateien
 
@@ -16,8 +18,9 @@ ERC-Bericht: [`docs/erc-daughtercard.rpt`](../../docs/erc-daughtercard.rpt) (0 F
 | `symbols/krone.kicad_sym` | **generiert** von `tools/build_krone_symbols.py` aus der KiCad-9-Bibliothek. Alle 15 im Schaltplan verwendeten Symbole, abgeflacht. Nicht von Hand bearbeiten. |
 | `sym-lib-table` | projektlokale Bibliothekstabelle, bindet `krone` über `${KIPRJMOD}` ein |
 | `daughtercard.kicad_sch` | **generiert** von `tools/gen_daughtercard_sch.py` aus Netzliste (`docs/schaltplan-daughtercard.md` Kap. 6) und Footprint-Tabelle (T5) |
-| `daughtercard.kicad_pro` | minimales Projektfile, damit `kicad-cli` die projektlokale `sym-lib-table` findet |
-| `daughtercard.net` | **generiert** (`--netlist`), nicht versioniert. PCB-Netzliste für den Import in den Board-Editor. |
+| `daughtercard.kicad_pro` | Projektfile: projektlokale `sym-lib-table` + Netzklassen (AC, RS485, Power) aus Schaltplan Kap. 8.2 |
+| `daughtercard.kicad_pcb` | **generiert** von `tools/gen_daughtercard_pcb.py` (System-Python, `pcbnew`): alle Bauteile vorplatziert, Netze zugeordnet, Umriss + 4 Bohrungen. Feinjustieren und routen im PCB-Editor. |
+| `daughtercard.net` | **generiert** (`--netlist`), nicht versioniert. PCB-Netzliste. |
 
 ## Neu erzeugen
 
@@ -25,7 +28,11 @@ ERC-Bericht: [`docs/erc-daughtercard.rpt`](../../docs/erc-daughtercard.rpt) (0 F
 source .venv/bin/activate
 python tools/build_krone_symbols.py                            # nur bei Änderung der Symbolauswahl
 python tools/gen_daughtercard_sch.py --erc --pdf --png --netlist
+/usr/bin/python3 tools/gen_daughtercard_pcb.py --png --drc      # System-Python (pcbnew)
 ```
+
+Nach einer Netzlistenänderung **beide** Generatoren laufen lassen und `.kicad_sch`
++ `.kicad_pcb` gemeinsam committen (die Skripte vergeben bei jedem Lauf neue UUIDs).
 
 | Flag | Ausgabe |
 |---|---|

@@ -21,10 +21,15 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 
 ## Backlog T1–T10 abgeschlossen
 
-Nächste sinnvolle Schritte (nicht mehr im Backlog):
+| Nachtrag | Ergebnis | Commit |
+|---|---|---|
+| PCB-Vorplatzierung | `hardware/daughtercard/daughtercard.kicad_pcb` von `tools/gen_daughtercard_pcb.py` (pcbnew): alle 48 Bauteile mit Footprint + Netz + grober Position, Umriss, 4 Bohrungen, Netzklassen. DRC: nur unverdrahtete Netze + ~4 enge Nachbarpaare. Vorschau `docs/pcb-daughtercard.png`. | `<dieser>` |
 
-- **PCB-Layout** `hardware/daughtercard/daughtercard.kicad_pcb` nach
-  `docs/layout-daughtercard.md`. Danach greift der Gerber-Export im CI-Release.
+Nächste sinnvolle Schritte:
+
+- **PCB routen** in `daughtercard.kicad_pcb`: Bauteile feinjustieren (oberer
+  Streifen), Leiterbahnen ziehen (AC-Zone an der Kante!), Massefläche. Danach
+  greift der Gerber-Export im CI-Release.
 - Messungen **O-2, O-5, O-6** an der Anzeigenplatine (Betreiber). Ergebnisse nach
   `docs/messprotokolle/`, dann in Schaltplan und Firmware-Parameter einarbeiten.
 - Master-Firmware: **Selbsttest** (7.3) über eine volle Umdrehung je Modul mit

@@ -5,11 +5,38 @@
 | Bezug | `docs/schaltplan-daughtercard.md` Kapitel 8, Netzliste `hardware/daughtercard/daughtercard.net` |
 | Platine | 74 × 60 mm, 2 Lagen, 1,6 mm, 35 µm Cu, HASL bleifrei |
 | Befestigung | 4 × Bohrung 3,2 mm, je 4 mm von den Ecken |
-| Status | Vorschlag, noch nicht im PCB-Editor umgesetzt |
+| Status | **Vorplatziert.** `hardware/daughtercard/daughtercard.kicad_pcb` enthält alle 48 Bauteile mit Footprint, Netz und einer groben Position, dazu Umriss, 4 Bohrungen und die Netzklassen. Im PCB-Editor bleibt: Bauteile feinjustieren und routen. |
 | Datum | 28.08.2026 |
 
-Koordinaten: Ursprung untere linke Ecke, X nach rechts (0…74), Y nach oben (0…60).
-Alle Angaben Richtwerte für die erste Platzierung, kein fertiges Layout.
+Koordinaten in diesem Dokument: Ursprung untere linke Ecke, X nach rechts
+(0…74), Y nach oben (0…60). Die `.kicad_pcb` verwendet die KiCad-Konvention
+(Ursprung oben links, Y nach unten).
+
+## Vorplatzierte Platine
+
+```bash
+/usr/bin/python3 tools/gen_daughtercard_pcb.py --png --drc
+```
+
+`tools/gen_daughtercard_pcb.py` (System-Python, nutzt `pcbnew`) liest die
+Netzliste des Schaltplans und die Footprint-Tabelle aus
+`tools/gen_daughtercard_sch.py` und schreibt die `.kicad_pcb`. Vorschau:
+`docs/pcb-daughtercard.png`.
+
+- Die Bauteil-Footprints tragen den Pfad des zugehörigen Schaltplansymbols;
+  „Update PCB from Schematic" ordnet sie also ohne Warnung zu.
+- DRC meldet die unverdrahteten Netze (erwartbar) und rund vier eng benachbarte
+  Bauteilpaare im gedrängten oberen Streifen (R16/JP3/R14/C2 zwischen den
+  Wannensteckern) — dort ein paar Millimeter auseinanderziehen.
+- Der Courtyard der Wannenstecker `IDC-Header_2x05_Vertical` ist 21,4 mm breit.
+  Damit ist der obere Rand die knappste Stelle. Wird es zu eng, sind die
+  Hebel: J1–J3 auf einen unshrouded `PinHeader_2x05` (6,2 mm) umstellen oder
+  die Platinenhöhe erhöhen (Kapitel 8.1 lässt bis knapp 100 mm zu).
+
+> **Achtung Generatoren:** `gen_daughtercard_sch.py` erzeugt bei jedem Lauf neue
+> UUIDs; die committete `.kicad_sch` und `.kicad_pcb` gehören zusammen. Nach einer
+> Netzlistenänderung beide neu erzeugen (`gen_daughtercard_sch.py … && `
+> `gen_daughtercard_pcb.py …`) und beide committen.
 
 ---
 
