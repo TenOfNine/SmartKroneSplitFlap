@@ -18,5 +18,9 @@ _autosave-*
 *.net
 gerber/
 
+# generierte Pruefberichte mit Zeitstempel (regenerierbar)
+docs/erc-*.rpt
+docs/drc-*.rpt
+
 # Sonstiges
 .DS_Store

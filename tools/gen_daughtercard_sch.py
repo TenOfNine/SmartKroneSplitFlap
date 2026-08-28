@@ -325,15 +325,51 @@ def build_schematic():
 
 
 def write_project_file() -> None:
-    """Minimale .kicad_pro, damit kicad-cli die projektlokale sym-lib-table
-    (${KIPRJMOD}/symbols/krone.kicad_sym) findet und ${KIPRJMOD} aufloest."""
+    """.kicad_pro, damit kicad-cli die projektlokale sym-lib-table findet und
+    ${KIPRJMOD} aufloest. Enthaelt ausserdem die Netzklassen aus
+    docs/schaltplan-daughtercard.md 8.2 fuer das Layout (T5)."""
+
+    def cls(name, clr, tw, **kw):
+        base = {
+            "name": name, "clearance": clr, "track_width": tw,
+            "via_diameter": 0.6, "via_drill": 0.3,
+            "microvia_diameter": 0.3, "microvia_drill": 0.1,
+            "diff_pair_width": tw, "diff_pair_gap": 0.25,
+            "diff_pair_via_gap": 0.25, "pcb_color": "rgba(0, 0, 0, 0.000)",
+            "wire_width": 6, "bus_width": 12, "schematic_color": "rgba(0, 0, 0, 0.000)",
+            "line_style": 0, "priority": 0,
+        }
+        base.update(kw)
+        return base
+
     pro = {
         "board": {},
         "boards": [],
         "libraries": {"pinned_footprint_libs": [], "pinned_symbol_libs": []},
         "meta": {"filename": PRO_PATH.name, "version": 1},
-        "net_settings": {},
-        "pcbnew": {},
+        "net_settings": {
+            "classes": [
+                cls("Default", 0.2, 0.25),
+                # AC-Fuehrung: >= 1,0 mm, >= 2,0 mm Abstand zu Logiknetzen
+                cls("AC", 2.0, 1.0),
+                # RS-485 als Paar, 0,3 mm
+                cls("RS485", 0.2, 0.3, diff_pair_gap=0.3),
+                # +5V / GND / VSENS / +15V: >= 0,5 mm
+                cls("Power", 0.2, 0.5),
+            ],
+            "meta": {"version": 4},
+            "netclass_patterns": [
+                {"netclass": "AC", "pattern": "/AC?"},
+                {"netclass": "RS485", "pattern": "/RS485_?"},
+                {"netclass": "Power", "pattern": "/+5V"},
+                {"netclass": "Power", "pattern": "/+5V_IN"},
+                {"netclass": "Power", "pattern": "/+15V"},
+                {"netclass": "Power", "pattern": "/GND"},
+                {"netclass": "Power", "pattern": "/VSENS"},
+                {"netclass": "Power", "pattern": "/VDRV"},
+            ],
+        },
+        "pcbnew": {"last_paths": {}, "page_layout_descr_file": ""},
         "schematic": {},
         "sheets": [],
         "text_variables": {},

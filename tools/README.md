@@ -5,6 +5,8 @@
 | `setup.sh` | Toolchain der Entwicklungs-VM einrichten (KiCad 9, Python-venv, PlatformIO). Siehe `docs/toolchain.md`. |
 | `build_krone_symbols.py` | Projekt-Symbolbibliothek `hardware/daughtercard/symbols/krone.kicad_sym` erzeugen. `--check` prüft für die CI, ob sie aktuell ist. |
 | `gen_daughtercard_sch.py` | Schaltplan, PDF, PNG-Vorschau und PCB-Netzliste aus der Netzliste (`docs/schaltplan-daughtercard.md` Kap. 6) erzeugen. `--check-only`, `--erc`, `--pdf`, `--png`, `--netlist`. |
+| `gen_daughtercard_pcb.py` | `.kicad_pcb` mit vorplatzierten Bauteilen erzeugen. **System-Python** (`/usr/bin/python3`, nutzt `pcbnew`). `--png`, `--drc`. |
+| `check_flash.py` | Flash-Verbrauch einer ELF gegen eine Obergrenze prüfen (CI). |
 | `busctl.py` | Kommandozeilenwerkzeug für den KRONE-REW-Bus (T9). |
 | `test_busctl.py` | stdlib-`unittest` für `busctl.py`. |
 
