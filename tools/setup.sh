@@ -99,6 +99,7 @@ install_apt_packages() {
 		python3-venv
 		python3-pip
 		xvfb            # kicad-cli-Unterbefehle brauchen ein Display
+		poppler-utils   # pdftoppm fuer die PNG-Vorschau (gen_daughtercard_sch.py --png)
 	)
 
 	sudo apt-get update -qq
@@ -176,7 +177,8 @@ setup_venv() {
 	python -m pip install \
 		"platformio" \
 		"kicad-sch-api" \
-		"kicad-skip"
+		"kicad-skip" \
+		"pillow"          # Zuschnitt der PNG-Vorschau
 }
 
 if [ "${DO_PIP}" -eq 1 ]; then

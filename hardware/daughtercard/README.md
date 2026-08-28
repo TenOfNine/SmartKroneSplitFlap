@@ -2,6 +2,13 @@
 
 KiCad-Projekt der Modulsteuerung (eine je Anzeigenmodul).
 
+## Schnellcheck
+
+![Schaltplan-Vorschau](../../docs/daughtercard.png)
+
+Vollauflösung: [`docs/daughtercard.pdf`](../../docs/daughtercard.pdf) ·
+ERC-Bericht: [`docs/erc-daughtercard.rpt`](../../docs/erc-daughtercard.rpt) (0 Fehler, 0 Warnungen)
+
 ## Dateien
 
 | Datei | Herkunft |
@@ -15,11 +22,16 @@ KiCad-Projekt der Modulsteuerung (eine je Anzeigenmodul).
 
 ```bash
 source .venv/bin/activate
-python tools/build_krone_symbols.py          # nur nötig, wenn sich die Symbolauswahl ändert
-python tools/gen_daughtercard_sch.py --erc --pdf
+python tools/build_krone_symbols.py                 # nur nötig, wenn sich die Symbolauswahl ändert
+python tools/gen_daughtercard_sch.py --erc --pdf --png
 ```
 
-`--erc` schreibt `docs/erc-daughtercard.rpt`, `--pdf` schreibt `docs/daughtercard.pdf`.
+| Flag | Ausgabe |
+|---|---|
+| `--erc` | `docs/erc-daughtercard.rpt` |
+| `--pdf` | `docs/daughtercard.pdf` |
+| `--png` | `docs/daughtercard.png` (Vorschau ohne Rahmen, für GitHub) |
+
 Beide Skripte haben einen `--check`- bzw. `--check-only`-Modus für die CI (T10).
 
 ## Zum Schaltplan

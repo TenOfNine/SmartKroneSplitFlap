@@ -14,10 +14,10 @@ Vorgehen:
   * No-Connect-Flag auf die bewusst offenen Reserve-Pins von U1.
 
 Danach:
-  xvfb-run -a kicad-cli sch erc  --exit-code-violations -o docs/erc-daughtercard.rpt <sch>
-  xvfb-run -a kicad-cli sch export pdf -o docs/daughtercard.pdf <sch>
-
-Diese beiden Schritte fuehrt --erc bzw. --pdf gleich mit aus.
+  --erc  ERC laufen lassen        -> docs/erc-daughtercard.rpt
+  --pdf  PDF exportieren          -> docs/daughtercard.pdf
+  --png  PNG-Vorschau exportieren -> docs/daughtercard.png (fuer den Schnellcheck
+         auf GitHub; braucht poppler-utils und ein Python mit Pillow)
 
 Zwei Netzlisten-Entscheidungen aus T4 stehen noch zur zweiten Pruefung, siehe
 docs/pruefpunkte-t4.md (P-1 Testpads, P-2 BAT54S-Pinbelegung).
@@ -37,6 +37,7 @@ PROJ_DIR = REPO_ROOT / "hardware" / "daughtercard"
 SCH_PATH = PROJ_DIR / "daughtercard.kicad_sch"
 PRO_PATH = PROJ_DIR / "daughtercard.kicad_pro"
 PDF_PATH = REPO_ROOT / "docs" / "daughtercard.pdf"
+PNG_PATH = REPO_ROOT / "docs" / "daughtercard.png"
 ERC_PATH = REPO_ROOT / "docs" / "erc-daughtercard.rpt"
 
 # ---------------------------------------------------------------------------
@@ -156,6 +157,23 @@ NETS: dict[str, list[tuple[str, str]]] = {
 # getrieben ansieht (+5V/GND wegen der power_in-Pins von U1/U2 zwingend).
 POWER_FLAG_NETS = ["+5V", "GND", "+15V", "+5V_IN"]
 
+# Funktionsblock-Platzierung fuer den optischen Schnellcheck. Kein Ersatz fuer
+# ein handverlegtes Blatt (T5), aber gruppiert die Bauteile sinnvoll.
+# (Titel, x, y, Spalten, Zellbreite, Zellhoehe, [refs])
+BLOCKS: list[tuple[str, float, float, int, float, float, list[str]]] = [
+    ("MCU", 25, 40, 1, 40, 55, ["U1"]),
+    ("RS-485-Bus", 95, 40, 3, 40, 55, ["U2", "R16", "JP3"]),
+    ("Versorgung", 230, 40, 4, 34, 55, ["F1", "C1", "C2", "C3", "R14", "JP1", "JP2"]),
+    ("Triac-Ansteuerung", 400, 40, 4, 38, 55, ["Q1", "Q2", "Q3", "R7", "R8", "R9", "R10"]),
+    ("Impulseingang Blatt (PA4)", 25, 140, 4, 36, 50, ["R1", "R2", "C4", "D1"]),
+    ("Impulseingang Leerbild (PA5)", 210, 140, 4, 36, 50, ["R3", "R4", "C5", "D2"]),
+    ("Impulseingang Nullimpuls (PA6)", 395, 140, 4, 36, 50, ["R5", "R6", "C6", "D3"]),
+    ("CHAIN / Enumeration", 25, 225, 3, 40, 50, ["R11", "R12", "R13"]),
+    ("Status-LED / UPDI", 175, 225, 3, 40, 50, ["R15", "D4", "J6"]),
+    ("Stecker", 25, 300, 5, 48, 55, ["J1", "J2", "J3", "J4", "J5"]),
+    ("Testpunkte", 310, 300, 7, 32, 50, ["TP1", "TP2", "TP3", "TP4", "TP5", "TP6", "TP7"]),
+]
+
 # Bewusst offene Reserve-Pins von U1 (docs/pruefpunkte-t4.md P-1).
 NO_CONNECT_PINS = [("U1", "11"), ("U1", "12"), ("U1", "13"), ("U1", "14"), ("U1", "15")]
 
@@ -207,35 +225,37 @@ def build_schematic():
         company="TenOfNine",
         comments={
             1: "Generiert aus docs/schaltplan-daughtercard.md Kap. 6 via tools/gen_daughtercard_sch.py",
-            2: "Layout ist nicht handverlegt - siehe Backlog T5. Offene Pruefpunkte: docs/pruefpunkte-t4.md",
+            2: "Verbindung ueber gleichnamige Pin-Labels. Nicht handverlegt (Backlog T5).",
+            3: "Offene Pruefpunkte: docs/pruefpunkte-t4.md",
         },
     )
 
-    # Bauteile im groben Raster platzieren.
-    order = list(COMPONENTS)
-    col_w, row_h, per_row = 45.0, 55.0, 9
-    x0, y0 = 40.0, 40.0
-    placed = {}
-    for i, ref in enumerate(order):
+    placed: dict = {}
+
+    def place(ref: str, x: float, y: float) -> None:
         lib_id, value, dnp = COMPONENTS[ref]
-        x = x0 + (i % per_row) * col_w
-        y = y0 + (i // per_row) * row_h
         comp = sch.components.add(lib_id, reference=ref, value=value, position=(x, y))
         if dnp:
             comp.set_property("dnp", "true")
         placed[ref] = comp
 
+    # Bauteile blockweise platzieren, mit Blocktitel.
+    for title, bx, by, cols, cw, ch, refs in BLOCKS:
+        sch.add_text(title, position=(bx, by - 18.0), size=2.5, bold=True)
+        for i, ref in enumerate(refs):
+            place(ref, bx + (i % cols) * cw, by + (i // cols) * ch)
+
+    # PWR_FLAG-Symbole zwischen Versorgungs- und Triac-Block.
+    for n, net in enumerate(POWER_FLAG_NETS):
+        sch.components.add("krone:PWR_FLAG", reference=f"#FLG{n + 1}",
+                           position=(370.0, 45.0 + n * 16.0))
+
     # Labels an jeden Pin.
     for net, pins in NETS.items():
         for ref, pin in pins:
             sch.add_label(net, pin=(ref, pin))
-
-    # PWR_FLAG-Symbole.
-    for n, net in enumerate(POWER_FLAG_NETS, start=1):
-        fx = x0 + (per_row - 1) * col_w + 20.0
-        fy = y0 + n * 12.0
-        flag = sch.components.add("krone:PWR_FLAG", reference=f"#FLG{n}", position=(fx, fy))
-        sch.add_label(net, pin=(f"#FLG{n}", "1"))
+    for n, net in enumerate(POWER_FLAG_NETS):
+        sch.add_label(net, pin=(f"#FLG{n + 1}", "1"))
 
     # No-Connect-Flags. sch.get_component_pin_position liefert die Position im
     # Blatt-Koordinatensystem (mit Y-Flip gegenueber der Symbolbibliothek);
@@ -270,6 +290,65 @@ def run(cmd: list[str]) -> int:
     return subprocess.run(cmd).returncode
 
 
+_CROP_SNIPPET = """
+import sys
+from PIL import Image, ImageChops, ImageOps
+src, dst = sys.argv[1], sys.argv[2]
+im = Image.open(src).convert("RGB")
+bg = Image.new("RGB", im.size, (255, 255, 255))
+diff = ImageChops.difference(im, bg)
+box = diff.getbbox()
+if box:
+    m = 24
+    box = (max(0, box[0] - m), max(0, box[1] - m),
+           min(im.size[0], box[2] + m), min(im.size[1], box[3] + m))
+    im = im.crop(box)
+im = ImageOps.expand(im, border=8, fill=(255, 255, 255))
+im.save(dst, optimize=True)
+print(f"{dst}  {im.size[0]}x{im.size[1]}")
+"""
+
+
+def render_png(dpi: int = 200) -> None:
+    """PNG-Vorschau fuer den optischen Schnellcheck auf GitHub.
+
+    Eigener PDF-Export ohne Zeichnungsrahmen (-e), damit der Weissrand-Zuschnitt
+    danach greift. Der Rahmen bleibt im regulaeren docs/daughtercard.pdf.
+    """
+    if not shutil.which("pdftoppm"):
+        print("[!] pdftoppm nicht gefunden (poppler-utils), ueberspringe PNG.", file=sys.stderr)
+        return
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        bare_pdf = Path(td) / "bare.pdf"
+        run([*kicad_cli(), "sch", "export", "pdf", "-e",
+             "-o", str(bare_pdf), str(SCH_PATH)])
+        prefix = Path(td) / "p"
+        run(["pdftoppm", "-png", "-r", str(dpi), "-f", "1", "-l", "1",
+             str(bare_pdf), str(prefix)])
+        raw = next(Path(td).glob("p*.png"), None)
+        if raw is None:
+            print("[!] pdftoppm hat kein PNG erzeugt.", file=sys.stderr)
+            return
+        # PIL steckt meist im System-Python, nicht in der venv.
+        candidates = ["/usr/bin/python3", "/usr/local/bin/python3", sys.executable]
+        done = False
+        for crop_py in candidates:
+            if not Path(crop_py).exists():
+                continue
+            res = subprocess.run([crop_py, "-c", _CROP_SNIPPET, str(raw), str(PNG_PATH)],
+                                 capture_output=True, text=True)
+            if res.returncode == 0:
+                print("  " + res.stdout.strip())
+                done = True
+                break
+        if not done:
+            print("[!] Zuschnitt nicht moeglich (kein Python mit Pillow), kopiere ungeschnitten.",
+                  file=sys.stderr)
+            shutil.copyfile(raw, PNG_PATH)
+
+
 def kicad_cli() -> list[str]:
     base = ["kicad-cli"] if shutil.which("kicad-cli") else None
     if base is None:
@@ -280,7 +359,8 @@ def kicad_cli() -> list[str]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--erc", action="store_true", help="nach dem Schreiben ERC laufen lassen")
-    ap.add_argument("--pdf", action="store_true", help="nach dem Schreiben PDF exportieren")
+    ap.add_argument("--pdf", action="store_true", help="PDF exportieren (docs/daughtercard.pdf)")
+    ap.add_argument("--png", action="store_true", help="PNG-Vorschau exportieren (docs/daughtercard.png); zieht --pdf nach sich")
     ap.add_argument("--check-only", action="store_true", help="nur Netzliste pruefen, nichts schreiben")
     args = ap.parse_args()
 
@@ -310,9 +390,12 @@ def main() -> int:
                       "-o", str(ERC_PATH), str(SCH_PATH)])
         print(f"ERC: {'sauber' if erc_rc == 0 else f'Verletzungen (rc={erc_rc}), siehe {ERC_PATH.relative_to(REPO_ROOT)}'}")
         rc = rc or erc_rc
-    if args.pdf:
+    if args.pdf or args.png:
         run([*kicad_cli(), "sch", "export", "pdf", "-o", str(PDF_PATH), str(SCH_PATH)])
         print(f"PDF: {PDF_PATH.relative_to(REPO_ROOT)}")
+    if args.png:
+        render_png()
+        print(f"PNG: {PNG_PATH.relative_to(REPO_ROOT)}")
     return rc
 
 
