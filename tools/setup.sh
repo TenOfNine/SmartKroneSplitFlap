@@ -190,6 +190,76 @@ else
 fi
 
 # ----------------------------------------------------------------------------
+# 3b. KiCad-Konfiguration fuer den Headless-Betrieb
+# ----------------------------------------------------------------------------
+#
+# 'kicad-cli sch erc' loest Symbolbibliotheken ueber die globale sym-lib-table
+# auf. Die legt sonst nur die GUI beim ersten Start an; headless fehlt sie und
+# ERC meldet fuer jedes Bauteil "configuration does not include the symbol
+# library". Dieselbe Logik gilt fuer Footprints (T5).
+
+setup_kicad_config() {
+	local cfg_base share_base
+	cfg_base="${XDG_CONFIG_HOME:-${HOME}/.config}/kicad/9.0"
+
+	share_base=""
+	for cand in /usr/share/kicad /usr/local/share/kicad /app/share/kicad; do
+		if [ -d "${cand}/template" ]; then share_base="${cand}"; break; fi
+	done
+	if [ -z "${share_base}" ]; then
+		warn "KiCad-Datenverzeichnis nicht gefunden, ueberspringe Bibliothekstabellen."
+		return
+	fi
+
+	log "KiCad-Bibliothekstabellen unter ${cfg_base}"
+	mkdir -p "${cfg_base}"
+	for tbl in sym-lib-table fp-lib-table; do
+		if [ ! -f "${cfg_base}/${tbl}" ] && [ -f "${share_base}/template/${tbl}" ]; then
+			cp "${share_base}/template/${tbl}" "${cfg_base}/${tbl}"
+			log "  ${tbl} aus der Vorlage kopiert"
+		fi
+	done
+
+	# Die Tabellen referenzieren ${KICAD9_SYMBOL_DIR} usw. Fehlen die Variablen,
+	# in kicad_common.json eintragen, damit auch nicht-interaktive Aufrufe sie
+	# aufloesen.
+	python - "${cfg_base}/kicad_common.json" "${share_base}" <<'PY'
+import json, os, sys
+
+path, share = sys.argv[1], sys.argv[2]
+try:
+    with open(path) as fh:
+        cfg = json.load(fh)
+except (OSError, ValueError):
+    cfg = {}
+
+env = cfg.setdefault("environment", {})
+vars_ = env.get("vars") or {}
+defaults = {
+    "KICAD9_SYMBOL_DIR": f"{share}/symbols",
+    "KICAD9_FOOTPRINT_DIR": f"{share}/footprints",
+    "KICAD9_3DMODEL_DIR": f"{share}/3dmodels",
+    "KICAD9_TEMPLATE_DIR": f"{share}/template",
+}
+changed = False
+for k, v in defaults.items():
+    if k not in vars_ and os.path.isdir(v):
+        vars_[k] = v
+        changed = True
+env["vars"] = vars_
+
+if changed:
+    with open(path, "w") as fh:
+        json.dump(cfg, fh, indent=2)
+    print("  kicad_common.json: Bibliothekspfade ergaenzt")
+PY
+}
+
+if [ "${DO_APT}" -eq 1 ] || [ "${DO_PIP}" -eq 1 ]; then
+	setup_kicad_config
+fi
+
+# ----------------------------------------------------------------------------
 # 4. Verifikation
 # ----------------------------------------------------------------------------
 
