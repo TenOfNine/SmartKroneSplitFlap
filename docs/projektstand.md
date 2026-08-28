@@ -11,18 +11,20 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | T2-Nachtrag | Toolchain auf Ubuntu 24.04 verifiziert: KiCad 9.0.9, Roundtrip erfolgreich, Backend `kicad-sch-api`. Probe in `setup.sh` korrigiert (`.add` statt `add_component`). Details in `docs/toolchain.md`. | `74cc386` |
 | T3 | `docs/symbolpruefung.md` — Pinprüfung ATtiny1616-S und TP8485E-SR (via MAX3485) gegen Datenblätter, vom Betreiber freigegeben. | `2d67fd3`, `bfd19d5` |
 | T4 | `hardware/daughtercard/daughtercard.kicad_sch` aus der Netzliste generiert (`tools/gen_daughtercard_sch.py`), **ERC 0/0**, PDF + PNG-Vorschau in `docs/`. Projektbibliothek `krone.kicad_sym` mit allen 15 Symbolen. P-1/P-2 vom Betreiber freigegeben (`docs/pruefpunkte-t4.md`). | `c023799`, `8500aa9`, `0521842`, `aebb75a` |
-| T5 | Footprints für alle 48 Bauteile in `FOOTPRINTS` (`gen_daughtercard_sch.py`), gegen `/usr/share/kicad/footprints` geprüft. PCB-Netzliste `--netlist` exportierbar (48 Bauteile, 40 Netze, jedes Bauteil mit Footprint). Platzierungsvorschlag `docs/layout-daughtercard.md`. | `<dieser>` |
+| T5 | Footprints für alle 48 Bauteile in `FOOTPRINTS` (`gen_daughtercard_sch.py`), gegen `/usr/share/kicad/footprints` geprüft. PCB-Netzliste `--netlist` exportierbar. Platzierungsvorschlag `docs/layout-daughtercard.md`. | `e569300` |
+| T6 | `firmware/module/lib/protocol/` (Rahmen, CRC16/MODBUS, Kommandotabelle) und `lib/enumeration/` (Enumerations-Automat, Rückfall, Kollision), hardwareunabhängig. `pio test -e native`: **39/39** grün (test_crc, test_frame, test_command, test_enumeration). | `<dieser>` |
 
-## Nächster Schritt: T6
+## Nächster Schritt: T7
 
-Hardwareunabhängige Protokollbibliothek unter `firmware/module/lib/` mit
-Host-Tests (`pio test -e native`): Rahmenaufbau nach Spezifikation 5.3, CRC16/MODBUS,
-Kommandotabelle 5.4, Enumerations-Zustandsautomat inkl. Rückfallverhalten 4.5.2.
-Siehe `docs/backlog.md` T6.
+Modul-Firmware ATtiny1616 (`firmware/module/src/`): Zustandsautomat nach
+Spezifikation Kapitel 6 (INIT/HOMING/IDLE/MOVING/ERROR), USART im RS-485-Modus
+über XDIR, Impulsauswertung auf fallende Flanke mit 20 ms Sperrzeit,
+Blattzahlerkennung, EEPROM-Parameter, Watchdog + Laufzeitüberwachung.
+`pio run -e attiny1616` fehlerfrei, Flash < 8 KB. Siehe `docs/backlog.md` T7.
 
-Das eigentliche PCB-Layout (`.kicad_pcb`) ist **nicht** Teil von T5 — T5 endet mit
-zugeordneten Footprints und importierbarer Netzliste. Das Layout kommt, wenn
-Firmware und Bus stehen.
+Hardwarenahe Konstanten gehören in **genau eine** Headerdatei (CLAUDE.md).
+`lib/protocol/` und `lib/enumeration/` sind fertig und getestet — T7 verdrahtet
+sie mit der Hardware.
 
 ## Umgebung
 
