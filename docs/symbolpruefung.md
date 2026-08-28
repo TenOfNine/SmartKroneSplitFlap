@@ -136,6 +136,20 @@ Damit T4, CI und das Layout reproduzierbar dieselben Symbole verwenden:
 
 Kein Pin wird dabei umnummeriert oder umbenannt.
 
+### Umsetzung in T4 (28.08.2026)
+
+`tools/build_krone_symbols.py` erzeugt `krone.kicad_sym` reproduzierbar aus der
+installierten KiCad-9-Bibliothek. Enthalten sind alle 15 im Schaltplan verwendeten
+Symbole (nicht nur ATtiny1616-S und TP8485E-SR), damit der Schaltplan komplett
+`krone:*` referenziert und ERC keine `lib_symbol_mismatch`-Warnung wirft.
+
+Die Symbole werden dabei **abgeflacht** (Vererbung aufgelöst): `kicad-sch-api`
+bettet Symbole ohnehin immer abgeflacht in die `.kicad_sch` ein, und für das von
+`Q_NPN_BEC` abgeleitete `MMBT3904` weicht diese Abflachung von der KiCad-eigenen
+ab. Die Projektbibliothek enthält daher dieselbe Abflachung. **An Pinnummern,
+Pinnamen und Pintypen ändert das nichts** — die Prüfung in Abschnitt 2 und 3 gilt
+unverändert, per `get_symbol_cache` gegengeprüft (28.08.2026).
+
 ---
 
 ## 5. Freigabe

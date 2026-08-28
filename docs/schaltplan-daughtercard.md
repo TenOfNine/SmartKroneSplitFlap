@@ -3,10 +3,10 @@
 | Feld | Wert |
 |---|---|
 | Baugruppe | Modulsteuerung, eine je Anzeigenmodul |
-| Version | 0.1 |
-| Datum | 27.08.2026 |
+| Version | 0.2 |
+| Datum | 28.08.2026 |
 | Bezug | Technische Spezifikation v0.3 |
-| Status | Entwurf, freigegeben zum Layout |
+| Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC fehlerfrei. Zwei Korrekturen offen zur zweiten Prüfung durch den Betreiber, siehe `docs/pruefpunkte-t4.md`. |
 
 **Zum Gebrauch:** Kapitel 3 bis 6 zusammen ergeben den vollständigen Schaltplan. Kapitel 5 zeigt die Blöcke als Prinzipschaltbild, Kapitel 6 ist die verbindliche Netzliste. Bei Abweichungen zwischen beiden gilt die Netzliste.
 
@@ -226,6 +226,8 @@ JP3 wird **nur auf den beiden Karten an den physikalischen Enden des Busses** ge
 
 Ruhepegel high, der Hall-Sensor zieht im Impuls nach Masse. Auswertende Flanke ist die **fallende**. Der Senkenstrom beträgt 0,5 mA je Eingang.
 
+D1–D3 sind BAT54S, ein Doppel-Schottky in Reihe. Pinbelegung nach dem KiCad-Symbol `Diode:BAT54S`: **Pin 1 = A, Pin 2 = K, Pin 3 = COM** (Mittelabgriff). Für den Rail-Clamp liegt Pin 1 (A) auf GND, Pin 2 (K) auf +5V, das gefilterte Signal am Mittelabgriff Pin 3. Eine Spitze über +5V fließt über die Diode COM→K ab, eine unter GND über die Diode A→COM. Diese Zuordnung wurde in T4 gegenüber der Erstfassung korrigiert, siehe `docs/pruefpunkte-t4.md` P-2.
+
 PULSE_NULL wird von der Firmware nicht ausgewertet und dient allein als Messpunkt.
 
 ### 5.4 Triac-Ansteuerung
@@ -309,11 +311,11 @@ Reine Durchverbindung, kein aktives Bauteil im AC-Pfad.
 
 | Netz | Angeschlossene Pins |
 |---|---|
-| +5V | F1.2, U1.1, U2.8, C1.1, C2.1, C3.1, R1.1, R3.1, R5.1, R14.1, JP1.1, J3.1 |
-| GND | U1.20, U2.2, U2.5, C1.2, C2.2, C3.2, C4.2, C5.2, C6.2, Q2.E, Q3.E, R12.2, R15.2 (über D4), J1.1, J1.3, J2.2, J2.4, J2.6, J2.8, J2.10, J3.2, J3.4, J3.6, J3.8, J3.10, J6.1, D1.3, D2.3, D3.3 |
+| +5V | F1.2, U1.1, U2.8, C1.1, C2.1, C3.1, R1.1, R3.1, R5.1, R14.1, JP1.1, J3.1, D1.2, D2.2, D3.2 |
+| GND | U1.20, U2.2, U2.5, C1.2, C2.2, C3.2, C4.2, C5.2, C6.2, Q2.E, Q3.E, R12.2, D4.1 (K), J1.1, J1.3, J2.2, J2.4, J2.6, J2.8, J2.10, J3.2, J3.4, J3.6, J3.8, J3.10, J6.1, D1.1, D2.1, D3.1, TP7.1 |
 | +15V | J2.9, J3.9, JP2.1 |
 | VDRV | JP1.2, JP2.2, R8.1, Q1.S |
-| VSENS | R14.2, J1.5, J1.6 |
+| VSENS | R14.2, J1.5, J1.6, TP6.1 |
 | +5V_IN | J2.1, F1.1, J6.3 |
 
 Ist F1 nicht bestückt, wird +5V_IN mit +5V gebrückt.
@@ -329,25 +331,32 @@ Ist F1 nicht bestückt, wird +5V_IN mit +5V gebrückt.
 | DI | U2.4, U1.9 (PB2) |
 | DE | U2.3, U1.8 (PB3) |
 | PULSE_BLATT_RAW | J1.10, R1.2, R2.1 |
-| PULSE_BLATT | R2.2, C4.1, D1.2, U1.2 (PA4) |
+| PULSE_BLATT | R2.2, C4.1, D1.3, U1.2 (PA4) |
 | PULSE_LEER_RAW | J1.8, R3.2, R4.1 |
-| PULSE_LEER | R4.2, C5.1, D2.2, U1.3 (PA5) |
-| PULSE_NULL_RAW | J1.7, R5.2, R6.1 |
-| PULSE_NULL | R6.2, C6.1, D3.2, U1.4 (PA6) |
+| PULSE_LEER | R4.2, C5.1, D2.3, U1.3 (PA5) |
+| PULSE_NULL_RAW | J1.7, R5.2, R6.1, TP3.1 |
+| PULSE_NULL | R6.2, C6.1, D3.3, U1.4 (PA6) |
 | TRIAC_DRV | U1.5 (PA7), R7.1, R10.1 |
 | Q2_BASE | R7.2, Q2.B |
 | PFET_GATE | Q2.C, R8.2, Q1.G |
-| TRIAC_CTRL | Q1.D über R9, Q3.C, J1.9 |
+| TRIAC_CTRL | Q1.D über R9, Q3.C, J1.9, TP4.1 |
 | CHAIN_IN_RAW | J2.7, R11.1 |
-| CHAIN_IN | R11.2, R12.1, U1.17 (PA1) |
+| CHAIN_IN | R11.2, R12.1, U1.17 (PA1), TP5.1 |
 | CHAIN_OUT | U1.18 (PA2), R13.1 |
 | CHAIN_OUT_EXT | R13.2, J3.7 |
 | UPDI | U1.16 (PA0), J6.2 |
 | LED_A | U1.19 (PA3), R15.1 |
+| LED_K | R15.2, D4.2 (A) |
 | AC1 | J4.1, J5.1, J1.2 |
 | AC2 | J4.2, J5.2, J1.4 |
+| TP_PB5 | U1.6 (PB5), TP1.1 |
+| TP_PB4 | U1.7 (PB4), TP2.1 |
 
-Die Anodenpins von D1–D3 (BAT54S, Pin 1) liegen jeweils auf +5V, die Kathoden (Pin 3) auf GND, der Mittelabgriff (Pin 2) am jeweiligen gefilterten Signal.
+Netz `TRIAC_CTRL` führt Q1.D **über R9** zum Signal: R9.1 an Q1.D, R9.2 am Netz `TRIAC_CTRL`. `VSENS` (6.1) erhält zusätzlich `TP6.1`.
+
+`LED_K` ist der Knoten zwischen R15 und der LED-Anode; die LED-Kathode D4.1 (K) liegt auf GND. Symbol `Device:LED`: Pin 1 = K, Pin 2 = A.
+
+D1–D3 (BAT54S), Zuordnung nach dem KiCad-Symbol `Diode:BAT54S` (Pin 1 = A, Pin 2 = K, Pin 3 = COM): **Pin 1 (A) an GND, Pin 2 (K) an +5V, Pin 3 (COM/Mittelabgriff) am gefilterten Signal.** Gegenüber der Erstfassung korrigiert, siehe `docs/pruefpunkte-t4.md` P-2.
 
 ### 6.3 Belegung U1 (ATtiny1616, SOIC-20)
 
@@ -358,14 +367,14 @@ Die Anodenpins von D1–D3 (BAT54S, Pin 1) liegen jeweils auf +5V, die Kathoden 
 | 3 | PA5 | PULSE_LEER |
 | 4 | PA6 | PULSE_NULL |
 | 5 | PA7 | TRIAC_DRV |
-| 6 | PB5 | TP1 (Reserve) |
-| 7 | PB4 | TP2 (Reserve) |
+| 6 | PB5 | TP_PB5 → TP1 |
+| 7 | PB4 | TP_PB4 → TP2 |
 | 8 | PB3 | DE |
 | 9 | PB2 | DI |
 | 10 | PB1 | RO |
-| 11 | PB0 | TP3 (Reserve) |
-| 12 | PC0 | TP4 (Reserve) |
-| 13 | PC1 | TP5 (Reserve) |
+| 11 | PB0 | offen (Reserve, kein Pad) |
+| 12 | PC0 | offen (Reserve, kein Pad) |
+| 13 | PC1 | offen (Reserve, kein Pad) |
 | 14 | PC2 | offen |
 | 15 | PC3 | offen |
 | 16 | PA0 | UPDI |
@@ -378,15 +387,19 @@ Die Anodenpins von D1–D3 (BAT54S, Pin 1) liegen jeweils auf +5V, die Kathoden 
 
 ### 6.4 Testpads
 
-| Ref | Netz | Zweck |
-|---|---|---|
-| TP1 | PB5 | Reserve, Firmware-Debug |
-| TP2 | PB4 | Reserve |
-| TP3 | PULSE_NULL_RAW | Untersuchung des Nullimpulses |
-| TP4 | TRIAC_CTRL | Messung des Ansteuerpegels, O-2 |
-| TP5 | CHAIN_IN | Diagnose der Enumeration |
-| TP6 | VSENS | Einspeisung einer höheren Sensorspannung, falls nötig |
-| TP7 | GND | Massepunkt für den Tastkopf, direkt neben TP3 und TP4 |
+Diese Tabelle ist für die Testpad-Zuordnung **maßgeblich** (Auflösung des früheren Widerspruchs zu 6.3, siehe `docs/pruefpunkte-t4.md` P-1). Nur TP1 und TP2 liegen auf Reserve-GPIOs, TP3–TP7 auf Funktionsnetzen.
+
+| Ref | Netz | Pin | Zweck |
+|---|---|---|---|
+| TP1 | TP_PB5 | U1.6 (PB5) | Reserve, Firmware-Debug |
+| TP2 | TP_PB4 | U1.7 (PB4) | Reserve |
+| TP3 | PULSE_NULL_RAW | J1.7 | Untersuchung des Nullimpulses |
+| TP4 | TRIAC_CTRL | J1.9 | Messung des Ansteuerpegels, O-2 |
+| TP5 | CHAIN_IN | U1.17 (PA1) | Diagnose der Enumeration |
+| TP6 | VSENS | J1.5/J1.6 | Einspeisung einer höheren Sensorspannung, falls nötig |
+| TP7 | GND | — | Massepunkt für den Tastkopf, direkt neben TP3 und TP4 |
+
+Die Reserve-GPIOs PB0, PC0, PC1, PC2, PC3 (U1 Pin 11–15) bleiben in dieser Fassung **unbeschaltet** — kein Testpad, kein Pad. Wer später Zugriff braucht, führt sie im Layout auf zusätzliche Pads.
 
 ---
 
@@ -480,3 +493,4 @@ Bei zehn Karten würde ich fünfzehn fertigen lassen. Der Aufpreis ist gering un
 | Version | Datum | Änderung |
 |---|---|---|
 | 0.1 | 27.08.2026 | Erstfassung auf Basis der Spezifikation v0.3. |
+| 0.2 | 28.08.2026 | T4: Netzliste in KiCad-Schaltplan überführt. Zwei Widersprüche in Kapitel 6 aufgelöst (Details und offene Gegenprüfung in `docs/pruefpunkte-t4.md`): **P-1** Testpad-Zuordnung — 6.4 ist maßgeblich, TP3–TP5 liegen auf Funktionsnetzen, die Reserve-GPIOs PB0/PC0/PC1/PC2/PC3 bleiben unbeschaltet; 6.3 entsprechend gefasst. **P-2** Klemmdioden D1–D3 (BAT54S) — Pinbelegung auf das KiCad-Symbol und eine funktionsfähige Clamp-Topologie umgestellt: Pin 1 (A) → GND, Pin 2 (K) → +5V, Pin 3 (COM) → Signal. Testpad-Netze TP1–TP7 und `LED_K` in die Netzliste aufgenommen. |
