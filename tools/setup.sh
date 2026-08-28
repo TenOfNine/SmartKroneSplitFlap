@@ -35,11 +35,13 @@ PYTHON="${PYTHON:-python3}"
 DO_APT=1
 DO_PIP=1
 DO_VERIFY=1
+DO_KICAD_CFG_ONLY=0
 
 for arg in "$@"; do
 	case "${arg}" in
 		--skip-apt)     DO_APT=0 ;;
 		--verify-only)  DO_APT=0; DO_PIP=0 ;;
+		--kicad-config) DO_APT=0; DO_PIP=0; DO_VERIFY=0; DO_KICAD_CFG_ONLY=1 ;;
 		--help|-h)
 			cat <<'USAGE'
 Toolchain-Setup fuer die Entwicklungs-VM (Debian/Ubuntu, siehe docs/toolchain.md).
@@ -53,6 +55,7 @@ Aufruf:
   bash tools/setup.sh                 vollstaendige Einrichtung
   bash tools/setup.sh --skip-apt      nur Python-venv und Verifikation
   bash tools/setup.sh --verify-only   nichts installieren, nur pruefen
+  bash tools/setup.sh --kicad-config  nur die KiCad-Bibliothekstabellen (CI)
   bash tools/setup.sh --help          diese Hilfe
 
 Umgebungsvariablen:
@@ -257,8 +260,13 @@ if changed:
 PY
 }
 
-if [ "${DO_APT}" -eq 1 ] || [ "${DO_PIP}" -eq 1 ]; then
+if [ "${DO_APT}" -eq 1 ] || [ "${DO_PIP}" -eq 1 ] || [ "${DO_KICAD_CFG_ONLY}" -eq 1 ]; then
 	setup_kicad_config
+fi
+
+if [ "${DO_KICAD_CFG_ONLY}" -eq 1 ]; then
+	log "KiCad-Bibliothekstabellen eingerichtet."
+	exit 0
 fi
 
 # ----------------------------------------------------------------------------

@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write   # fuer den Release-Job
+
+jobs:
+  host-tests:
+    name: Host-Tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: PlatformIO-Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-native-${{ hashFiles('firmware/**/platformio.ini') }}
+          restore-keys: pio-native-
+      - run: pip install --upgrade platformio
+      - name: Modul-Bibliotheken (pio test -e native)
+        run: pio test -e native -d firmware/module
+      - name: Master-Bibliotheken (pio test -e native)
+        run: pio test -e native -d firmware/master
+      - name: busctl
+        run: python tools/test_busctl.py
+
+  firmware:
+    name: Firmware-Builds
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: PlatformIO-Cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-build-${{ hashFiles('firmware/**/platformio.ini') }}
+          restore-keys: pio-build-
+      - run: pip install --upgrade platformio
+      - name: Modul-Firmware (ATtiny1616)
+        run: pio run -e attiny1616 -d firmware/module
+      - name: Flash-Verbrauch < 8 KB
+        run: python tools/check_flash.py firmware/module/.pio/build/attiny1616/firmware.elf 8192
+      - name: Master-Firmware (ESP32)
+        run: pio run -e esp32 -d firmware/master
+
+  hardware:
+    name: Schaltplan-ERC
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: KiCad 9 + xvfb
+        run: |
+          sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends kicad xvfb
+      - run: pip install kicad-sch-api kicad-skip
+      - name: Bibliothekstabellen
+        run: bash tools/setup.sh --kicad-config
+      - name: Symbolbibliothek aktuell
+        run: python tools/build_krone_symbols.py --check
+      - name: Netzliste konsistent
+        run: python tools/gen_daughtercard_sch.py --check-only
+      - name: ERC
+        run: >
+          xvfb-run -a kicad-cli sch erc --exit-code-violations
+          --severity-error --severity-warning
+          -o erc-daughtercard.rpt
+          hardware/daughtercard/daughtercard.kicad_sch
+      - if: failure()
+        run: cat erc-daughtercard.rpt || true
+
+  release:
+    name: Release-Artefakte
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [host-tests, firmware, hardware]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: KiCad 9 + xvfb
+        run: |
+          sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends kicad xvfb
+      - name: Schaltplan-PDF
+        run: >
+          xvfb-run -a kicad-cli sch export pdf
+          -o daughtercard.pdf hardware/daughtercard/daughtercard.kicad_sch
+      - name: Gerber (sobald ein Layout vorliegt)
+        run: |
+          PCB=hardware/daughtercard/daughtercard.kicad_pcb
+          if [ -f "$PCB" ]; then
+            xvfb-run -a kicad-cli pcb export gerbers -o gerber/ "$PCB"
+            xvfb-run -a kicad-cli pcb export drill   -o gerber/ "$PCB"
+            (cd gerber && zip -r ../daughtercard-gerber.zip .)
+          else
+            echo "kein .kicad_pcb -- Gerber-Export uebersprungen (Layout folgt)"
+          fi
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            daughtercard.pdf
+            daughtercard-gerber.zip
+          fail_on_unmatched_files: false
+          generate_release_notes: true
