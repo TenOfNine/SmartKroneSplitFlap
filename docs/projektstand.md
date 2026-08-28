@@ -15,18 +15,16 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | T6 | `firmware/module/lib/protocol/` (Rahmen, CRC16/MODBUS, Kommandotabelle) und `lib/enumeration/` (Enumerations-Automat, Rückfall, Kollision), hardwareunabhängig. `pio test -e native`: **39/39** grün. | `b871628` |
 | T7 (P-3) | Befund: RS-485-Pins der Spez. passten nicht zur USART0-Belegung des ATtiny1616. Freigegeben und korrigiert: RO→PB3, DE→PB0, PB1 Reserve. Schaltplan v0.3 (ERC 0/0), Spez. v0.5, `docs/pruefpunkte-t7.md`. | `52a022c`, `b008f8a` |
 | T7 | Modul-Firmware ATtiny1616, **bare metal** (avr-libc, kein megaTinyCore). `src/board.h`, `src/main.c`, Libs `lib/motion/` + `lib/config/`. `pio run -e attiny1616`: **5303 B Flash** (< 8 KB). `pio test -e native`: **62/62** grün. | `35fad05` |
-| T8 | Master-Firmware ESP32 (`firmware/master/`). Libs `charmap`/`clocktext`/`busmaster`/`masterapp`/`hadiscovery` — hardwareunabhängig, `pio test -e native` **33/33** grün (REST-Logik gegen simulierten Bus). `src/main.cpp`: UART2-RS485, WiFiManager, WebServer/REST (7.5), PubSubClient/MQTT + HA-Discovery (7.6), NTP (7.2), OTA. `pio run -e esp32`: fehlerfrei, ~950 KB Flash. `lib/protocol` via `lib_extra_dirs` geteilt. | `<dieser>` |
+| T8 | Master-Firmware ESP32 (`firmware/master/`). Libs `charmap`/`clocktext`/`busmaster`/`masterapp`/`hadiscovery` — `pio test -e native` **33/33**. `src/main.cpp`: UART2-RS485, WiFiManager, WebServer/REST (7.5), MQTT + HA-Discovery (7.6), NTP, OTA. `pio run -e esp32`: ~950 KB Flash. | `1a0e3c0` |
+| T9 | `tools/busctl.py` — Bus-Kommandozeilenwerkzeug (enum/status/set/show/home/stop/ping/uid/config/sniff/selftest) für USB-RS485-Adapter, `--sim N` und `--loopback` ohne Hardware. `tools/test_busctl.py`: 13 stdlib-Tests. `selftest` prüft gegen dieselben Goldwerte wie die C-Tests. | `<dieser>` |
 
-## Nächster Schritt: T9 — Bus-Testwerkzeug
+## Nächster Schritt: T10 — CI
 
-`tools/busctl.py` für einen USB-RS485-Adapter: Enumeration auslösen, Status
-abfragen, Zielblatt setzen, Rohrahmen mitschneiden. Abnahme: gegen die
-Modul-Firmware in einer TX-auf-RX-Schleife plausible Rahmen erzeugen und
-zerlegen. Siehe `docs/backlog.md` T9. Danach T10 (CI).
-
-Die Rahmen-/CRC-Logik existiert schon dreifach (C in `lib/protocol`, genutzt von
-Modul und Master); `busctl.py` implementiert sie in Python neu und kann gegen die
-C-Tests gegengeprüft werden.
+GitHub Action: ERC, beide Firmware-Builds (`attiny1616`, `esp32`), alle
+Host-Tests (`pio test -e native` in module + master, `tools/test_busctl.py`,
+`build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`).
+Bei einem Tag zusätzlich PDF und Gerber als Release-Artefakt. Siehe
+`docs/backlog.md` T10.
 
 ## Umgebung
 
