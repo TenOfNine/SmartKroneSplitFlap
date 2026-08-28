@@ -1,43 +1,38 @@
 # firmware/module
 
-Firmware der Modulsteuerung (ATtiny1616, PlatformIO / megaTinyCore).
+Firmware der Modulsteuerung (ATtiny1616, PlatformIO, **bare metal** / avr-libc).
 
-## Stand
+## Aufbau
 
-| Teil | Status |
-|---|---|
-| `lib/protocol/` | **T6 fertig.** Rahmen, CRC16/MODBUS, Kommandotabelle. Hardwareunabhängig, host-getestet. |
-| `lib/enumeration/` | **T6 fertig.** Enumerations-Zustandsautomat inkl. Rückfallverhalten und Kollisionserkennung. |
-| `src/main.c` | Platzhalter. Zustandsautomat, USART/RS-485, Impulsauswertung, Watchdog → **T7**. |
+| Teil | Inhalt | Bezug |
+|---|---|---|
+| `lib/protocol/` | Rahmen, CRC16/MODBUS, Kommandotabelle | Spez. 5.3–5.5 |
+| `lib/enumeration/` | Enumerations-Automat, Rückfall, Kollisionserkennung | Spez. 4.5 |
+| `lib/motion/` | Bewegungs-Zustandsautomat (HOMING/IDLE/MOVING/ERROR) | Spez. 6 |
+| `lib/config/` | EEPROM-Konfiguration, Vorgaben, Bereichsprüfung | Spez. 6.3 |
+| `src/board.h` | **einzige** Datei mit hardwarenahen Konstanten (Pins, Takt, EEPROM-Layout) |
+| `src/main.c` | Peripherie-Setup, ISRs, Kommando-Dispatch, Hauptschleife |
 
-## Bibliotheken
+Die vier Bibliotheken sind hardwareunabhängig (kein Registerzugriff) und auf dem
+Host getestet. `src/` verdrahtet sie mit USART0 (RS-485-Modus, XDIR treibt DE),
+TCB0 (1-ms-Zeitbasis), PORTA-Flankeninterrupts (Impulse) und dem Watchdog.
 
-Beide hardwareunabhängig (kein Registerzugriff), Bezug jeweils
-`docs/spezifikation.md`:
-
-- **`protocol`** (Abschnitt 5.3–5.5) — `proto_encode`, Streaming-Parser
-  `proto_parser_feed`, `proto_crc16`, Kommandotabelle `proto_cmd_lookup` /
-  `proto_cmd_is_valid`.
-- **`enumeration`** (Abschnitt 4.5) — `enum_fsm_*`. Der Automat kennt weder EEPROM
-  noch CHAIN-Leitung; der Aufrufer speist Ereignisse ein (`on_frame`, `on_tick`,
-  `on_echo_mismatch`) und wertet die Ausgabeflags aus (`want_ack`,
-  `want_eeprom_write`).
-
-## Tests
+## Tests (Host)
 
 ```bash
 source ../../.venv/bin/activate
 pio test -e native
 ```
 
-`test/test_crc`, `test/test_frame`, `test/test_command`, `test/test_enumeration`
-(Unity). Der Enumerationstest deckt die vom Backlog T6 geforderten Fälle ab:
-Kollisionserkennung, Rückfall auf die EEPROM-Adresse, Rückfall auf die
-Serviceadresse 250.
+`test_crc`, `test_frame`, `test_command`, `test_enumeration`, `test_motion`,
+`test_config` (Unity). Der Enumerationstest deckt die vom Backlog T6 geforderten
+Fälle ab: Kollisionserkennung, Rückfall EEPROM-Adresse, Rückfall Serviceadresse 250.
 
-## Firmware bauen (ab T7)
+## Firmware bauen und flashen
 
 ```bash
-pio run  -e attiny1616
-pio run  -e attiny1616 -t upload      # SerialUPDI, FTDI-Adapter mit 4,7 kΩ TX–RX
+pio run  -e attiny1616               # ~5,3 KB Flash (Grenze 8 KB)
+pio run  -e attiny1616 -t upload     # SerialUPDI, FTDI-Adapter mit 4,7 kΩ TX–RX
 ```
+
+Voraussetzung am Baustein: OSCCFG-Fuse auf 20 MHz (PlatformIO-Board-Vorgabe).

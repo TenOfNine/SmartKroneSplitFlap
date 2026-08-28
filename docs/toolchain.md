@@ -81,9 +81,15 @@ pio test -e native -d firmware/module  # Protokolltests auf dem Host
 
 | Ziel | Plattform | Board | Framework | Upload |
 |---|---|---|---|---|
-| Modul | `atmelmegaavr` | `ATtiny1616` | arduino (megaTinyCore) | `serialupdi` |
+| Modul | `atmelmegaavr` | `ATtiny1616` | keins (bare metal, avr-libc) | `serialupdi` |
 | Master | `espressif32` | `esp32dev` | arduino | `esptool`, später OTA |
-| Tests | `native` | — | — | — |
+| Tests | `native` | — | unity | — |
+
+> In T7 fiel die Wahl auf **bare metal** statt megaTinyCore: knapper Flash-Bedarf
+> (rund 5,3 KB gegen 8 KB Grenze), volle Kontrolle über USART0-RS485, TCB0 und
+> Watchdog, und der ganze Firmware-Code bleibt reines C wie `lib/protocol` und
+> `lib/enumeration`. Die Plattformpakete (`toolchain-atmelavr`, Device-Header)
+> kommen weiterhin über `atmelmegaavr`.
 
 Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstand zwischen TX und RX. Der Widerstand sitzt im Adapter, nicht auf der Daughter Card.
 
