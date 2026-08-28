@@ -224,13 +224,34 @@ BLOCKS: list[tuple[str, float, float, int, float, float, list[str]]] = [
 NO_CONNECT_PINS = [("U1", "10"), ("U1", "12"), ("U1", "13"), ("U1", "14"), ("U1", "15")]
 
 
-def check_netlist_consistency() -> list[str]:
-    """Prueft, dass jeder Bauteilpin genau einem Netz (oder NC) zugeordnet ist."""
-    import kicad_sch_api as ksa
-    from kicad_sch_api.library import get_symbol_cache
+def _symbol_pins(lib_text: str) -> dict[str, list[str]]:
+    """Pinnummern je Symbol direkt aus der .kicad_sym lesen (ohne kicad-sch-api,
+    damit der Konsistenzcheck von der Toolchain-Version unabhaengig ist)."""
+    import re
 
-    cache = get_symbol_cache()
-    cache.add_library_path(str(PROJ_DIR / "symbols" / "krone.kicad_sym"))
+    out: dict[str, list[str]] = {}
+    for m in re.finditer(r'^\t\(symbol "([^"]+)"', lib_text, re.M):
+        name = m.group(1)
+        start = m.end()
+        depth = 1
+        i = start
+        while i < len(lib_text) and depth:
+            c = lib_text[i]
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            i += 1
+        block = lib_text[start:i]
+        out[name] = re.findall(r'\(pin\b.*?\(number "([^"]+)"', block, re.S)
+    return out
+
+
+def check_netlist_consistency() -> list[str]:
+    """Prueft, dass jeder Bauteilpin genau einem Netz (oder NC) zugeordnet ist
+    und jedes Bauteil einen Footprint hat."""
+    lib_path = PROJ_DIR / "symbols" / "krone.kicad_sym"
+    pins_by_symbol = _symbol_pins(lib_path.read_text(encoding="utf-8"))
 
     assigned: dict[tuple[str, str], str] = {}
     problems: list[str] = []
@@ -250,13 +271,14 @@ def check_netlist_consistency() -> list[str]:
 
     fp_root = Path("/usr/share/kicad/footprints")
     for ref, (lib_id, _value, _dnp) in COMPONENTS.items():
-        sym = cache.get_symbol(lib_id)
-        if sym is None:
-            problems.append(f"Symbol {lib_id} fuer {ref} nicht gefunden")
+        sym_name = lib_id.split(":", 1)[1]
+        pins = pins_by_symbol.get(sym_name)
+        if pins is None:
+            problems.append(f"Symbol {sym_name} fuer {ref} nicht in krone.kicad_sym")
             continue
-        for p in sym.pins:
-            if (ref, p.number) not in assigned:
-                problems.append(f"{ref}.{p.number} ({p.name}) hat kein Netz")
+        for pin in pins:
+            if (ref, pin) not in assigned:
+                problems.append(f"{ref}.{pin} hat kein Netz")
 
         fp = FOOTPRINTS.get(ref)
         if not fp:
@@ -264,12 +286,18 @@ def check_netlist_consistency() -> list[str]:
         elif fp_root.is_dir():
             lib, _, mod = fp.partition(":")
             if not (fp_root / f"{lib}.pretty" / f"{mod}.kicad_mod").is_file():
-                problems.append(f"{ref}: Footprint {fp} nicht in {fp_root}")
+                # nur ein Hinweis: Footprintnamen koennen zwischen KiCad-Versionen
+                # abweichen, ohne dass die Netzliste falsch ist
+                print(f"  [i] {ref}: Footprint {fp} nicht in {fp_root} gefunden",
+                      file=sys.stderr)
     return problems
 
 
 def build_schematic():
     import kicad_sch_api as ksa
+    from kicad_sch_api.library import get_symbol_cache
+
+    get_symbol_cache().add_library_path(str(PROJ_DIR / "symbols" / "krone.kicad_sym"))
 
     sch = ksa.create_schematic("daughtercard")
     sch.set_paper_size("A2")
@@ -325,50 +353,20 @@ def build_schematic():
 
 
 def write_project_file() -> None:
-    """.kicad_pro, damit kicad-cli die projektlokale sym-lib-table findet und
-    ${KIPRJMOD} aufloest. Enthaelt ausserdem die Netzklassen aus
-    docs/schaltplan-daughtercard.md 8.2 fuer das Layout (T5)."""
+    """Legt eine minimale .kicad_pro an, falls noch keine existiert, damit
+    kicad-cli die projektlokale sym-lib-table findet und ${KIPRJMOD} aufloest.
 
-    def cls(name, clr, tw, **kw):
-        base = {
-            "name": name, "clearance": clr, "track_width": tw,
-            "via_diameter": 0.6, "via_drill": 0.3,
-            "microvia_diameter": 0.3, "microvia_drill": 0.1,
-            "diff_pair_width": tw, "diff_pair_gap": 0.25,
-            "diff_pair_via_gap": 0.25, "pcb_color": "rgba(0, 0, 0, 0.000)",
-            "wire_width": 6, "bus_width": 12, "schematic_color": "rgba(0, 0, 0, 0.000)",
-            "line_style": 0, "priority": 0,
-        }
-        base.update(kw)
-        return base
-
+    Eine vorhandene Datei wird NICHT ueberschrieben -- der PCB-Editor und
+    tools/gen_daughtercard_pcb.py reichern sie um Board-Einstellungen und
+    Netzklassen an."""
+    if PRO_PATH.exists():
+        return
     pro = {
         "board": {},
         "boards": [],
         "libraries": {"pinned_footprint_libs": [], "pinned_symbol_libs": []},
         "meta": {"filename": PRO_PATH.name, "version": 1},
-        "net_settings": {
-            "classes": [
-                cls("Default", 0.2, 0.25),
-                # AC-Fuehrung: >= 1,0 mm, >= 2,0 mm Abstand zu Logiknetzen
-                cls("AC", 2.0, 1.0),
-                # RS-485 als Paar, 0,3 mm
-                cls("RS485", 0.2, 0.3, diff_pair_gap=0.3),
-                # +5V / GND / VSENS / +15V: >= 0,5 mm
-                cls("Power", 0.2, 0.5),
-            ],
-            "meta": {"version": 4},
-            "netclass_patterns": [
-                {"netclass": "AC", "pattern": "/AC?"},
-                {"netclass": "RS485", "pattern": "/RS485_?"},
-                {"netclass": "Power", "pattern": "/+5V"},
-                {"netclass": "Power", "pattern": "/+5V_IN"},
-                {"netclass": "Power", "pattern": "/+15V"},
-                {"netclass": "Power", "pattern": "/GND"},
-                {"netclass": "Power", "pattern": "/VSENS"},
-                {"netclass": "Power", "pattern": "/VDRV"},
-            ],
-        },
+        "net_settings": {},
         "pcbnew": {"last_paths": {}, "page_layout_descr_file": ""},
         "schematic": {},
         "sheets": [],

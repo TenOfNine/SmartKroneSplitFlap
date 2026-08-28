@@ -25,6 +25,10 @@ Netzliste des Schaltplans und die Footprint-Tabelle aus
 
 - Die Bauteil-Footprints tragen den Pfad des zugehörigen Schaltplansymbols;
   „Update PCB from Schematic" ordnet sie also ohne Warnung zu.
+- Netzklassen in der `.kicad_pro`: `AC` (1,0 mm Bahn), `RS485` (0,3 mm Paar),
+  `Power` (0,5 mm). Der 2‑mm‑Abstand der AC‑Bahnen zu Logiknetzen (Abschnitt 3)
+  ist eine **Routing‑Vorgabe von Hand**, keine DRC‑Regel — am Stecker mit
+  2,54‑mm‑Raster wäre er nicht einhaltbar.
 - DRC meldet die unverdrahteten Netze (erwartbar) und rund vier eng benachbarte
   Bauteilpaare im gedrängten oberen Streifen (R16/JP3/R14/C2 zwischen den
   Wannensteckern) — dort ein paar Millimeter auseinanderziehen.
