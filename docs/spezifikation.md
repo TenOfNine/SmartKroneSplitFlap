@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.3 |
-| Datum | 27.08.2026 |
+| Version | 0.4 |
+| Datum | 28.08.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11 |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -173,7 +173,8 @@ Verworfene Alternativen: CH32V003 (3,3 V, Pegelwandlung nötig, Vorteil erst ab 
 | 17 | PA1 | CHAIN_IN |
 | 18 | PA2 | CHAIN_OUT |
 | 19 | PA3 | Status-LED |
-| 6, 7, 12–15 | PB5, PB4, PC0…PC3 | Reserve, herausgeführt auf Testpads |
+| 6, 7 | PB5, PB4 | Reserve, herausgeführt auf Testpad TP1 bzw. TP2 |
+| 11–15 | PB0, PC0…PC3 | Reserve, im Schaltplan v0.2 unbeschaltet (kein Pad), siehe `docs/pruefpunkte-t4.md` P-1 |
 | 16 | PA0 | UPDI |
 | 1, 20 | VDD, GND | Versorgung |
 
@@ -710,3 +711,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 |---|---|---|
 | 0.1 | 27.08.2026 | Erstfassung. Architektur, Modul-CPU, Busprotokoll, Firmware-Konzept, Zentralsteuerung, Netzteil, Testplan. Offene Punkte O-1 bis O-7 markiert. |
 | 0.3 | 27.08.2026 | Steckerbelegung aus der Originaldokumentation vollständig übernommen: gemeinsame Masse (Pin 1, 3), gemeinsame Versorgung (Pin 5, 6), 42 V~ an Pin 2 und 4, Triac-Eingang an Pin 9, Impulse an Pin 8 und 10 mit fallender auswertender Flanke. Getrennte Potenzialbereiche entfallen, damit auch Optokoppler und isolierter DC/DC-Wandler. Kapitel 4.4 neu gefasst mit Transistorschalter und wählbarer Treiberspannung. Abschnitt 8.4 zur Potenzialfreiheit der Motorspannung ergänzt. O-1, O-3 und O-4 abgeschlossen, O-2 neu formuliert. |
+| 0.4 | 28.08.2026 | Kapitel 4.2: Reserve-Pins präzisiert. Nur PB5/PB4 liegen auf Testpads (TP1/TP2); PB0 und PC0…PC3 bleiben im Schaltplan v0.2 unbeschaltet. Auflösung des Widerspruchs zwischen Schaltplan 6.3 und 6.4, dokumentiert in `docs/pruefpunkte-t4.md`. Zur zweiten Prüfung durch den Betreiber offen. |
