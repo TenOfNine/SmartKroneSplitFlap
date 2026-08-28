@@ -14,17 +14,19 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | T5 | Footprints für alle 48 Bauteile in `FOOTPRINTS` (`gen_daughtercard_sch.py`), gegen `/usr/share/kicad/footprints` geprüft. PCB-Netzliste `--netlist` exportierbar. Platzierungsvorschlag `docs/layout-daughtercard.md`. | `e569300` |
 | T6 | `firmware/module/lib/protocol/` (Rahmen, CRC16/MODBUS, Kommandotabelle) und `lib/enumeration/` (Enumerations-Automat, Rückfall, Kollision), hardwareunabhängig. `pio test -e native`: **39/39** grün. | `b871628` |
 | T7 (P-3) | Befund: RS-485-Pins der Spez. passten nicht zur USART0-Belegung des ATtiny1616. Freigegeben und korrigiert: RO→PB3, DE→PB0, PB1 Reserve. Schaltplan v0.3 (ERC 0/0), Spez. v0.5, `docs/pruefpunkte-t7.md`. | `52a022c`, `b008f8a` |
-| T7 | Modul-Firmware ATtiny1616, **bare metal** (avr-libc, kein megaTinyCore). `src/board.h` (Hardwarekonstanten), `src/main.c` (USART0-RS485, TCB0-1ms, PORTA-Flankenint, WDT, Kommando-Dispatch). Neue Libs `lib/motion/` (Spez. 6) und `lib/config/` (Spez. 6.3), hardwareunabhängig. `pio run -e attiny1616`: **5303 B Flash** (< 8 KB), 184 B RAM. `pio test -e native`: **62/62** grün. | `<dieser>` |
+| T7 | Modul-Firmware ATtiny1616, **bare metal** (avr-libc, kein megaTinyCore). `src/board.h`, `src/main.c`, Libs `lib/motion/` + `lib/config/`. `pio run -e attiny1616`: **5303 B Flash** (< 8 KB). `pio test -e native`: **62/62** grün. | `35fad05` |
+| T8 | Master-Firmware ESP32 (`firmware/master/`). Libs `charmap`/`clocktext`/`busmaster`/`masterapp`/`hadiscovery` — hardwareunabhängig, `pio test -e native` **33/33** grün (REST-Logik gegen simulierten Bus). `src/main.cpp`: UART2-RS485, WiFiManager, WebServer/REST (7.5), PubSubClient/MQTT + HA-Discovery (7.6), NTP (7.2), OTA. `pio run -e esp32`: fehlerfrei, ~950 KB Flash. `lib/protocol` via `lib_extra_dirs` geteilt. | `<dieser>` |
 
-## Nächster Schritt: T8 — Master-Firmware ESP32
+## Nächster Schritt: T9 — Bus-Testwerkzeug
 
-`firmware/master/`: WLAN-Einrichtung über Captive Portal, Web-UI, REST (7.5),
-MQTT mit Home-Assistant-Auto-Discovery (7.6), NTP-Uhr, Zeichenabbildung (7.4),
-Betriebsarten inkl. Auto-Timeout der Sekundenanzeige. `pio run` fehlerfrei,
-REST-Endpunkte gegen einen simulierten Bus. Siehe `docs/backlog.md` T8.
+`tools/busctl.py` für einen USB-RS485-Adapter: Enumeration auslösen, Status
+abfragen, Zielblatt setzen, Rohrahmen mitschneiden. Abnahme: gegen die
+Modul-Firmware in einer TX-auf-RX-Schleife plausible Rahmen erzeugen und
+zerlegen. Siehe `docs/backlog.md` T9. Danach T10 (CI).
 
-Die Protokollschicht `firmware/module/lib/protocol/` ist plattformunabhängiges
-C und lässt sich im Master wiederverwenden (Rahmen/CRC/Kommandotabelle).
+Die Rahmen-/CRC-Logik existiert schon dreifach (C in `lib/protocol`, genutzt von
+Modul und Master); `busctl.py` implementiert sie in Python neu und kann gegen die
+C-Tests gegengeprüft werden.
 
 ## Umgebung
 

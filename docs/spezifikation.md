@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.6 |
+| Version | 0.7 |
 | Datum | 28.08.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11 |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -490,11 +490,17 @@ Arduino-ESP32, bewusst ohne ESPHome, da bei zehn Modulen die Entity-Verwaltung s
 | Aufgabe | Bibliothek |
 |---|---|
 | WLAN-Einrichtung | WiFiManager, Captive Portal beim Erststart |
-| Web-UI | ESPAsyncWebServer + LittleFS |
-| Konfiguration | ArduinoJson, Ablage in LittleFS |
+| Web-UI | eingebauter `WebServer` (in T8 gewählt; siehe unten) |
+| Konfiguration | ArduinoJson zum Parsen, Ablage in `Preferences`/NVS |
 | MQTT | PubSubClient mit Home-Assistant-Auto-Discovery |
 | Zeit | `configTzTime` mit `CET-1CEST,M3.5.0,M10.5.0/3` |
 | Update | ArduinoOTA |
+
+In T8 wurden gegenüber der Erstfassung `ESPAsyncWebServer` durch den eingebauten
+synchronen `WebServer` und `LittleFS` durch `Preferences` (NVS) ersetzt:
+dependency-arm, ohne `AsyncTCP`, mit arduino-esp32 3.x ohne Patches lauffähig.
+Für zehn Module und die einfache UI genügt der synchrone Server. Details in
+`docs/toolchain.md` Abschnitt 4.
 
 ### 7.3 Funktionsumfang
 
@@ -718,3 +724,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.4 | 28.08.2026 | Kapitel 4.2: Reserve-Pins präzisiert. Nur PB5/PB4 liegen auf Testpads (TP1/TP2); PB0 und PC0…PC3 bleiben im Schaltplan v0.2 unbeschaltet. Auflösung des Widerspruchs zwischen Schaltplan 6.3 und 6.4, dokumentiert in `docs/pruefpunkte-t4.md`. Zur zweiten Prüfung durch den Betreiber offen. |
 | 0.5 | 28.08.2026 | Kapitel 4.2: RS-485-Pins auf die tatsächliche USART0-Belegung des ATtiny1616 korrigiert (`docs/pruefpunkte-t7.md` P-3, vom Betreiber freigegeben). RXD an PB3 (Pin 8), TXD an PB2 (Pin 9), XDIR an PB0 (Pin 11). PB1 (USART0 XCK) wird Reserve. P-1 und P-2 aus `pruefpunkte-t4.md` als freigegeben vermerkt. |
 | 0.6 | 28.08.2026 | T7: Blatt- und Leerbildimpuls werden über einen Flanken-Interrupt auf PORTA ausgewertet statt über TCB0 Input Capture (Kapitel 4.2). TCB0 stellt die 1-ms-Zeitbasis. Bei ≤ 17 Impulsen/s genügt der Software-Zeitstempel; das spart einen Zeitgeber. |
+| 0.7 | 28.08.2026 | T8: Kapitel 7.2 — Softwarestack der Zentralsteuerung dependency-arm gefasst: eingebauter `WebServer` statt `ESPAsyncWebServer`, `Preferences` (NVS) statt `LittleFS`. Funktionsumfang 7.3–7.7 unverändert. |
