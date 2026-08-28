@@ -16,15 +16,20 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | T7 (P-3) | Befund: RS-485-Pins der Spez. passten nicht zur USART0-Belegung des ATtiny1616. Freigegeben und korrigiert: RO→PB3, DE→PB0, PB1 Reserve. Schaltplan v0.3 (ERC 0/0), Spez. v0.5, `docs/pruefpunkte-t7.md`. | `52a022c`, `b008f8a` |
 | T7 | Modul-Firmware ATtiny1616, **bare metal** (avr-libc, kein megaTinyCore). `src/board.h`, `src/main.c`, Libs `lib/motion/` + `lib/config/`. `pio run -e attiny1616`: **5303 B Flash** (< 8 KB). `pio test -e native`: **62/62** grün. | `35fad05` |
 | T8 | Master-Firmware ESP32 (`firmware/master/`). Libs `charmap`/`clocktext`/`busmaster`/`masterapp`/`hadiscovery` — `pio test -e native` **33/33**. `src/main.cpp`: UART2-RS485, WiFiManager, WebServer/REST (7.5), MQTT + HA-Discovery (7.6), NTP, OTA. `pio run -e esp32`: ~950 KB Flash. | `1a0e3c0` |
-| T9 | `tools/busctl.py` — Bus-Kommandozeilenwerkzeug (enum/status/set/show/home/stop/ping/uid/config/sniff/selftest) für USB-RS485-Adapter, `--sim N` und `--loopback` ohne Hardware. `tools/test_busctl.py`: 13 stdlib-Tests. `selftest` prüft gegen dieselben Goldwerte wie die C-Tests. | `<dieser>` |
+| T9 | `tools/busctl.py` — Bus-Kommandozeilenwerkzeug (enum/status/set/show/home/stop/ping/uid/config/sniff/selftest), `--sim N` / `--loopback` ohne Hardware. `tools/test_busctl.py`: 13 Tests. | `9d931cc` |
+| T10 | `.github/workflows/ci.yml` — Jobs `host-tests` (module+master `pio test -e native`, `test_busctl.py`), `firmware` (`attiny1616`-Build + `check_flash.py` < 8 KB, `esp32`-Build), `hardware` (KiCad 9, `build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`, ERC 0/0), `release` (bei Tag `v*`: PDF, Gerber sobald ein `.kicad_pcb` vorliegt). Alle Schritte lokal verifiziert. | `<dieser>` |
 
-## Nächster Schritt: T10 — CI
+## Backlog T1–T10 abgeschlossen
 
-GitHub Action: ERC, beide Firmware-Builds (`attiny1616`, `esp32`), alle
-Host-Tests (`pio test -e native` in module + master, `tools/test_busctl.py`,
-`build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`).
-Bei einem Tag zusätzlich PDF und Gerber als Release-Artefakt. Siehe
-`docs/backlog.md` T10.
+Nächste sinnvolle Schritte (nicht mehr im Backlog):
+
+- **PCB-Layout** `hardware/daughtercard/daughtercard.kicad_pcb` nach
+  `docs/layout-daughtercard.md`. Danach greift der Gerber-Export im CI-Release.
+- Messungen **O-2, O-5, O-6** an der Anzeigenplatine (Betreiber). Ergebnisse nach
+  `docs/messprotokolle/`, dann in Schaltplan und Firmware-Parameter einarbeiten.
+- Master-Firmware: **Selbsttest** (7.3) über eine volle Umdrehung je Modul mit
+  Timing-Auswertung — bislang nur Homing-Broadcast.
+- Inbetriebnahme nach `docs/spezifikation.md` Kapitel 10 mit `tools/busctl.py`.
 
 ## Umgebung
 

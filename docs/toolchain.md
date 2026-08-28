@@ -104,6 +104,20 @@ pio test -e native -d firmware/module  # Protokolltests auf dem Host
 
 Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstand zwischen TX und RX. Der Widerstand sitzt im Adapter, nicht auf der Daughter Card.
 
-## 5. Was die Werkzeuge nicht leisten
+## 5. CI
+
+`.github/workflows/ci.yml` läuft bei jedem Push auf `main` und bei Pull Requests:
+
+| Job | Prüfung |
+|---|---|
+| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (33), `python tools/test_busctl.py` (13) |
+| `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32` |
+| `hardware` | KiCad 9, `build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`, `kicad-cli sch erc` (0 Fehler / 0 Warnungen) |
+| `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber sobald ein `.kicad_pcb` existiert |
+
+`~/.platformio` wird zwischen Läufen gecacht. Der `hardware`-Job installiert KiCad
+aus dem PPA (`--no-install-recommends`, ohne 3D-Modelle).
+
+## 6. Was die Werkzeuge nicht leisten
 
 ERC prüft, ob eine Schaltplandatei gültig ist, nicht ob sie richtig ist. Trägt das verwendete Symbol eine falsche Pinnummerierung, läuft ERC fehlerfrei durch und die Platine ist trotzdem unbrauchbar. Die Gegenprüfung der Symbolpins gegen das Datenblatt bleibt ein manueller Schritt, siehe T3 im Backlog.

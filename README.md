@@ -1,5 +1,7 @@
 # KRONE REW Fallblattanzeige — Ersatzsteuerung
 
+![CI](https://github.com/TenOfNine/SmartKroneSplitFlap/actions/workflows/ci.yml/badge.svg)
+
 Eigenbau-Steuerung für eine mechanische Fallblattanzeige der KRONE AG aus dem Jahr 1990. Die Original-Elektronik (Anzeigersteuerung und Palettensteuerungen PST mit HMCS44C) wird ersetzt. Mechanik und Anzeigenplatinen bleiben unverändert.
 
 ## Aufbau
@@ -42,13 +44,30 @@ Jedes Anzeigenmodul erhält eine eigene kleine Steuerplatine, die die Hall-Impul
 
 ## Stand
 
-Konzeptphase abgeschlossen, Schaltplan als Netzliste vollständig, Layout und Firmware stehen aus. Drei Messungen an der Anzeigenplatine sind noch offen (O-2, O-5, O-6), siehe `docs/backlog.md`. Alles, was davon abhängt, ist als Parameter ausgeführt und blockiert die Fertigung nicht.
+| Bereich | Stand |
+|---|---|
+| Spezifikation, Schaltplan (Netzliste) | vollständig, `docs/` |
+| Schaltplan `.kicad_sch` + Footprints + PCB-Netzliste | generiert, ERC 0/0 (`hardware/daughtercard/`) |
+| PCB-Layout `.kicad_pcb` | steht aus |
+| Modul-Firmware (ATtiny1616) | fertig, `firmware/module/` |
+| Master-Firmware (ESP32) | fertig, `firmware/master/` |
+| Bus-Werkzeug | `tools/busctl.py` |
+| CI | `.github/workflows/ci.yml` |
+| Offene Messungen O-2, O-5, O-6 | parametrisiert, blockieren die Fertigung nicht |
+
+Der Projektstand für den Einstieg in eine neue Arbeitssitzung steht in
+`docs/projektstand.md`.
 
 ## Einstieg
 
 ```bash
-bash tools/setup.sh          # Toolchain installieren, siehe docs/toolchain.md
-cat docs/backlog.md          # Aufgabenreihenfolge
+bash tools/setup.sh                              # Toolchain, siehe docs/toolchain.md
+source .venv/bin/activate
+
+pio test -e native -d firmware/module            # 62 Tests
+pio test -e native -d firmware/master            # 33 Tests
+python tools/test_busctl.py                      # 13 Tests
+python tools/gen_daughtercard_sch.py --erc --pdf --png
 ```
 
 ## Hinweis zu den Originalunterlagen
