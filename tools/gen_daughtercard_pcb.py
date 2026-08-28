@@ -106,8 +106,54 @@ PLACEMENT: dict[str, tuple[float, float, float]] = {
     "TP4": (44, 39, 0),
 }
 
-# Netzklassen (docs/schaltplan-daughtercard.md 8.2). Werden ueber die .kicad_pro
-# von tools/gen_daughtercard_sch.py gesetzt; hier nur zur Dokumentation.
+# Netzklassen nach docs/schaltplan-daughtercard.md 8.2. Nach dem Speichern in die
+# .kicad_pro geschrieben (pcbnew serialisiert nur die Default-Klasse selbst).
+# AC-Klasse: 1,0 mm Bahn. Der Mindestabstand von 2,0 mm zu Logiknetzen
+# (Schaltplan 8.2) laesst sich am Stecker nicht einhalten (Pin-Raster 2,54 mm)
+# und bleibt eine Routing-Vorgabe in docs/layout-daughtercard.md, keine
+# DRC-Regel -- daher hier nur der normale Abstand.
+NETCLASSES = [
+    {"name": "Default", "clearance": 0.2, "track_width": 0.25},
+    {"name": "AC", "clearance": 0.3, "track_width": 1.0},
+    {"name": "RS485", "clearance": 0.2, "track_width": 0.3, "diff_pair_gap": 0.3},
+    {"name": "Power", "clearance": 0.2, "track_width": 0.5},
+]
+NETCLASS_PATTERNS = [
+    {"netclass": "AC", "pattern": "/AC?"},
+    {"netclass": "RS485", "pattern": "/RS485_?"},
+    {"netclass": "Power", "pattern": "/+5V"},
+    {"netclass": "Power", "pattern": "/+5V_IN"},
+    {"netclass": "Power", "pattern": "/+15V"},
+    {"netclass": "Power", "pattern": "/GND"},
+    {"netclass": "Power", "pattern": "/VSENS"},
+    {"netclass": "Power", "pattern": "/VDRV"},
+]
+
+
+def patch_project_netclasses() -> None:
+    """Schreibt NETCLASSES/NETCLASS_PATTERNS in die .kicad_pro. pcbnew.SaveBoard
+    legt dort nur die Default-Klasse an."""
+    import json
+
+    pro_path = PROJ / "daughtercard.kicad_pro"
+    pro = json.loads(pro_path.read_text(encoding="utf-8"))
+    ns = pro.setdefault("net_settings", {})
+    full = []
+    for c in NETCLASSES:
+        e = {
+            "bus_width": 12, "clearance": 0.2, "diff_pair_gap": 0.25,
+            "diff_pair_via_gap": 0.25, "diff_pair_width": c["track_width"],
+            "line_style": 0, "microvia_diameter": 0.3, "microvia_drill": 0.1,
+            "name": c["name"], "pcb_color": "rgba(0, 0, 0, 0.000)", "priority": 0,
+            "schematic_color": "rgba(0, 0, 0, 0.000)", "track_width": 0.25,
+            "via_diameter": 0.6, "via_drill": 0.3, "wire_width": 6,
+        }
+        e.update(c)
+        full.append(e)
+    ns["classes"] = full
+    ns["netclass_patterns"] = NETCLASS_PATTERNS
+    ns.setdefault("meta", {"version": 4})
+    pro_path.write_text(json.dumps(pro, indent=2) + "\n", encoding="utf-8")
 
 
 def run_netlist() -> str:
@@ -274,6 +320,7 @@ def main() -> int:
 
     board = build()
     pcbnew.SaveBoard(str(PCB), board)
+    patch_project_netclasses()
     n = sum(1 for f in board.GetFootprints() if not f.GetReference().startswith("H"))
     print(f"geschrieben: {PCB.relative_to(REPO)}  ({n} Bauteile + 4 Bohrungen, "
           f"{BOARD_W:g} x {BOARD_H:g} mm)")

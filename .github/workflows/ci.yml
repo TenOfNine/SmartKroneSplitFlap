@@ -63,17 +63,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: KiCad 9 + xvfb
+      - name: KiCad 9 + Bibliotheken + xvfb
         run: |
           sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends kicad xvfb
+          # kicad-symbols/-footprints/-templates sind bei KiCad 9 nur ein
+          # Recommends -> explizit installieren, aber ohne die 3D-Modelle.
+          sudo apt-get install -y --no-install-recommends \
+            kicad kicad-symbols kicad-footprints kicad-templates xvfb
       - run: pip install kicad-sch-api kicad-skip
       - name: Bibliothekstabellen
         run: bash tools/setup.sh --kicad-config
-      - name: Symbolbibliothek aktuell
-        run: python tools/build_krone_symbols.py --check
-      - name: Netzliste konsistent
+      - name: Netzliste konsistent (versionsunabhaengig)
         run: python tools/gen_daughtercard_sch.py --check-only
       - name: ERC
         run: >
@@ -83,6 +84,11 @@ jobs:
           hardware/daughtercard/daughtercard.kicad_sch
       - if: failure()
         run: cat erc-daughtercard.rpt || true
+      # Informativ: haengt von der genauen KiCad-Symbolbibliothek ab; ein
+      # Patch-Release kann eine Neuerzeugung von krone.kicad_sym noetig machen.
+      - name: Symbolbibliothek aktuell (informativ)
+        continue-on-error: true
+        run: python tools/build_krone_symbols.py --check
 
   release:
     name: Release-Artefakte
@@ -94,16 +100,18 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: KiCad 9 + xvfb
+      - name: KiCad 9 + Bibliotheken + xvfb
         run: |
           sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends kicad xvfb
+          sudo apt-get install -y --no-install-recommends \
+            kicad kicad-symbols kicad-footprints kicad-templates xvfb
+      - run: bash tools/setup.sh --kicad-config
       - name: Schaltplan-PDF
         run: >
           xvfb-run -a kicad-cli sch export pdf
           -o daughtercard.pdf hardware/daughtercard/daughtercard.kicad_sch
-      - name: Gerber (sobald ein Layout vorliegt)
+      - name: Gerber (sobald geroutet)
         run: |
           PCB=hardware/daughtercard/daughtercard.kicad_pcb
           if [ -f "$PCB" ]; then
@@ -111,7 +119,7 @@ jobs:
             xvfb-run -a kicad-cli pcb export drill   -o gerber/ "$PCB"
             (cd gerber && zip -r ../daughtercard-gerber.zip .)
           else
-            echo "kein .kicad_pcb -- Gerber-Export uebersprungen (Layout folgt)"
+            echo "kein .kicad_pcb -- Gerber-Export uebersprungen"
           fi
       - uses: softprops/action-gh-release@v2
         with:
