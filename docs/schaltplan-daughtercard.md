@@ -3,10 +3,10 @@
 | Feld | Wert |
 |---|---|
 | Baugruppe | Modulsteuerung, eine je Anzeigenmodul |
-| Version | 0.2 |
+| Version | 0.3 |
 | Datum | 28.08.2026 |
-| Bezug | Technische Spezifikation v0.3 |
-| Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC fehlerfrei. Zwei Korrekturen (P-1, P-2) vom Betreiber freigegeben, siehe `docs/pruefpunkte-t4.md`. |
+| Bezug | Technische Spezifikation v0.5 |
+| Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC 0/0. Freigegebene Korrekturen: P-1, P-2 (`docs/pruefpunkte-t4.md`), P-3 RS-485-Pins (`docs/pruefpunkte-t7.md`). |
 
 **Zum Gebrauch:** Kapitel 3 bis 6 zusammen ergeben den vollständigen Schaltplan. Kapitel 5 zeigt die Blöcke als Prinzipschaltbild, Kapitel 6 ist die verbindliche Netzliste. Bei Abweichungen zwischen beiden gilt die Netzliste.
 
@@ -186,9 +186,9 @@ VSENS ist über R14 fest mit +5V verbunden. Ergibt Teststufe 1, dass die Hall-Se
 ### 5.2 RS-485-Anbindung
 
 ```
-   U1.10 (PB1, RXD) ◄──────── U2.1 (RO)
-   U1.8  (PB3, XDIR) ───────► U2.3 (DE)
-   U1.9  (PB2, TXD) ────────► U2.4 (DI)
+   U1.8  (PB3, RXD)  ◄──────── U2.1 (RO)
+   U1.11 (PB0, XDIR) ───────► U2.3 (DE)
+   U1.9  (PB2, TXD)  ───────► U2.4 (DI)
                               U2.2 (/RE) ── GND
                               U2.5 (GND) ── GND
                               U2.8 (VCC) ── +5V
@@ -201,6 +201,10 @@ VSENS ist über R14 fest mit +5V verbunden. Ergibt Teststufe 1, dass die Hall-Se
               │
    U2.7 (B) ──┴── J2.5, J3.5
 ```
+
+Die drei USART0-Leitungen liegen auf der **Standard-MUX-Position** des ATtiny1616:
+TXD = PB2, RXD = PB3, XDIR = PB0 (PB1 ist XCK und bleibt im Async-Betrieb frei).
+Siehe `docs/pruefpunkte-t7.md` P-3.
 
 /RE liegt fest auf Masse, der Empfänger ist also dauerhaft aktiv. Die Karte liest ihre eigene Sendung zurück; die Firmware verwirft dieses Echo im Normalbetrieb und nutzt es zur Kollisionserkennung.
 
@@ -327,9 +331,9 @@ Ist F1 nicht bestückt, wird +5V_IN mit +5V gebrückt.
 | RS485_A | U2.6, J2.3, J3.3, JP3.1 |
 | RS485_B | U2.7, J2.5, J3.5, R16.2 |
 | RS485_TERM | JP3.2, R16.1 |
-| RO | U2.1, U1.10 (PB1) |
-| DI | U2.4, U1.9 (PB2) |
-| DE | U2.3, U1.8 (PB3) |
+| RO | U2.1, U1.8 (PB3, USART0 RXD) |
+| DI | U2.4, U1.9 (PB2, USART0 TXD) |
+| DE | U2.3, U1.11 (PB0, USART0 XDIR) |
 | PULSE_BLATT_RAW | J1.10, R1.2, R2.1 |
 | PULSE_BLATT | R2.2, C4.1, D1.3, U1.2 (PA4) |
 | PULSE_LEER_RAW | J1.8, R3.2, R4.1 |
@@ -369,10 +373,10 @@ D1–D3 (BAT54S), Zuordnung nach dem KiCad-Symbol `Diode:BAT54S` (Pin 1 = A, Pin
 | 5 | PA7 | TRIAC_DRV |
 | 6 | PB5 | TP_PB5 → TP1 |
 | 7 | PB4 | TP_PB4 → TP2 |
-| 8 | PB3 | DE |
-| 9 | PB2 | DI |
-| 10 | PB1 | RO |
-| 11 | PB0 | offen (Reserve, kein Pad) |
+| 8 | PB3 | RO (USART0 RXD) |
+| 9 | PB2 | DI (USART0 TXD) |
+| 10 | PB1 | offen (Reserve, kein Pad; USART0 XCK) |
+| 11 | PB0 | DE (USART0 XDIR) |
 | 12 | PC0 | offen (Reserve, kein Pad) |
 | 13 | PC1 | offen (Reserve, kein Pad) |
 | 14 | PC2 | offen |
@@ -494,3 +498,4 @@ Bei zehn Karten würde ich fünfzehn fertigen lassen. Der Aufpreis ist gering un
 |---|---|---|
 | 0.1 | 27.08.2026 | Erstfassung auf Basis der Spezifikation v0.3. |
 | 0.2 | 28.08.2026 | T4: Netzliste in KiCad-Schaltplan überführt. Zwei Widersprüche in Kapitel 6 aufgelöst (Details und offene Gegenprüfung in `docs/pruefpunkte-t4.md`): **P-1** Testpad-Zuordnung — 6.4 ist maßgeblich, TP3–TP5 liegen auf Funktionsnetzen, die Reserve-GPIOs PB0/PC0/PC1/PC2/PC3 bleiben unbeschaltet; 6.3 entsprechend gefasst. **P-2** Klemmdioden D1–D3 (BAT54S) — Pinbelegung auf das KiCad-Symbol und eine funktionsfähige Clamp-Topologie umgestellt: Pin 1 (A) → GND, Pin 2 (K) → +5V, Pin 3 (COM) → Signal. Testpad-Netze TP1–TP7 und `LED_K` in die Netzliste aufgenommen. |
+| 0.3 | 28.08.2026 | **P-3** (`docs/pruefpunkte-t7.md`): RS-485-Anschluss auf die USART0-Standard-MUX-Position des ATtiny1616 korrigiert. RO an PB3 (Pin 8, war PB1), DE an PB0 (Pin 11, war PB3), DI an PB2 unverändert. PB1 (Pin 10) wird neuer unbeschalteter Reserve-Pin. Netze `RO`/`DE` und die Pinbelegung 6.3 entsprechend. ERC weiter 0/0. |
