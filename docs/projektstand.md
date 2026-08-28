@@ -39,4 +39,3 @@ Netzliste und damit `gen_daughtercard_sch.py` ändern.
 - `docs/spezifikation.md` Version 0.4: vor jeder Änderung die Änderungshistorie
   im Anhang D fortschreiben.
 - `docs/pruefpunkte-t4.md` P-1 und P-2 warten auf die zweite Freigabe.
-- Commits liegen lokal, noch nicht nach `origin` gepusht.
