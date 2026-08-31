@@ -17,6 +17,7 @@ fp-info-cache
 _autosave-*
 *.net
 gerber/
+*.ses
 
 # generierte Pruefberichte mit Zeitstempel (regenerierbar)
 docs/erc-*.rpt
@@ -24,3 +25,6 @@ docs/drc-*.rpt
 
 # Sonstiges
 .DS_Store
+
+# heruntergeladene Werkzeuge (FreeRouting-JAR, JRE) -- via tools/setup_freerouting.sh
+tools/vendor/
