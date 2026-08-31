@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.7 |
+| Version | 0.8 |
 | Datum | 28.08.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11 |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -284,8 +284,8 @@ Nach jeder Enumeration fragt der Master über `GET_UID` die Seriennummer jeder A
 | 2 | TP8485E-SR, SOIC-8 | 1 | RS-485, 3–5,5 V, Full-Fail-Safe-Empfänger, /RE fest auf GND |
 | 3 | BSS84 (P-Kanal) oder MMBT3904 (NPN) | 1 | Triac-Ansteuerung, nur ein Zweig bestückt |
 | 4 | — | — | entfällt gegenüber v0.2 (isolierter DC/DC nicht mehr nötig) |
-| 5 | Pfostenstecker 2×5, 2,54 mm | 1 | zur Anzeige |
-| 6 | Pfostenstecker 2×5, 2,54 mm | 2 | Bus ein / Bus aus |
+| 5 | Buchsenleiste 2×5, 2,54 mm, gerade | 1 | zur Anzeige, board-to-board auf den Pfostenstecker der Anzeigenplatine (Referenz BKL 10120960); nicht kodiert, Verpolschutz siehe Schaltplan 4.1 |
+| 6 | Wannenstecker 2×5, 2,54 mm | 2 | Bus ein / Bus aus |
 | 7 | Schraubklemme 2-polig, 5 mm | 2 | 42 V~ ein / aus |
 | 8 | Stiftleiste 1×3, 2,54 mm | 1 | UPDI |
 | 9 | Lötjumper bzw. 0-Ω-Brücken | 2 | Polaritätswahl Triac-Steuereingang, siehe 4.4 |
@@ -725,3 +725,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.5 | 28.08.2026 | Kapitel 4.2: RS-485-Pins auf die tatsächliche USART0-Belegung des ATtiny1616 korrigiert (`docs/pruefpunkte-t7.md` P-3, vom Betreiber freigegeben). RXD an PB3 (Pin 8), TXD an PB2 (Pin 9), XDIR an PB0 (Pin 11). PB1 (USART0 XCK) wird Reserve. P-1 und P-2 aus `pruefpunkte-t4.md` als freigegeben vermerkt. |
 | 0.6 | 28.08.2026 | T7: Blatt- und Leerbildimpuls werden über einen Flanken-Interrupt auf PORTA ausgewertet statt über TCB0 Input Capture (Kapitel 4.2). TCB0 stellt die 1-ms-Zeitbasis. Bei ≤ 17 Impulsen/s genügt der Software-Zeitstempel; das spart einen Zeitgeber. |
 | 0.7 | 28.08.2026 | T8: Kapitel 7.2 — Softwarestack der Zentralsteuerung dependency-arm gefasst: eingebauter `WebServer` statt `ESPAsyncWebServer`, `Preferences` (NVS) statt `LittleFS`. Funktionsumfang 7.3–7.7 unverändert. |
+| 0.8 | 31.08.2026 | Stückliste 4.6: J1 (zur Anzeige) ist eine **Buchsenleiste 2×5**, die board-to-board direkt auf den Pfostenstecker der Anzeigenplatine gesteckt wird — kein Flachbandkabel an dieser Stelle. J1 ist damit nicht mechanisch kodiert; der Verpolschutz (42 V~ an Pin 2/4) ist über Mechanik, Bestückungsdruck und die Durchgangsprüfung sicherzustellen, siehe Schaltplan 4.1 und `docs/pruefpunkte-j1-buchsenleiste.md`. Pinbelegung unverändert. |

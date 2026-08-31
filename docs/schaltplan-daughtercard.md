@@ -3,7 +3,7 @@
 | Feld | Wert |
 |---|---|
 | Baugruppe | Modulsteuerung, eine je Anzeigenmodul |
-| Version | 0.4 |
+| Version | 0.5 |
 | Datum | 28.08.2026 |
 | Bezug | Technische Spezifikation v0.5 |
 | Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC 0/0. Freigegebene Korrekturen: P-1, P-2 (`docs/pruefpunkte-t4.md`), P-3 RS-485-Pins (`docs/pruefpunkte-t7.md`). |
@@ -86,7 +86,7 @@
 
 | Ref | Bauteil | Anmerkung |
 |---|---|---|
-| J1 | Wannenstecker 2×5, 2,54 mm, gerade | zur Anzeigenplatine |
+| J1 | Buchsenleiste 2×5, 2,54 mm, gerade | board-to-board direkt auf den Pfostenstecker der Anzeigenplatine (Referenz BKL 10120960). Kein kodierter Wannenstecker — Verpolschutz siehe 4.1 |
 | J2, J3 | Wannenstecker 2×5, 2,54 mm, gerade | Bus ein / Bus aus |
 | J4, J5 | Schraubklemme 2-polig, 5,08 mm | 42 V~ ein / aus |
 | J6 | Stiftleiste 1×3, 2,54 mm | UPDI |
@@ -99,6 +99,11 @@
 ## 4. Steckverbinder
 
 ### 4.1 J1 — zur Anzeigenplatine (KRONE 6281 3 160-00)
+
+Bauform **Buchsenleiste 2×5, 2,54 mm, gerade** (Referenz BKL 10120960). Die
+Daughter Card wird huckepack direkt auf den vorhandenen Pfostenstecker der
+Anzeigenplatine gesteckt, kein Flachbandkabel. Pin 1 der Buchsenleiste liegt auf
+Pin 1 der Anzeige.
 
 | Pin | Netz | Richtung |
 |---|---|---|
@@ -113,7 +118,22 @@
 | 9 | TRIAC_CTRL | zur Anzeige |
 | 10 | PULSE_BLATT_RAW | von der Anzeige |
 
-> ⚠️ **Vor dem ersten Einschalten Durchgang prüfen.** Ein spiegelverkehrt aufgelegtes Flachbandkabel legt die 42 V~ auf die 5-V-Schiene und zerstört U1 und U2. Die Zählrichtung des Wannensteckers auf der Anzeigenplatine ist auf der Lötseite mit 2, 4, 6, 8, 10 in einer Reihe beschriftet. Prüfen, dass Pin 1 der Karte auf Pin 1 der Anzeige landet.
+> ⚠️ **Verpolschutz — J1 ist nicht kodiert.** Pin 2 und Pin 4 führen die 42 V~.
+> Wird die Karte um 180° verdreht aufgesteckt, landet die 42 V~ auf
+> TRIAC_CTRL/VSENS und den Impulseingängen und zerstört U1, U2 und Q1/Q2. Die
+> Buchsenleiste passt in beiden Drehlagen auf den Pfostenstecker — es gibt keine
+> mechanische Sperre wie beim früher vorgesehenen Wannenstecker.
+>
+> Abzusichern durch:
+> 1. **Mechanik.** Die Kartenbefestigung (Abstandsbolzen, Gehäuse) so gestalten,
+>    dass nur eine Drehlage passt. Die vier symmetrischen Eckbohrungen allein
+>    genügen nicht. Siehe offener Punkt in `docs/pruefpunkte-j1-buchsenleiste.md`.
+> 2. **Kennzeichnung.** Pin-1-Dreieck im Bestückungsdruck auf der Bauteilseite,
+>    zusätzlich Text „PIN1 → ANZEIGE PIN1" neben J1.
+> 3. **Durchgangsprüfung vor dem ersten Einschalten** (Prüfliste 9,
+>    Inbetriebnahme 10): J1.2 und J1.4 gegen die 42-V~-Pins der Anzeige, nicht
+>    gegen die Versorgung. Die Zählrichtung ist auf der Lötseite der Anzeige mit
+>    2, 4, 6, 8, 10 in einer Reihe beschriftet.
 
 ### 4.2 J2 / J3 — Bus
 
@@ -472,7 +492,7 @@ Bei zehn Karten würde ich fünfzehn fertigen lassen. Der Aufpreis ist gering un
 
 ## 9. Prüfliste vor der ersten Inbetriebnahme
 
-1. Durchgang J1 gegen die Anzeigenplatine prüfen, Pin für Pin. Insbesondere sicherstellen, dass J1.2 und J1.4 auf den 42-V~-Pins der Anzeige landen und nicht auf der Versorgung.
+1. Durchgang J1 gegen die Anzeigenplatine prüfen, Pin für Pin. Insbesondere sicherstellen, dass J1.2 und J1.4 auf den 42-V~-Pins der Anzeige landen und nicht auf der Versorgung. J1 ist eine **nicht kodierte Buchsenleiste** — die Drehlage der aufgesteckten Karte zuerst gegen Pin 1 der Anzeige kontrollieren (siehe 4.1 und `docs/pruefpunkte-j1-buchsenleiste.md`).
 2. Widerstand zwischen +5V und GND messen. Ein Wert unter 1 kΩ deutet auf einen Bestückungsfehler.
 3. Widerstand zwischen AC1 und GND messen. Muss hochohmig sein, die Motorspannung ist potenzialfrei.
 4. Prüfen, dass genau einer von JP1 und JP2 geschlossen ist.
@@ -500,3 +520,4 @@ Bei zehn Karten würde ich fünfzehn fertigen lassen. Der Aufpreis ist gering un
 | 0.2 | 28.08.2026 | T4: Netzliste in KiCad-Schaltplan überführt. Zwei Widersprüche in Kapitel 6 aufgelöst (Details und offene Gegenprüfung in `docs/pruefpunkte-t4.md`): **P-1** Testpad-Zuordnung — 6.4 ist maßgeblich, TP3–TP5 liegen auf Funktionsnetzen, die Reserve-GPIOs PB0/PC0/PC1/PC2/PC3 bleiben unbeschaltet; 6.3 entsprechend gefasst. **P-2** Klemmdioden D1–D3 (BAT54S) — Pinbelegung auf das KiCad-Symbol und eine funktionsfähige Clamp-Topologie umgestellt: Pin 1 (A) → GND, Pin 2 (K) → +5V, Pin 3 (COM) → Signal. Testpad-Netze TP1–TP7 und `LED_K` in die Netzliste aufgenommen. |
 | 0.3 | 28.08.2026 | **P-3** (`docs/pruefpunkte-t7.md`): RS-485-Anschluss auf die USART0-Standard-MUX-Position des ATtiny1616 korrigiert. RO an PB3 (Pin 8, war PB1), DE an PB0 (Pin 11, war PB3), DI an PB2 unverändert. PB1 (Pin 10) wird neuer unbeschalteter Reserve-Pin. Netze `RO`/`DE` und die Pinbelegung 6.3 entsprechend. ERC weiter 0/0. |
 | 0.4 | 31.08.2026 | JLCPCB-Bestückung vorbereitet (`docs/jlc-bestueckung.md`): LCSC-Nummern und Basic/Extended-Einordnung, zweite Anschlussbild-Prüfung aller Symbole (ohne Befund). **R16 von 1206 auf 0805** (D-1) — 120 Ω ist bei JLCPCB nur in 0805 ein Basic Part, Verlustleistung unkritisch. Schaltplan und PCB neu erzeugt, ERC 0/0. |
+| 0.5 | 31.08.2026 | **J1 von Wannenstecker auf Buchsenleiste 2×5** (Referenz BKL 10120960). Grund: die Daughter Card wird board-to-board direkt auf den Pfostenstecker der Anzeigenplatine gesteckt; ein Wannenstecker (Stifte im Kragen) passt dort nicht. Pinbelegung 4.1 unverändert. Neu: J1 ist nicht mehr mechanisch kodiert → erweiterter Verpol-Hinweis in 4.1, Prüfliste 9.1, offener Punkt `docs/pruefpunkte-j1-buchsenleiste.md`. Footprint `Connector_PinSocket_2.54mm:PinSocket_2x05_P2.54mm_Vertical`. ERC 0/0. |
