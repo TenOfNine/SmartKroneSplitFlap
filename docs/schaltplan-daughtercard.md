@@ -3,7 +3,7 @@
 | Feld | Wert |
 |---|---|
 | Baugruppe | Modulsteuerung, eine je Anzeigenmodul |
-| Version | 0.5 |
+| Version | 0.7 |
 | Datum | 28.08.2026 |
 | Bezug | Technische Spezifikation v0.5 |
 | Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC 0/0. Freigegebene Korrekturen: P-1, P-2 (`docs/pruefpunkte-t4.md`), P-3 RS-485-Pins (`docs/pruefpunkte-t7.md`). |
@@ -80,7 +80,7 @@
 | C1 | 100 nF | Abblockung U1, direkt an Pin 1/20 |
 | C2 | 100 nF | Abblockung U2, direkt an Pin 8/5 |
 | C3 | 10 µF / 16 V | Stützkondensator +5V, Keramik oder Tantal |
-| F1 | PTC 0,5 A | Rückstellsicherung in der +5V-Zuführung, optional |
+| F1 | 0-Ω-Brücke, 1206 | +5V_IN → +5V. War als PTC 0,5 A vorgesehen; bei 10 Modulen in Reihe läge der Kettenstrom über dem Auslösewert, daher feste Brücke. Absicherung: Firmware-Watchdog + Laufzeitgrenze (Spez. 8) |
 
 ### 3.3 Mechanik
 
@@ -184,7 +184,7 @@ Der für SerialUPDI übliche Widerstand von 4,7 kΩ sitzt im Adapter, nicht auf 
 ### 5.1 Versorgung
 
 ```
-   J2.1 ──[F1 PTC 0,5A]──┬── +5V ──┬── U1.1 (VDD)
+   J2.1 ──[F1 0 Ω]──┬── +5V ──┬── U1.1 (VDD)
                          │         ├── U2.8 (VCC)
                          │         ├── JP1 ── VDRV
                          │         └──[R14 0Ω]── VSENS ── J1.5, J1.6
@@ -342,7 +342,7 @@ Reine Durchverbindung, kein aktives Bauteil im AC-Pfad.
 | VSENS | R14.2, J1.5, J1.6, TP6.1 |
 | +5V_IN | J2.1, F1.1, J6.3 |
 
-Ist F1 nicht bestückt, wird +5V_IN mit +5V gebrückt.
+F1 ist die 0-Ω-Brücke zwischen +5V_IN und +5V. (Früher als PTC geplant — für die Reihenschaltung von bis zu 10 Modulen entfallen, siehe Änderungshistorie 0.6 und `docs/jlc-bestueckung.md` D-3.)
 
 ### 6.2 Signalnetze
 
@@ -461,23 +461,36 @@ Die Entscheidung fällt nach O-2 und lässt sich nach der Fertigung durch Umbest
 
 ### 8.2 Netzspezifische Vorgaben
 
-| Netz | Leiterbahnbreite | Abstand |
-|---|---|---|
-| AC1, AC2 | ≥ 1,0 mm | ≥ 2,0 mm zu allen Logiknetzen |
-| +5V, VSENS, GND | ≥ 0,5 mm | Standard |
-| RS485_A, RS485_B | 0,3 mm, als Paar geführt | Standard |
-| übrige Signale | 0,25 mm | Standard |
+Stand des Routing-Laufs (v0.7, Betreiber-Vorgabe „alle Bahnen 0,5 mm außer AC"):
 
-AC1 und AC2 werden entlang **einer** Platinenkante von J4 über J5 nach J1 geführt, räumlich getrennt vom Bereich um U1 und U2. Bei 1 A und 35 µm Kupfer ergeben 1,0 mm Breite eine Erwärmung deutlich unter 10 K.
+| Netz | Leiterbahnbreite | Abstand (DRC) |
+|---|---|---|
+| AC1, AC2 | **1,5 mm** | 0,5 mm; ≥ 2,0 mm zu Logik ist Handregel, siehe unten |
+| alle übrigen Netze (inkl. +5V, +15V, VSENS, VDRV, RS485, CHAIN, Signale) | **0,5 mm** (an SOIC-Pins auf 0,375 mm verjüngt) | 0,2 mm |
+| GND | Massefläche F.Cu + B.Cu, Stitching-Raster 5 mm + je ein Via an jedem GND-Pad | 0,2 mm |
+
+- **AC-Führung:** AC1/AC2 laufen von J4 über J5 nach J1, räumlich getrennt vom
+  Bereich um U1/U2. Die ≥ 2,0-mm-Vorgabe zu Logiknetzen lässt sich am
+  2,54-mm-Raster von J1/J4/J5 **nicht** halten und ist keine DRC-Regel. Q1–Q3
+  und R7–R10 wurden aus dem AC-Korridor nach rechts gerückt; danach hält die
+  AC-Bahn ≥ 0,55 mm Kupferabstand zu jeder Logikbahn und ≥ 2,4 mm zu jedem
+  Logik-Pad. Bei 1 A / 35 µm ergeben 1,5 mm eine Erwärmung ≪ 10 K.
+- **+5V bei 0,5 mm:** stromtragfähig (~1,3 A nach IPC-2221), aber der
+  Spannungsabfall der Durchgangsschiene über 10 Module steigt gegenüber einer
+  breiten Bahn deutlich (grob 0,3 V on-board plus Stecker und Flachbandkabel).
+  Konsequenz siehe `docs/jlc-bestueckung.md` D-5.
 
 ### 8.3 Weitere Hinweise
 
 - C1 und C2 direkt an den Versorgungspins der jeweiligen ICs platzieren, Anbindung über kurze Stiche an eine durchgehende Massefläche auf der Rückseite.
 - RS485_A und RS485_B als Paar mit konstantem Abstand führen, keine Stichleitungen. R16 und JP3 nahe an J2 setzen.
 - C4, C5, C6 nahe an den Portpins von U1 platzieren, die Widerstände R2, R4, R6 nahe an J1. Das ist die wirksame Reihenfolge für den Tiefpass.
-- Massefläche auf der Rückseite durchgehend, unterbrochen nur im Bereich der AC-Führung.
+- Massefläche auf **beiden** Lagen, unterbrochen nur im Bereich der AC-Führung.
 - Silkscreen: Pin 1 aller Steckverbinder deutlich markieren, JP1/JP2 mit „5V" und „15V" beschriften, JP3 mit „TERM".
 - Beschriftungsfeld für die Modulnummer vorsehen, auch wenn die Adresse per Enumeration vergeben wird — es hilft bei der Fehlersuche.
+- **Platine schwarz, Bestückungsdruck weiß.** Im Lagenaufbau der `.kicad_pcb`
+  gesetzt (Maske „Black" / Silk „White"); bei JLCPCB die passende Bestelloption
+  wählen. Maker-Kennzeichnung (GitHub-Marke + „TenOfNine") auf der Rückseite.
 
 ### 8.4 Fertigung
 
@@ -521,3 +534,5 @@ Bei zehn Karten würde ich fünfzehn fertigen lassen. Der Aufpreis ist gering un
 | 0.3 | 28.08.2026 | **P-3** (`docs/pruefpunkte-t7.md`): RS-485-Anschluss auf die USART0-Standard-MUX-Position des ATtiny1616 korrigiert. RO an PB3 (Pin 8, war PB1), DE an PB0 (Pin 11, war PB3), DI an PB2 unverändert. PB1 (Pin 10) wird neuer unbeschalteter Reserve-Pin. Netze `RO`/`DE` und die Pinbelegung 6.3 entsprechend. ERC weiter 0/0. |
 | 0.4 | 31.08.2026 | JLCPCB-Bestückung vorbereitet (`docs/jlc-bestueckung.md`): LCSC-Nummern und Basic/Extended-Einordnung, zweite Anschlussbild-Prüfung aller Symbole (ohne Befund). **R16 von 1206 auf 0805** (D-1) — 120 Ω ist bei JLCPCB nur in 0805 ein Basic Part, Verlustleistung unkritisch. Schaltplan und PCB neu erzeugt, ERC 0/0. |
 | 0.5 | 31.08.2026 | **J1 von Wannenstecker auf Buchsenleiste 2×5** (Referenz BKL 10120960). Grund: die Daughter Card wird board-to-board direkt auf den Pfostenstecker der Anzeigenplatine gesteckt; ein Wannenstecker (Stifte im Kragen) passt dort nicht. Pinbelegung 4.1 unverändert. Neu: J1 ist nicht mehr mechanisch kodiert → erweiterter Verpol-Hinweis in 4.1, Prüfliste 9.1, offener Punkt `docs/pruefpunkte-j1-buchsenleiste.md`. Footprint `Connector_PinSocket_2.54mm:PinSocket_2x05_P2.54mm_Vertical`. ERC 0/0. |
+| 0.6 | 31.08.2026 | **F1 von PTC 0,5 A auf 0-Ω-Brücke** (`docs/jlc-bestueckung.md` D-3): F1 liegt im +5V-Durchgangspfad J2 → F1 → J3; bei 10 Modulen in Reihe läge der Kettenstrom über dem PTC-Auslösewert. Fail-Safe übernehmen Watchdog und Laufzeitgrenze (Spez. 8). Symbol `krone:R`, Wert `0R`, Footprint `Resistor_SMD:R_1206_3216Metric`, LCSC `C17888` (Basic). Stückliste 3.2, Blockschaltbild 5.1, Netzliste-Notiz angepasst. ERC 0/0. |
+| 0.7 | 01.09.2026 | Routing-Lauf (Betreiber-Vorgaben): **alle Leiterbahnen 0,5 mm außer AC1/AC2 (1,5 mm)** — Abschnitt 8.2 entsprechend gefasst, Hinweis auf den +5V-Spannungsabfall bei 0,5 mm über 10 Module (`docs/jlc-bestueckung.md` D-5). Q1–Q3/R7–R10 aus dem AC-Korridor gerückt (AC ↔ Logikbahn danach ≥ 0,55 mm). **Platine schwarz / Druck weiß** im Lagenaufbau. Maker-Kennzeichnung (GitHub-Marke + „TenOfNine") auf B.SilkS. Schaltplan unverändert, ERC 0/0. |

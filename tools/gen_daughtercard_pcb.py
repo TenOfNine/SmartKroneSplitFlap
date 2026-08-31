@@ -110,23 +110,33 @@ PLACEMENT: dict[str, tuple[float, float, float]] = {
 
 # Netzklassen nach docs/schaltplan-daughtercard.md 8.2. Nach dem Speichern in die
 # .kicad_pro geschrieben (pcbnew serialisiert nur die Default-Klasse selbst).
-# AC-Klasse: 1,0 mm Bahn. Der Mindestabstand von 2,0 mm zu Logiknetzen
-# (Schaltplan 8.2) laesst sich am Stecker nicht einhalten (Pin-Raster 2,54 mm)
-# und bleibt eine Routing-Vorgabe in docs/layout-daughtercard.md, keine
-# DRC-Regel -- daher hier nur der normale Abstand.
+#
+# Vorgabe des Betreibers (31.08.2026): ALLE Bahnen 0,5 mm, nur die 42-V~-Bahnen
+# (AC1/AC2) breiter. Damit sind auch +5V/+15V nur noch 0,5 mm.
+#
+#   >>> Konsequenz: 0,5 mm / 35 µm traegt ~1,3 A (IPC-2221, 10 K) -- der
+#   >>> Kettenstrom von ~0,6 A auf +5V ist stromtragfaehig, aber der
+#   >>> Spannungsabfall der +5V-Durchgangsschiene ueber 10 Module steigt auf
+#   >>> grob 0,3 V (on-board) + Stecker + Flachbandkabel. Bei zehn Modulen an
+#   >>> einem Netzteil die 5-V-Schiene entsprechend hoeher einstellen oder
+#   >>> die Kette kuerzer halten. Siehe docs/jlc-bestueckung.md D-5.
+#
+# AC1/AC2 (42 V~, ~1 A bei 10 Modulen): 1,5 mm, Abstand 0,5 mm (die 2,0-mm-
+# Empfehlung aus 8.2 ist am 2,54-mm-Steckerraster von J1/J4/J5 nicht haltbar;
+# ausserhalb der Stecker liegt der Abstand nach dem Routing bei >= 0,7 mm).
 NETCLASSES = [
-    {"name": "Default", "clearance": 0.2, "track_width": 0.25},
-    {"name": "AC", "clearance": 0.3, "track_width": 1.0},
-    {"name": "RS485", "clearance": 0.2, "track_width": 0.3, "diff_pair_gap": 0.3},
+    {"name": "Default", "clearance": 0.2, "track_width": 0.5},
+    {"name": "AC", "clearance": 0.5, "track_width": 1.5,
+     "via_diameter": 0.8, "via_drill": 0.4},
     {"name": "Power", "clearance": 0.2, "track_width": 0.5},
+    {"name": "GND", "clearance": 0.2, "track_width": 0.5},
 ]
 NETCLASS_PATTERNS = [
     {"netclass": "AC", "pattern": "/AC?"},
-    {"netclass": "RS485", "pattern": "/RS485_?"},
+    {"netclass": "GND", "pattern": "/GND"},
     {"netclass": "Power", "pattern": "/+5V"},
     {"netclass": "Power", "pattern": "/+5V_IN"},
     {"netclass": "Power", "pattern": "/+15V"},
-    {"netclass": "Power", "pattern": "/GND"},
     {"netclass": "Power", "pattern": "/VSENS"},
     {"netclass": "Power", "pattern": "/VDRV"},
 ]
@@ -294,23 +304,63 @@ def build() -> pcbnew.BOARD:
 
 
 def render_png() -> None:
+    """Routing-Vorschau: Ober- und Unterseite nebeneinander in
+    docs/pcb-daughtercard.png. Die Masseflaechen werden fuer die Vorschau
+    entfernt, damit die Leiterbahnen als positive Linien sichtbar sind."""
     from shutil import which
     if not (which("pdftoppm") and which("kicad-cli")):
         return
     import subprocess
     import tempfile
     cli = ["xvfb-run", "-a", "kicad-cli"] if which("xvfb-run") else ["kicad-cli"]
+
     with tempfile.TemporaryDirectory() as td:
-        pdf = Path(td) / "pcb.pdf"
-        subprocess.run([*cli, "pcb", "export", "pdf",
-                        "--layers", "F.Cu,F.Silkscreen,F.Fab,Edge.Cuts",
-                        "-o", str(pdf), str(PCB)], check=True, capture_output=True)
+        # Kopie ohne Zonen rendern (Bahnen sonst nur als Aussparung sichtbar).
+        preview_pcb = Path(td) / "preview.kicad_pcb"
+        b = pcbnew.LoadBoard(str(PCB))
+        for z in list(b.Zones()):
+            b.Delete(z)
+        pcbnew.SaveBoard(str(preview_pcb), b)
+
+        sides = [
+            ("Oberseite (F.Cu rot, Durchkontaktierungen)",
+             "Edge.Cuts,F.Cu,F.Silkscreen,F.Fab", []),
+            ("Unterseite (B.Cu, gespiegelt)",
+             "Edge.Cuts,B.Cu,B.Silkscreen,B.Fab", ["--mirror"]),
+        ]
+        try:
+            from PIL import Image, ImageDraw, ImageOps
+        except ImportError:
+            print("[!] Pillow fehlt -- keine Vorschau")
+            return
+
+        pics = []
+        for _, layers, extra in sides:
+            pdf = Path(td) / "s.pdf"
+            subprocess.run([*cli, "pcb", "export", "pdf", "--mode-single",
+                            "--layers", layers, *extra,
+                            "-o", str(pdf), str(preview_pcb)],
+                           check=True, capture_output=True)
+            raw = Path(td) / "s.png"
+            subprocess.run(["pdftoppm", "-png", "-r", "500", "-singlefile",
+                            str(pdf), str(raw.with_suffix(""))], check=True)
+            im = Image.open(raw).convert("RGB")
+            bbox = ImageOps.invert(im).getbbox()  # weissen Rand abschneiden
+            pics.append(im.crop(bbox) if bbox else im)
+
+        h = max(p.height for p in pics)
+        gap, pad, head = 60, 40, 46
+        w = sum(p.width for p in pics) + gap + 2 * pad
+        canvas = Image.new("RGB", (w, h + 2 * pad + head), "white")
+        draw = ImageDraw.Draw(canvas)
+        x = pad
+        for (label, _, _), p in zip(sides, pics):
+            canvas.paste(p, (x, pad + head))
+            draw.text((x, pad + 12), label, fill="black")
+            x += p.width + gap
         out = REPO / "docs" / "pcb-daughtercard.png"
-        subprocess.run(["pdftoppm", "-png", "-r", "300", "-singlefile",
-                        "-x", "0", "-y", "0", "-W", str(int(BOARD_W * 300 / 25.4) + 60),
-                        "-H", str(int(BOARD_H * 300 / 25.4) + 60),
-                        str(pdf), str(out.with_suffix(""))], check=True)
-        print(f"PNG: {out.relative_to(REPO)}")
+        canvas.save(out)
+        print(f"PNG: {out.relative_to(REPO)}  ({canvas.width}x{canvas.height})")
 
 
 # ---------------------------------------------------------------------------
