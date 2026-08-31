@@ -124,10 +124,10 @@ FOOTPRINTS: dict[str, str] = {
     "R5": _FP_R0805, "R6": _FP_R0805, "R7": _FP_R0805, "R8": _FP_R0805,
     "R9": _FP_R0805, "R10": _FP_R0805, "R11": _FP_R0805, "R12": _FP_R0805,
     "R13": _FP_R0805, "R15": _FP_R0805,
-    "R14": _FP_R1206,  # Kap. 3.2: 0-Ohm-Bruecke, Bauform 1206
-    "R16": _FP_R1206,  # Kap. 3.2: 120 Ohm, 0,25 W -> 1206
+    "R14": _FP_R1206,  # Kap. 3.2: 0-Ohm-Bruecke in 1206 (leichter von Hand auszuloeten)
+    "R16": _FP_R0805,  # 120 Ohm; tatsaechliche Verlustleistung ~50 mW << 125 mW (0805)
     "C1": _FP_C0805, "C2": _FP_C0805, "C4": _FP_C0805, "C5": _FP_C0805, "C6": _FP_C0805,
-    "C3": "Capacitor_SMD:C_1206_3216Metric",  # 10 uF/16 V, Reserve; Kap. 3.2 "Keramik oder Tantal"
+    "C3": "Capacitor_SMD:C_1206_3216Metric",  # 10 uF, Reserve; Kap. 3.2 "Keramik oder Tantal"
     "F1": "Fuse:Fuse_1206_3216Metric",
     "J1": _FP_IDC10, "J2": _FP_IDC10, "J3": _FP_IDC10,
     "J4": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
@@ -140,6 +140,51 @@ FOOTPRINTS: dict[str, str] = {
     "TP3": "TestPoint:TestPoint_Pad_D1.5mm", "TP4": "TestPoint:TestPoint_Pad_D1.5mm",
     "TP5": "TestPoint:TestPoint_Pad_D1.5mm", "TP6": "TestPoint:TestPoint_Pad_D1.5mm",
     "TP7": "TestPoint:TestPoint_Pad_D1.5mm",
+}
+
+# ---------------------------------------------------------------------------
+# LCSC-Bestellnummern fuer die JLCPCB-Bestueckung (--jlc).
+#
+# Ziel: so viele "Basic Part" wie moeglich, damit keine Ruestkosten (Extended
+# Part Fee, einmalig ~3 USD je Position) anfallen. Alle 0805/1206-Widerstaende
+# und -Kondensatoren von JLCPCB sind Basic Parts.
+#
+# Quelle der Basic-Nummern: JLCPCB "Basic Parts Library"-Liste (Snapshot).
+# Details und Stand siehe docs/jlc-bestueckung.md. Vor der Bestellung jede
+# Nummer im JLCPCB-Parts-Manager gegen Wert, Bauform und Anschlussbild pruefen
+# (Projektregel 1: keine Nummer ungeprueft uebernehmen).
+#
+# Leer ("") = bewusst keine feste Nummer. Betrifft Bauteile, die es im
+# Basic-Snapshot nicht gibt (BAT54S, BSS84, LED, PTC) oder die von Hand
+# geloetet werden. Fuer die SMT-Bestueckung traegt sie der Nutzer im
+# JLCPCB-Cart nach; --jlc listet sie mit leerem Feld und warnt.
+# ---------------------------------------------------------------------------
+
+LCSC: dict[str, str] = {
+    # --- Basic Parts: Widerstaende 0805 ---
+    "R1": "C17414", "R3": "C17414", "R5": "C17414", "R7": "C17414",   # 10k
+    "R10": "C17414",                                                   # 10k (DNP)
+    "R2": "C17513", "R4": "C17513", "R6": "C17513", "R11": "C17513",   # 1k
+    "R13": "C17513", "R15": "C17513",                                  # 1k
+    "R8": "C17407", "R12": "C17407",                                   # 100k
+    "R9": "C17673",                                                    # 4k7
+    "R16": "C17437",                                                   # 120R 0805
+    # --- Basic Parts: Widerstaende 1206 ---
+    "R14": "C17888",                                                   # 0R 1206 (Handloet-Bruecke)
+    # --- Basic Parts: Kondensatoren ---
+    "C1": "C49678", "C2": "C49678",                                    # 100n 50V 0805
+    "C4": "C1710", "C5": "C1710", "C6": "C1710",                       # 10n 50V 0805
+    "C3": "C13585",                                                    # 10u 50V 1206 (Reserve-Bulk)
+    # --- Basic Part: Transistor ---
+    "Q2": "C20526", "Q3": "C20526",                                    # MMBT3904 NPN SOT-23
+    # --- Extended Parts (unvermeidbar, je ~3 USD Ruestkosten einmalig) ---
+    "U1": "C614136",   # ATtiny1616-SNR, SOIC-20
+    "U2": "C94206",    # TP8485E-SR, RS-485-Transceiver SOIC-8
+    # --- ohne feste Nummer: im Basic-Snapshot nicht vorhanden ---
+    "Q1": "",   # BSS84 P-MOSFET  (Kandidat Basic: C8492 - vor Bestellung pruefen)
+    "D1": "", "D2": "", "D3": "",   # BAT54S Doppel-Schottky (Extended)
+    "D4": "",   # LED gruen 0805
+    "F1": "",   # PTC 0,5 A (in Spezifikation als optional markiert)
 }
 
 # ---------------------------------------------------------------------------

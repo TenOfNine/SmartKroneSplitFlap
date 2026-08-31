@@ -18,6 +18,7 @@ _autosave-*
 *.net
 gerber/
 *.ses
+hardware/daughtercard/jlc/
 
 # generierte Pruefberichte mit Zeitstempel (regenerierbar)
 docs/erc-*.rpt

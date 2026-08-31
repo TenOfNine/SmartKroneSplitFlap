@@ -42,6 +42,8 @@ sys.path.insert(0, str(REPO / "tools"))
 import gen_daughtercard_sch as sch_gen  # noqa: E402  (nur Datenstrukturen)
 
 FOOTPRINTS = sch_gen.FOOTPRINTS
+LCSC = sch_gen.LCSC
+JLC_DIR = PROJ / "jlc"  # Bauartefakt, .gitignore
 
 # Platinenmass aus docs/schaltplan-daughtercard.md 8.1
 BOARD_W, BOARD_H = 74.0, 60.0
@@ -311,12 +313,113 @@ def render_png() -> None:
         print(f"PNG: {out.relative_to(REPO)}")
 
 
+# ---------------------------------------------------------------------------
+# JLCPCB-Export (--jlc): Stueckliste (BOM) und Bestueckungsplan (CPL/Pick&Place)
+# im JLCPCB-Format. Erzeugt jlc/BOM.csv und jlc/CPL.csv.
+#
+# NICHT bestueckt (weder in BOM noch CPL):
+#   * #-Referenzen (PWR_FLAG), H* (Bohrungen), TP* (Testpunkte), JP* (Loetbruecken)
+#   * J1..J6  -- Steckverbinder, werden von Hand geloetet
+#   * DNP-Bauteile (Q3, R10)
+# ---------------------------------------------------------------------------
+
+_HANDSOLDER_RE = re.compile(r"J\d+$")
+
+
+def _assembled(ref: str) -> bool:
+    if ref.startswith(("#", "H", "TP", "JP")):
+        return False
+    if _HANDSOLDER_RE.match(ref):
+        return False
+    _, _, dnp = sch_gen.COMPONENTS.get(ref, ("", "", False))
+    return not dnp
+
+
+def _csv_field(v: str) -> str:
+    return f'"{v}"' if ("," in v or '"' in v) else v
+
+
+def export_jlc() -> None:
+    """jlc/BOM.csv + jlc/CPL.csv im JLCPCB-Format aus der committeten .kicad_pcb."""
+    if not PCB.is_file():
+        raise SystemExit(f"{PCB.name} fehlt -- erst ohne --jlc erzeugen.")
+    JLC_DIR.mkdir(parents=True, exist_ok=True)
+
+    # --- Positionen ueber kicad-cli (rechnet Ursprung und Y-Spiegelung korrekt) ---
+    cli = ["xvfb-run", "-a", "kicad-cli"] if _have("xvfb-run") else ["kicad-cli"]
+    import csv
+    import io
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        pos = Path(td) / "pos.csv"
+        subprocess.run([*cli, "pcb", "export", "pos", "--format", "csv",
+                        "--units", "mm", "--side", "both", "--exclude-dnp",
+                        "--use-drill-file-origin", "-o", str(pos), str(PCB)],
+                       check=True, capture_output=True)
+        rows = list(csv.DictReader(io.StringIO(pos.read_text(encoding="utf-8"))))
+
+    # Spalten von kicad-cli: Ref,Val,Package,PosX,PosY,Rot,Side
+    cpl_lines = ["Designator,Mid X,Mid Y,Layer,Rotation"]
+    placed: set[str] = set()
+    for r in rows:
+        ref = r["Ref"]
+        if not _assembled(ref):
+            continue
+        layer = "Top" if r["Side"].lower().startswith("t") else "Bottom"
+        cpl_lines.append(f'{ref},{float(r["PosX"]):.4f}mm,{float(r["PosY"]):.4f}mm,'
+                         f'{layer},{float(r["Rot"]):.4f}')
+        placed.add(ref)
+
+    (JLC_DIR / "CPL.csv").write_text("\n".join(cpl_lines) + "\n", encoding="utf-8")
+
+    # --- BOM: nach (Wert, Footprint, LCSC) gruppieren ---
+    groups: dict[tuple[str, str, str], list[str]] = {}
+    for ref in sorted(placed, key=lambda s: (s[0], int(re.sub(r"\D", "", s) or 0))):
+        _, value, _ = sch_gen.COMPONENTS[ref]
+        fp_short = FOOTPRINTS[ref].split(":", 1)[1]
+        lcsc = LCSC.get(ref, "")
+        groups.setdefault((value, fp_short, lcsc), []).append(ref)
+
+    bom_lines = ["Comment,Designator,Footprint,LCSC Part #"]
+    missing_lcsc: list[str] = []
+    for (value, fp_short, lcsc), refs in sorted(groups.items()):
+        desig = " ".join(refs)
+        bom_lines.append(",".join(_csv_field(x) for x in (value, desig, fp_short, lcsc)))
+        if not lcsc:
+            missing_lcsc.extend(refs)
+
+    (JLC_DIR / "BOM.csv").write_text("\n".join(bom_lines) + "\n", encoding="utf-8")
+
+    basic = sum(1 for k in groups if k[2] and k[2] in _BASIC_HINT)
+    print(f"jlc/BOM.csv  : {len(groups)} Positionen, {len(placed)} Bauteile bestueckt")
+    print(f"jlc/CPL.csv  : {len(placed)} Platzierungen")
+    if missing_lcsc:
+        print(f"[!] ohne LCSC-Nummer (im JLCPCB-Cart nachtragen): "
+              f"{', '.join(missing_lcsc)}")
+    print("    Ausgabe ist ein Bauartefakt (jlc/ ist in .gitignore) -- nicht committen.")
+
+
+# LCSC-Nummern, die laut Basic-Snapshot Basic Parts sind (nur fuer die Statistik).
+_BASIC_HINT = {
+    "C17414", "C17513", "C17407", "C17673", "C17437", "C17477", "C17888",
+    "C49678", "C1710", "C13585", "C15850", "C20526",
+}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--drc", action="store_true", help="nach dem Schreiben DRC laufen lassen")
     ap.add_argument("--png", action="store_true", help="Vorschau docs/pcb-daughtercard.png")
+    ap.add_argument("--jlc", action="store_true",
+                    help="nur jlc/BOM.csv + jlc/CPL.csv aus der vorhandenen "
+                         ".kicad_pcb erzeugen (kein Neu-Aufbau)")
     args = ap.parse_args()
+
+    if args.jlc:
+        export_jlc()
+        return 0
 
     board = build()
     pcbnew.SaveBoard(str(PCB), board)
