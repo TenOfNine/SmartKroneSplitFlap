@@ -84,7 +84,7 @@ COMPONENTS: dict[str, tuple[str, str, bool]] = {
     "C4": ("krone:C", "10n", False),
     "C5": ("krone:C", "10n", False),
     "C6": ("krone:C", "10n", False),
-    "F1": ("krone:Polyfuse", "500mA", False),
+    "F1": ("krone:R", "0R", False),  # 0-Ohm-Bruecke (war PTC); D-3, fuer Reihenschaltung >10 Module
     "J1": ("krone:Conn_02x05_Odd_Even", "Anzeige", False),
     "J2": ("krone:Conn_02x05_Odd_Even", "Bus in", False),
     "J3": ("krone:Conn_02x05_Odd_Even", "Bus out", False),
@@ -132,7 +132,7 @@ FOOTPRINTS: dict[str, str] = {
     "R16": _FP_R0805,  # 120 Ohm; tatsaechliche Verlustleistung ~50 mW << 125 mW (0805)
     "C1": _FP_C0805, "C2": _FP_C0805, "C4": _FP_C0805, "C5": _FP_C0805, "C6": _FP_C0805,
     "C3": "Capacitor_SMD:C_1206_3216Metric",  # 10 uF, Reserve; Kap. 3.2 "Keramik oder Tantal"
-    "F1": "Fuse:Fuse_1206_3216Metric",
+    "F1": _FP_R1206,  # 0-Ohm-Bruecke in 1206
     "J1": _FP_SOCKET10,  # Buchsenleiste, board-to-board auf die Anzeigenplatine
     "J2": _FP_IDC10, "J3": _FP_IDC10,
     "J4": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
@@ -189,7 +189,7 @@ LCSC: dict[str, str] = {
     "Q1": "",   # BSS84 P-MOSFET  (Kandidat Basic: C8492 - vor Bestellung pruefen)
     "D1": "", "D2": "", "D3": "",   # BAT54S Doppel-Schottky (Extended)
     "D4": "",   # LED gruen 0805
-    "F1": "",   # PTC 0,5 A (in Spezifikation als optional markiert)
+    "F1": "C17888",  # 0 Ohm 1206 Basic (0-Ohm-Bruecke statt PTC, D-3)
 }
 
 # ---------------------------------------------------------------------------

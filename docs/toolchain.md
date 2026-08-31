@@ -129,13 +129,25 @@ bash tools/setup_freerouting.sh          # laedt FreeRouting 2.3.0 + JRE 25 nach
 /usr/bin/python3 tools/route_daughtercard.py --dry-run  # nur .dsn/.ses erzeugen, kein Import
 ```
 
-`route_daughtercard.py` exportiert die Specctra-`.dsn` über `pcbnew`, laesst
-FreeRouting headless laufen und importiert die `.ses` zurueck. FreeRouting 2.3.0
-braucht **Java 25**; das Setup-Skript holt eine Temurin-JRE, falls das System
-keine hat.
+`route_daughtercard.py` macht in einem Durchlauf:
+
+1. Netzklassen aus `gen_daughtercard_pcb.py` in die `.kicad_pro` schreiben.
+2. Specctra-`.dsn` über `pcbnew` exportieren, FreeRouting 2.3.0 headless laufen
+   lassen (braucht **Java 25** — das Setup-Skript holt eine Temurin-JRE), `.ses`
+   zurueck importieren.
+3. `tools/finish_routes.py` — die wenigen Verbindungen, die FreeRouting offen
+   laesst (meist 0–2, aus `kicad-cli pcb drc --format json`), mit einem
+   Rastersuch-Router (A*, 0,25 mm, 2 Lagen) schliessen.
+4. FreeRoutings GND-Bahnen verwerfen, Masseflaechen F.Cu + B.Cu anlegen,
+   Stitching-Raster (5 mm) + je ein Via an jedem GND-Pad, fuellen,
+   freistehende Vias entfernen.
+5. Netzklassen erneut schreiben (SaveBoard setzt sie zurueck), DRC.
+
+Danach `tools/add_silk_marks.py`: Maker-Kennzeichnung (GitHub-Marke +
+Repo-Owner) auf die Rueckseiten-Silkscreen, Lagenaufbau auf schwarze Maske /
+weissen Druck.
 
 Der Router-Lauf gehoert an den Schluss, wenn die Bauteilpositionen feststehen.
-Danach im PCB-Editor DRC pruefen und die Massefläche fuellen.
 
 **KiCad-GUI-Plugin** (fuer die eigene Maschine): Plugin and Content Manager
 (Strg+M) → „Freerouting" → Installieren; ebenfalls Java 25 noetig.
