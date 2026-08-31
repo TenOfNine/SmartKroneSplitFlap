@@ -61,7 +61,7 @@ ohne die bisherige mechanische Sperre.
 
 | Nr | Punkt | Verantwortung | Status |
 |---|---|---|---|
-| J1-M | Mechanische Kodierung der Drehlage beim Aufstecken festlegen (Bolzenbild / Kodierstift / Gehäuse). Fließt in das Platinen-Layout und die Gehäusekonstruktion ein. | Betreiber | **offen** — als GitHub-Issue führen |
+| J1-M | Mechanische Kodierung der Drehlage beim Aufstecken festlegen (Bolzenbild / Kodierstift / Gehäuse). Fließt in das Platinen-Layout und die Gehäusekonstruktion ein. | Betreiber | **offen** — GitHub-Issue [#1](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/1) |
 
 ## Freigabe
 

@@ -58,5 +58,5 @@ Nächste sinnvolle Schritte:
 - `docs/spezifikation.md` Version 0.8: vor jeder Änderung die Änderungshistorie
   im Anhang D fortschreiben.
 - `docs/pruefpunkte-t4.md` P-1 und P-2 warten auf die zweite Freigabe.
-- **J1-M** (`docs/pruefpunkte-j1-buchsenleiste.md`): mechanische Kodierung der
-  J1-Drehlage festlegen — als GitHub-Issue führen.
+- **J1-M** (`docs/pruefpunkte-j1-buchsenleiste.md`, Issue #1): mechanische
+  Kodierung der J1-Drehlage festlegen.
