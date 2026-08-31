@@ -118,6 +118,25 @@ Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstan
 `~/.platformio` wird zwischen Läufen gecacht. Der `hardware`-Job installiert KiCad
 aus dem PPA (`--no-install-recommends`, ohne 3D-Modelle).
 
-## 6. Was die Werkzeuge nicht leisten
+## 6. Autorouting (FreeRouting)
+
+```bash
+bash tools/setup_freerouting.sh          # laedt FreeRouting 2.3.0 + JRE 25 nach tools/vendor/ (gitignored)
+/usr/bin/python3 tools/route_daughtercard.py            # DSN -> FreeRouting -> SES -> .kicad_pcb
+/usr/bin/python3 tools/route_daughtercard.py --dry-run  # nur .dsn/.ses erzeugen, kein Import
+```
+
+`route_daughtercard.py` exportiert die Specctra-`.dsn` über `pcbnew`, laesst
+FreeRouting headless laufen und importiert die `.ses` zurueck. FreeRouting 2.3.0
+braucht **Java 25**; das Setup-Skript holt eine Temurin-JRE, falls das System
+keine hat.
+
+Der Router-Lauf gehoert an den Schluss, wenn die Bauteilpositionen feststehen.
+Danach im PCB-Editor DRC pruefen und die Massefläche fuellen.
+
+**KiCad-GUI-Plugin** (fuer die eigene Maschine): Plugin and Content Manager
+(Strg+M) → „Freerouting" → Installieren; ebenfalls Java 25 noetig.
+
+## 7. Was die Werkzeuge nicht leisten
 
 ERC prüft, ob eine Schaltplandatei gültig ist, nicht ob sie richtig ist. Trägt das verwendete Symbol eine falsche Pinnummerierung, läuft ERC fehlerfrei durch und die Platine ist trotzdem unbrauchbar. Die Gegenprüfung der Symbolpins gegen das Datenblatt bleibt ein manueller Schritt, siehe T3 im Backlog.
