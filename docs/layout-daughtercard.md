@@ -31,11 +31,15 @@ Netzliste des Schaltplans und die Footprint-Tabelle aus
   2,54‑mm‑Raster wäre er nicht einhaltbar.
 - DRC meldet die unverdrahteten Netze (erwartbar) und rund vier eng benachbarte
   Bauteilpaare im gedrängten oberen Streifen (R16/JP3/R14/C2 zwischen den
-  Wannensteckern) — dort ein paar Millimeter auseinanderziehen.
-- Der Courtyard der Wannenstecker `IDC-Header_2x05_Vertical` ist 21,4 mm breit.
-  Damit ist der obere Rand die knappste Stelle. Wird es zu eng, sind die
-  Hebel: J1–J3 auf einen unshrouded `PinHeader_2x05` (6,2 mm) umstellen oder
-  die Platinenhöhe erhöhen (Kapitel 8.1 lässt bis knapp 100 mm zu).
+  Wannensteckern J2/J3) — dort ein paar Millimeter auseinanderziehen.
+- Der Courtyard der Bus-Wannenstecker `IDC-Header_2x05_Vertical` (J2, J3) ist
+  21,4 mm breit. Damit ist der obere Rand die knappste Stelle. Wird es zu eng,
+  sind die Hebel: J2/J3 auf einen unshrouded `PinHeader_2x05` (6,2 mm) umstellen
+  oder die Platinenhöhe erhöhen (Kapitel 8.1 lässt bis knapp 100 mm zu).
+- **J1** ist seit Schaltplan v0.5 eine **Buchsenleiste**
+  (`PinSocket_2x05_P2.54mm_Vertical`, Courtyard ~6 mm), kein Wannenstecker mehr —
+  die Karte wird board-to-board auf die Anzeigenplatine gesteckt. An der
+  Unterkante ist dadurch mehr Luft.
 
 > **Achtung Generatoren:** `gen_daughtercard_sch.py` erzeugt bei jedem Lauf neue
 > UUIDs; die committete `.kicad_sch` und `.kicad_pcb` gehören zusammen. Nach einer
@@ -78,7 +82,7 @@ Drei Zonen, räumlich getrennt:
 |---|---|---|
 | J4 (42 V~ in) | X 4, Y 4, Schraubklemme nach links/unten | Einspeisung, an der Kante |
 | J5 (42 V~ out) | X 66, Y 4, Schraubklemme nach rechts/unten | Durchschleifen zur nächsten Karte |
-| J1 (zur Anzeige) | X 30…44, Y 3, Wannenstecker | mittig unten. AC1/AC2 laufen kurz von J4/J5 zu J1.2/J1.4; die Impuls- und Triac-Adern von J1.7–J1.10 gehen von hier nach oben zu U1 |
+| J1 (zur Anzeige) | X 30…44, Y 3, Buchsenleiste 2×5 | mittig unten. AC1/AC2 laufen kurz von J4/J5 zu J1.2/J1.4; die Impuls- und Triac-Adern von J1.7–J1.10 gehen von hier nach oben zu U1. Pin-1-Lage und Drehsinn müssen zum Pfostenstecker der Anzeigenplatine passen (board-to-board, nicht kodiert) |
 
 **AC1, AC2:** ≥ 1,0 mm Leiterbahn, entlang der Unterkante von J4 über J5 nach J1,
 durchgehend ≥ 2,0 mm Abstand zu jedem Logiknetz. Die Massefläche auf der Rückseite
@@ -156,7 +160,9 @@ Unterkante.
 
 ## 4. Checkliste vor dem Routen
 
-- [ ] Pin 1 aller Wannenstecker (J1, J2, J3) im Silk eindeutig markiert
+- [ ] Pin 1 von J1 (Buchsenleiste), J2 und J3 im Silk eindeutig markiert
+- [ ] J1: Pin-1-Dreieck **und** Klartext „PIN1 → ANZEIGE PIN1" auf der
+      Bestückungsseite (J1 ist nicht kodiert, siehe `docs/pruefpunkte-j1-buchsenleiste.md`)
 - [ ] J1-Belegung gegen die Anzeigenplatine 6281 3 160-00 geprüft (Schaltplan 4.1)
 - [ ] JP1 „5V", JP2 „15V", JP3 „TERM" beschriftet
 - [ ] Feld für die Modulnummer auf dem Silk vorgesehen

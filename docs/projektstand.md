@@ -25,7 +25,8 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 |---|---|---|
 | PCB-Vorplatzierung | `hardware/daughtercard/daughtercard.kicad_pcb` von `tools/gen_daughtercard_pcb.py` (pcbnew): alle 48 Bauteile mit Footprint + Netz + grober Position, Umriss, 4 Bohrungen, Netzklassen. DRC: nur unverdrahtete Netze + ~4 enge Nachbarpaare. Vorschau `docs/pcb-daughtercard.png`. | `<dieser>` |
 | FreeRouting-Anbindung | `tools/setup_freerouting.sh` (JAR + JRE 25 nach `tools/vendor/`), `tools/route_daughtercard.py` (DSN → FreeRouting → SES). GUI-Plugin installiert. `docs/toolchain.md` §6. Router-Lauf erst nach finaler Platzierung. | `bf70800` |
-| JLCPCB-Bestückung vorbereitet | `LCSC`-Dict in `gen_daughtercard_sch.py` (Basic Parts wo möglich), `--jlc`-Export in `gen_daughtercard_pcb.py` (`jlc/BOM.csv` + `CPL.csv`, gitignored). R16 1206→0805 (Basic, D-1). Zweite Anschlussbild-Prüfung aller Symbole: ✅. Offene Punkte D-2..D-4 in `docs/jlc-bestueckung.md`. | `<dieser>` |
+| JLCPCB-Bestückung vorbereitet | `LCSC`-Dict in `gen_daughtercard_sch.py` (Basic Parts wo möglich), `--jlc`-Export in `gen_daughtercard_pcb.py` (`jlc/BOM.csv` + `CPL.csv`, gitignored). R16 1206→0805 (Basic, D-1). Zweite Anschlussbild-Prüfung aller Symbole: ✅. Offene Punkte D-2..D-4 in `docs/jlc-bestueckung.md`. | `f79b958` |
+| J1 → Buchsenleiste | J1 von Wannenstecker auf Buchsenleiste 2×5 (`PinSocket_2x05_P2.54mm_Vertical`, Referenz BKL 10120960) — Karte wird board-to-board auf die Anzeigenplatine gesteckt. Pinbelegung unverändert, ERC 0/0. Schaltplan v0.5, Spez. v0.8. **Offen J1-M**: mechanische Kodierung der Drehlage (nicht kodierter Stecker + 42 V~ an Pin 2/4), siehe `docs/pruefpunkte-j1-buchsenleiste.md`. | `<dieser>` |
 
 Nächste sinnvolle Schritte:
 
@@ -54,6 +55,8 @@ Nächste sinnvolle Schritte:
 
 - Git-Identität ist nur lokal gesetzt (`user.name = TenOfNine`,
   `user.email = phi.hoffmann@hotmail.de`). Bei Bedarf anpassen.
-- `docs/spezifikation.md` Version 0.4: vor jeder Änderung die Änderungshistorie
+- `docs/spezifikation.md` Version 0.8: vor jeder Änderung die Änderungshistorie
   im Anhang D fortschreiben.
 - `docs/pruefpunkte-t4.md` P-1 und P-2 warten auf die zweite Freigabe.
+- **J1-M** (`docs/pruefpunkte-j1-buchsenleiste.md`): mechanische Kodierung der
+  J1-Drehlage festlegen — als GitHub-Issue führen.

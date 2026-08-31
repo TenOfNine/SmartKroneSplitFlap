@@ -100,7 +100,7 @@ PLACEMENT: dict[str, tuple[float, float, float]] = {
     "J6": (66, 24, 90),
     # --- AC-Zone (Unterkante) ---
     "J4": (12, 48, 0),
-    "J1": (37, 48, 90),
+    "J1": (37, 48, 90),  # Buchsenleiste 2x5, board-to-board auf die Anzeigenplatine
     "J5": (58, 48, 0),
     # --- Testpunkte an J1 ---
     "TP3": (27, 39, 0),

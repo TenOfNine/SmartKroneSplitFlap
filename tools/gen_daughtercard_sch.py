@@ -113,6 +113,10 @@ _FP_R1206 = "Resistor_SMD:R_1206_3216Metric"
 _FP_C0805 = "Capacitor_SMD:C_0805_2012Metric"
 _FP_SOT23 = "Package_TO_SOT_SMD:SOT-23"
 _FP_IDC10 = "Connector_IDC:IDC-Header_2x05_P2.54mm_Vertical"
+# J1 sitzt board-to-board direkt auf dem Pfostenstecker der Anzeigenplatine
+# (KRONE 6281 3 160-00). Daher Buchsenleiste, nicht Wannenstecker.
+# Referenz: BKL 10120960 (Buchsenleiste 2x5, 2,54 mm, gerade).
+_FP_SOCKET10 = "Connector_PinSocket_2.54mm:PinSocket_2x05_P2.54mm_Vertical"
 
 FOOTPRINTS: dict[str, str] = {
     "U1": "Package_SO:SOIC-20W_7.5x12.8mm_P1.27mm",
@@ -129,7 +133,8 @@ FOOTPRINTS: dict[str, str] = {
     "C1": _FP_C0805, "C2": _FP_C0805, "C4": _FP_C0805, "C5": _FP_C0805, "C6": _FP_C0805,
     "C3": "Capacitor_SMD:C_1206_3216Metric",  # 10 uF, Reserve; Kap. 3.2 "Keramik oder Tantal"
     "F1": "Fuse:Fuse_1206_3216Metric",
-    "J1": _FP_IDC10, "J2": _FP_IDC10, "J3": _FP_IDC10,
+    "J1": _FP_SOCKET10,  # Buchsenleiste, board-to-board auf die Anzeigenplatine
+    "J2": _FP_IDC10, "J3": _FP_IDC10,
     "J4": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
     "J5": "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",
     "J6": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
