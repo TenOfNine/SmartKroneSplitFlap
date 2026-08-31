@@ -3,7 +3,7 @@
 | Feld | Wert |
 |---|---|
 | Baugruppe | Modulsteuerung, eine je Anzeigenmodul |
-| Version | 0.3 |
+| Version | 0.4 |
 | Datum | 28.08.2026 |
 | Bezug | Technische Spezifikation v0.5 |
 | Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC 0/0. Freigegebene Korrekturen: P-1, P-2 (`docs/pruefpunkte-t4.md`), P-3 RS-485-Pins (`docs/pruefpunkte-t7.md`). |
@@ -74,9 +74,9 @@
 | R11 | 1 kΩ | Serienwiderstand CHAIN_IN |
 | R12 | 100 kΩ | Pull-down CHAIN_IN |
 | R13 | 1 kΩ | Serienwiderstand CHAIN_OUT |
-| R14 | 0 Ω | Brücke +5V nach VSENS, Bauform 1206 |
+| R14 | 0 Ω | Brücke +5V nach VSENS, Bauform 1206 (Handlöt-Brücke) |
 | R15 | 1 kΩ | Vorwiderstand D4 |
-| R16 | 120 Ω | Busabschluss, über JP3 zuschaltbar, 0,25 W |
+| R16 | 120 Ω | Busabschluss, über JP3 zuschaltbar. Bauform **0805** (P ≈ 50 mW; 120 Ω gibt es bei JLCPCB nur in 0805 als Basic Part) |
 | C1 | 100 nF | Abblockung U1, direkt an Pin 1/20 |
 | C2 | 100 nF | Abblockung U2, direkt an Pin 8/5 |
 | C3 | 10 µF / 16 V | Stützkondensator +5V, Keramik oder Tantal |
@@ -499,3 +499,4 @@ Bei zehn Karten würde ich fünfzehn fertigen lassen. Der Aufpreis ist gering un
 | 0.1 | 27.08.2026 | Erstfassung auf Basis der Spezifikation v0.3. |
 | 0.2 | 28.08.2026 | T4: Netzliste in KiCad-Schaltplan überführt. Zwei Widersprüche in Kapitel 6 aufgelöst (Details und offene Gegenprüfung in `docs/pruefpunkte-t4.md`): **P-1** Testpad-Zuordnung — 6.4 ist maßgeblich, TP3–TP5 liegen auf Funktionsnetzen, die Reserve-GPIOs PB0/PC0/PC1/PC2/PC3 bleiben unbeschaltet; 6.3 entsprechend gefasst. **P-2** Klemmdioden D1–D3 (BAT54S) — Pinbelegung auf das KiCad-Symbol und eine funktionsfähige Clamp-Topologie umgestellt: Pin 1 (A) → GND, Pin 2 (K) → +5V, Pin 3 (COM) → Signal. Testpad-Netze TP1–TP7 und `LED_K` in die Netzliste aufgenommen. |
 | 0.3 | 28.08.2026 | **P-3** (`docs/pruefpunkte-t7.md`): RS-485-Anschluss auf die USART0-Standard-MUX-Position des ATtiny1616 korrigiert. RO an PB3 (Pin 8, war PB1), DE an PB0 (Pin 11, war PB3), DI an PB2 unverändert. PB1 (Pin 10) wird neuer unbeschalteter Reserve-Pin. Netze `RO`/`DE` und die Pinbelegung 6.3 entsprechend. ERC weiter 0/0. |
+| 0.4 | 31.08.2026 | JLCPCB-Bestückung vorbereitet (`docs/jlc-bestueckung.md`): LCSC-Nummern und Basic/Extended-Einordnung, zweite Anschlussbild-Prüfung aller Symbole (ohne Befund). **R16 von 1206 auf 0805** (D-1) — 120 Ω ist bei JLCPCB nur in 0805 ein Basic Part, Verlustleistung unkritisch. Schaltplan und PCB neu erzeugt, ERC 0/0. |
