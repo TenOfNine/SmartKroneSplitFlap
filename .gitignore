@@ -16,9 +16,11 @@ fp-info-cache
 *.bak
 _autosave-*
 *.net
-gerber/
+/gerber/
 *.ses
 hardware/daughtercard/jlc/
+# hardware/daughtercard/manufacturing/ ist ein committetes Fertigungspaket
+# (Gerber, BOM, CPL) aus tools/gen_manufacturing.py -- kein Bauartefakt.
 
 # generierte Pruefberichte mit Zeitstempel (regenerierbar)
 docs/erc-*.rpt
