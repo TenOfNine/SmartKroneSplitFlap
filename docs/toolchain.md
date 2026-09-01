@@ -131,9 +131,9 @@ Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstan
 | Job | Prüfung |
 |---|---|
 | `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (40), `python tools/test_busctl.py` (13) |
-| `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32` |
-| `hardware` | KiCad 9, `build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`, `kicad-cli sch erc` (0 Fehler / 0 Warnungen) |
-| `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber sobald ein `.kicad_pcb` existiert |
+| `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32c3` |
+| `hardware` | KiCad 9, `build_krone_symbols.py --check` + `build_krone_master_symbols.py --check` (informativ), `gen_daughtercard_sch.py --check-only` + `gen_master_sch.py --check-only`, `kicad-cli sch erc` für beide Schaltpläne (0 Fehler / 0 Warnungen) |
+| `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber der Daughter Card |
 
 `~/.platformio` wird zwischen Läufen gecacht. Der `hardware`-Job installiert KiCad
 aus dem PPA (`--no-install-recommends`, ohne 3D-Modelle).
