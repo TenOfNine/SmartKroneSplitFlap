@@ -121,7 +121,7 @@ void masterapp_tick(masterapp_t *app, uint32_t now_ms)
     app->have_shown = true;
 }
 
-static const char *mode_name(app_mode_t m)
+const char *masterapp_mode_name(app_mode_t m)
 {
     switch (m) {
     case APP_MODE_TEXT:      return "text";
@@ -139,7 +139,7 @@ size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size)
                      "{\"mode\":\"%s\",\"sep\":\"%c\",\"text\":\"%s\","
                      "\"time_valid\":%s,\"align\":%u,\"detected\":%u,"
                      "\"enum_busy\":%s,\"modules\":[",
-                     mode_name(app->mode), app->sep, app->text,
+                     masterapp_mode_name(app->mode), app->sep, app->text,
                      app->time_valid ? "true" : "false",
                      (unsigned)app->align, (unsigned)app->bus->module_count,
                      busmaster_enum_busy(app->bus) ? "true" : "false");

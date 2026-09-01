@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.13 |
+| Version | 0.14 |
 | Datum | 01.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -583,7 +583,9 @@ NVS nicht selbsttätig.
 
 ### 7.6 MQTT und Home Assistant
 
-Anbindung über MQTT mit Auto-Discovery, damit keine Custom Integration in Home Assistant installiert werden muss.
+Anbindung über MQTT mit Auto-Discovery (Präfix `homeassistant/`), damit keine
+Custom Integration in Home Assistant installiert werden muss. Die Config-Topics
+werden retained veröffentlicht; die MQTT-Client-ID ist der Hostname (Kapitel 7.3).
 
 | Entity | Typ | Topic-Suffix |
 |---|---|---|
@@ -594,6 +596,21 @@ Anbindung über MQTT mit Auto-Discovery, damit keine Custom Integration in Home 
 | Zeichen je Modul | `sensor` | `module/<n>/char` |
 | Sammelfehler | `binary_sensor` | `error/state` |
 | Modul online | `binary_sensor` | `module/<n>/online` |
+
+**Verfügbarkeit (LWT):** Beim Verbinden meldet die Karte `<base_topic>/status` =
+`online` (retained) und hinterlegt `offline` als Last Will. Jede Entity trägt
+dieses Topic als `availability_topic`, sodass sie in Home Assistant „nicht
+verfügbar" wird, wenn die Karte abreißt oder MQTT abgeschaltet wird.
+
+**Zustands-Topics** (`…/state`, `module/<n>/…`, `error/state`) werden retained
+gesendet, damit Home Assistant nach einem Neustart sofort den letzten Stand hat.
+Aktualisierung einmal je Bus-Abfragezyklus (~1 s bei zehn Modulen). `module/<n>/char`
+liefert das **dargestellte Zeichen** (`A`, `7`, `-`, `.` oder Leerzeichen), nicht
+die Blattnummer.
+
+Wird die Modulzahl verkleinert, löscht die Firmware die Discovery-Configs der
+entfallenen Module (leere retained Payload), damit keine Geister-Entities
+zurückbleiben.
 
 ### 7.7 Hinweis zur Sekundenanzeige
 
@@ -779,3 +796,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.11 | 01.09.2026 | Dokumentationspflege: Dokumentkopf auf die tatsächliche Version gebracht (war seit v0.8 nicht mitgezogen). Kapitel 2.2/7/8.2/Anhang B durchgängig „ESP32-C3" statt „ESP32". Kapitel 7.2/7.3 um die konfigurierbaren Zeit-/Schnittstellen-Einstellungen und die Diagnose-Ansicht ergänzt. Keine inhaltlichen Systemänderungen. |
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
 | 0.13 | 01.09.2026 | Kapitel 7.2/7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. **ArduinoOTA entfernt** — der passwortlose espota-UDP-Port entfällt; der `ota_enabled`-Schalter gated jetzt `/api/update`. |
+| 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |

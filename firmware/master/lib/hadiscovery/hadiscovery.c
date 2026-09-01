@@ -64,6 +64,14 @@ int hadiscovery_entity(char *config_topic, size_t topic_size,
         return -1;
     }
 
+    /* gemeinsamer Verfuegbarkeits-Block (LWT-Topic, Spezifikation 7.6) */
+    char avail[128];
+    snprintf(avail, sizeof(avail),
+             "\"availability_topic\":\"%s/status\","
+             "\"payload_available\":\"online\","
+             "\"payload_not_available\":\"offline\"",
+             base_topic);
+
     /* gemeinsamer device-Block */
     char dev[160];
     snprintf(dev, sizeof(dev),
@@ -91,48 +99,48 @@ int hadiscovery_entity(char *config_topic, size_t topic_size,
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
                      "\"command_topic\":\"%s/text/set\",\"state_topic\":\"%s/text/state\","
-                     "%s}",
-                     name, uid, base_topic, base_topic, dev);
+                     "%s,%s}",
+                     name, uid, base_topic, base_topic, avail, dev);
         break;
     case HA_ENT_MODE:
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
                      "\"command_topic\":\"%s/mode/set\",\"state_topic\":\"%s/mode/state\","
                      "\"options\":[\"text\",\"clock_hm\",\"clock_hms\",\"blank\",\"off\"],"
-                     "%s}",
-                     name, uid, base_topic, base_topic, dev);
+                     "%s,%s}",
+                     name, uid, base_topic, base_topic, avail, dev);
         break;
     case HA_ENT_HOME:
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
-                     "\"command_topic\":\"%s/home/press\",%s}",
-                     name, uid, base_topic, dev);
+                     "\"command_topic\":\"%s/home/press\",%s,%s}",
+                     name, uid, base_topic, avail, dev);
         break;
     case HA_ENT_SELFTEST:
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
-                     "\"command_topic\":\"%s/selftest/press\",%s}",
-                     name, uid, base_topic, dev);
+                     "\"command_topic\":\"%s/selftest/press\",%s,%s}",
+                     name, uid, base_topic, avail, dev);
         break;
     case HA_ENT_ERROR:
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
                      "\"state_topic\":\"%s/error/state\",\"device_class\":\"problem\","
-                     "\"payload_on\":\"1\",\"payload_off\":\"0\",%s}",
-                     name, uid, base_topic, dev);
+                     "\"payload_on\":\"1\",\"payload_off\":\"0\",%s,%s}",
+                     name, uid, base_topic, avail, dev);
         break;
     case HA_ENT_MODULE_CHAR:
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
-                     "\"state_topic\":\"%s/module/%u/char\",%s}",
-                     name, uid, base_topic, (unsigned)module_n, dev);
+                     "\"state_topic\":\"%s/module/%u/char\",%s,%s}",
+                     name, uid, base_topic, (unsigned)module_n, avail, dev);
         break;
     case HA_ENT_MODULE_ONLINE:
         r = snprintf(payload, payload_size,
                      "{\"name\":\"%s\",\"unique_id\":\"%s\","
                      "\"state_topic\":\"%s/module/%u/online\",\"device_class\":\"connectivity\","
-                     "\"payload_on\":\"1\",\"payload_off\":\"0\",%s}",
-                     name, uid, base_topic, (unsigned)module_n, dev);
+                     "\"payload_on\":\"1\",\"payload_off\":\"0\",%s,%s}",
+                     name, uid, base_topic, (unsigned)module_n, avail, dev);
         break;
     default:
         return -1;

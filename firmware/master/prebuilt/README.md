@@ -1,6 +1,6 @@
 # Vorgebaute Master-Firmware (ESP32-C3 Super Mini)
 
-Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `5212ed5`, 2026-09-01). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `e2fccd8`, 2026-09-01). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|
@@ -9,8 +9,8 @@ Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt geb
 | `krone-master-esp32c3.ota.bin` | App-Image fuer das **OTA-Update aus der Web-UI** (Einstellungen > System > Firmware aktualisieren) |
 | `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |
 
-SHA-256 `factory.bin`: `c06790a48d4768c25023d50611ce35e39c5088b7234a62da139b3d2146e1fdda`  
-SHA-256 `ota.bin`: `b3bbf3b76e3b0bf4b4f567984e99951fc3e0bbb8c901a2f7620861894b5d2765`
+SHA-256 `factory.bin`: `95e99d5387ba1fa2f81f7a04fdaa8fc9366774845f048c47f6882dd92d9a53ad`  
+SHA-256 `ota.bin`: `d4ed62b3a7eda63078283fb84a940413b6cad32fbf832294cbbdf2784ad3c467`
 
 ## Erst-Flash (USB)
 
@@ -24,8 +24,7 @@ SHA-256 `ota.bin`: `b3bbf3b76e3b0bf4b4f567984e99951fc3e0bbb8c901a2f7620861894b5d
 
 ## Spaetere Updates (OTA)
 
-- **Web-UI:** *Einstellungen > System > Firmware aktualisieren* -> `krone-master-esp32c3.ota.bin` hochladen. Kein Toolchain, jeder Browser. Bei Fehler bleibt die alte Firmware aktiv. Einstellungen (NVS) bleiben erhalten.
-- **PlatformIO:** `pio run -e esp32c3 -t upload -d firmware/master` mit `--upload-port krone_anzeige.local` (ArduinoOTA, im Netz aktiv).
+*Einstellungen > System > Firmware aktualisieren* -> `krone-master-esp32c3.ota.bin` hochladen (nicht die `.factory.bin`). Kein Toolchain, jeder Browser. Bei Fehler bleibt die alte Firmware aktiv, die Einstellungen (NVS) bleiben erhalten. In den *Schnittstellen* abschaltbar; ein Netzwerk-OTA (ArduinoOTA) gibt es bewusst nicht.
 
 Nach dem Boot: Access-Point `krone_anzeige` fuer die WLAN-Einrichtung, serielle Konsole auf USB-C (115200 Bd). Status-LED (GPIO6): schnelles Blinken = kein WLAN.
 

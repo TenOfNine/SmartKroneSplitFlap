@@ -1009,6 +1009,8 @@ static void handle_reboot()
     ok_json();
 }
 
+static String topic(const char *suffix);   /* Definition im MQTT-Abschnitt */
+
 /* Konfiguration aus einem JSON-Objekt uebernehmen, in NVS sichern und -- wo
  * gefahrlos -- sofort anwenden. Von /api/config und /api/backup genutzt. */
 static void apply_config_doc(JsonDocument &doc)
@@ -1048,7 +1050,11 @@ static void apply_config_doc(JsonDocument &doc)
     g_app.align = align_from(cfg.align);
     g_app.have_shown = false;   /* Anzeige mit neuer Ausrichtung neu setzen */
     apply_time_config();
-    if (!cfg.mqtt_enabled && mqtt.connected()) mqtt.disconnect();
+    if (!cfg.mqtt_enabled && mqtt.connected()) {
+        /* sauberes Abmelden loest kein Last Will aus -> selbst offline melden */
+        mqtt.publish(topic("status").c_str(), "offline", true);
+        mqtt.disconnect();
+    }
 }
 
 static void config_to_json(JsonDocument &d)
@@ -1233,7 +1239,7 @@ static void mqtt_publish_discovery()
     static const ha_entity_t global_ents[] = { HA_ENT_TEXT, HA_ENT_MODE,
                                                HA_ENT_HOME, HA_ENT_SELFTEST,
                                                HA_ENT_ERROR };
-    char t[128], p[512];
+    char t[128], p[640];
     for (ha_entity_t e : global_ents) {
         if (hadiscovery_entity(t, sizeof(t), p, sizeof(p), "homeassistant",
                                cfg.base_topic, cfg.node_id, e, 0) == 0) {
@@ -1245,6 +1251,17 @@ static void mqtt_publish_discovery()
             if (hadiscovery_entity(t, sizeof(t), p, sizeof(p), "homeassistant",
                                    cfg.base_topic, cfg.node_id, e, n) == 0) {
                 mqtt.publish(t, p, true);
+            }
+        }
+    }
+    /* Discovery-Configs frueher konfigurierter, jetzt entfallener Module
+     * loeschen (leere retained Payload), sonst bleiben Geister-Entities in
+     * Home Assistant stehen. */
+    for (uint8_t n = cfg.module_count + 1; n <= BUSMASTER_MAX_MODULES; ++n) {
+        for (ha_entity_t e : { HA_ENT_MODULE_CHAR, HA_ENT_MODULE_ONLINE }) {
+            if (hadiscovery_entity(t, sizeof(t), p, sizeof(p), "homeassistant",
+                                   cfg.base_topic, cfg.node_id, e, n) == 0) {
+                mqtt.publish(t, "", true);
             }
         }
     }
@@ -1280,9 +1297,14 @@ static void mqtt_ensure()
     }
     last_mqtt_try = millis();
     mqtt.setServer(cfg.mqtt_host, cfg.mqtt_port);
-    mqtt.setBufferSize(768);
+    mqtt.setBufferSize(1024);   /* Discovery-Payloads inkl. availability + device */
     mqtt.setCallback(mqtt_callback);
-    if (mqtt.connect(cfg.node_id, cfg.mqtt_user, cfg.mqtt_pass)) {
+    /* Last Will: der Broker setzt <base>/status = "offline" (retained), wenn die
+     * Karte ohne sauberes DISCONNECT abreisst. */
+    const String st = topic("status");
+    if (mqtt.connect(cfg.node_id, cfg.mqtt_user, cfg.mqtt_pass,
+                     st.c_str(), 0, true, "offline")) {
+        mqtt.publish(st.c_str(), "online", true);
         mqtt.subscribe(topic("text/set").c_str());
         mqtt.subscribe(topic("mode/set").c_str());
         mqtt.subscribe(topic("home/press").c_str());
@@ -1299,16 +1321,20 @@ static void mqtt_publish_state()
     bool any_error = false;
     for (uint8_t i = 0; i < cfg.module_count; ++i) {
         const bm_module_t *m = &g_bus.mod[i];
-        char st[8];
-        snprintf(st, sizeof(st), "%u", m->ist_blatt);
-        mqtt.publish((String(cfg.base_topic) + "/module/" + (i + 1) + "/char").c_str(), st);
+        const char ch[2] = { charmap_char(m->ist_blatt), 0 };
+        mqtt.publish((String(cfg.base_topic) + "/module/" + (i + 1) + "/char").c_str(),
+                     ch, true);
         mqtt.publish((String(cfg.base_topic) + "/module/" + (i + 1) + "/online").c_str(),
-                     m->online ? "1" : "0");
+                     m->online ? "1" : "0", true);
         if (m->fehler != 0) {
             any_error = true;
         }
     }
-    mqtt.publish(topic("error/state").c_str(), any_error ? "1" : "0");
+    mqtt.publish(topic("error/state").c_str(), any_error ? "1" : "0", true);
+    /* Rueckmeldung fuer die schreibenden Entities (text / select). */
+    mqtt.publish(topic("text/state").c_str(), g_app.text, true);
+    mqtt.publish(topic("mode/state").c_str(),
+                 masterapp_mode_name(g_app.mode), true);
 }
 
 /* ================================================================== */

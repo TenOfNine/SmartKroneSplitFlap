@@ -167,6 +167,27 @@ Spezifikation v0.12. Am Gerät noch nicht getestet.
 
 ---
 
+## T14 — MQTT/Home-Assistant-Anbindung vervollständigen
+
+Die Auto-Discovery aus T8 deklarierte Zustands-Topics, die die Firmware nie
+bediente, und hatte keine Ausfallerkennung.
+
+- **Last Will / Verfügbarkeit:** `<base>/status` = `online`/`offline` (retained),
+  in jeder Discovery-Payload als `availability_topic` → Entities werden bei
+  Ausfall/MQTT-Abschaltung „nicht verfügbar".
+- **Zustände retained**, inkl. der bisher fehlenden `text/state` und `mode/state`.
+- `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer —
+  neue Umkehrfunktion `charmap_char()` in `lib/charmap`, host-getestet.
+- Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module
+  gelöscht (keine Geister-Entities).
+- MQTT-Puffer auf 1 KB (Discovery-Payload wächst um `availability`-Block).
+
+**Fertig, wenn:** `pio run -e esp32c3` kompiliert und `pio test -e native` grün.
+**Erledigt 01.09.2026** — `pio test -e native` 43/43, Flash ~1000 KB (76,3 %).
+Spezifikation v0.14. Am Gerät noch nicht gegen einen Broker getestet.
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.
