@@ -122,20 +122,40 @@ Bench-Test M-3 vor der Bestellung.
 
 ## T12 — Master-Firmware auf ESP32-C3 portieren
 
-`firmware/master/` läuft bislang gegen `esp32dev` (WROOM-32, UART2, GPIO 16/17/5/4).
-Für den ESP32-C3 Super Mini:
+Die Master-Firmware lief zunächst gegen `esp32dev` (WROOM-32, UART2, GPIO 16/17/5/4).
+Portierung auf den ESP32-C3 Super Mini:
 
-- `platformio.ini`: `board = esp32-c3-devkitm-1`.
+- `platformio.ini`: `board = esp32-c3-devkitm-1`, `env` `esp32` → `esp32c3`.
 - `src/main.cpp`: RS-485 auf **UART1** (der C3 hat nur zwei UARTs, UART0 =
   USB-Konsole), GPIO-Konstanten nach `docs/schaltplan-master.md` Kap. 6
-  (TX GPIO3, RX GPIO4, DE GPIO10, CHAIN GPIO5, LED GPIO6).
+  (TX GPIO3, RX GPIO4, DE GPIO10, CHAIN GPIO5, LED GPIO6), Pins über `build_flags`.
 - CHAIN-Polarität: bei bestücktem 74LVC1G17 nicht invertiert.
 
 **Fertig, wenn:** `pio run -e esp32c3` fehlerfrei kompiliert und die
 Host-Tests (`pio test -e native`) unverändert grün bleiben.
-**Erledigt 01.09.2026** — `esp32c3`-Env (~936 KB Flash), RS-485 auf UART1,
-Pins via `build_flags`, Status-LED an GPIO6. `pio test -e native` 34/34.
+**Erledigt 01.09.2026** — `esp32c3`-Env, RS-485 auf UART1, Pins via `build_flags`,
+Status-LED an GPIO6, `-DARDUINO_USB_CDC_ON_BOOT=1`. `pio test -e native` grün.
 Am Gerät noch nicht getestet.
+
+---
+
+## T13 — Web-UI der Zentralsteuerung
+
+Ablösung der minimalen Web-UI aus T8 durch eine bedienbare Oberfläche (Vorschlag
+und Freigabe mit dem Betreiber über einen Design-Mockup).
+
+- Eine `PROGMEM`-Seite (System-Schriften, kein CDN, ~14 KB), Dark-Theme,
+  Sidebar-Navigation, Ansichten Übersicht / Module / Log / Einstellungen.
+- Neues hardwareunabhängiges `lib/eventlog/` (Ereignis-Ringpuffer, host-getestet).
+- REST erweitert (`/api/system`, `/api/log`, `/api/module`, `/api/enumerate`,
+  `/api/time`, `/api/wifi/*`, `/api/reboot`); `/api/config` deckt NTP-Server,
+  Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab.
+- `busmaster` zählt CRC-Fehler und Timeouts; neu `busmaster_identify()`.
+
+**Fertig, wenn:** `pio run -e esp32c3` kompiliert und `pio test -e native` grün
+bleibt (inkl. `test_eventlog`).
+**Erledigt 01.09.2026** — `pio test -e native` 40/40, Flash ~998 KB (76 %).
+Spezifikation v0.10. Am Gerät noch nicht getestet.
 
 ---
 

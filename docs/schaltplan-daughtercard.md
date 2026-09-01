@@ -4,9 +4,9 @@
 |---|---|
 | Baugruppe | Modulsteuerung, eine je Anzeigenmodul |
 | Version | 0.7 |
-| Datum | 28.08.2026 |
-| Bezug | Technische Spezifikation v0.5 |
-| Status | Entwurf. Netzliste in T4 in `.kicad_sch` überführt, ERC 0/0. Freigegebene Korrekturen: P-1, P-2 (`docs/pruefpunkte-t4.md`), P-3 RS-485-Pins (`docs/pruefpunkte-t7.md`). |
+| Datum | 01.09.2026 |
+| Bezug | Technische Spezifikation v0.8 (Steckerbelegung J1) |
+| Status | Netzliste in `.kicad_sch` überführt (ERC 0/0), PCB geroutet (DRC 0), Fertigungspaket `hardware/daughtercard/manufacturing/`, bei JLCPCB in Auftrag. Freigegebene Korrekturen: P-1, P-2 (`docs/pruefpunkte-t4.md`), P-3 RS-485-Pins (`docs/pruefpunkte-t7.md`). |
 
 **Zum Gebrauch:** Kapitel 3 bis 6 zusammen ergeben den vollständigen Schaltplan. Kapitel 5 zeigt die Blöcke als Prinzipschaltbild, Kapitel 6 ist die verbindliche Netzliste. Bei Abweichungen zwischen beiden gilt die Netzliste.
 

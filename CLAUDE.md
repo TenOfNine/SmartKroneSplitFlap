@@ -9,16 +9,17 @@ Architektur:
 - Je Anzeigenmodul eine Daughter Card mit ATtiny1616
 - RS-485 half duplex (TP8485E), 115200 Bd, Daisy-Chain über Flachbandkabel
 - Automatische Adressvergabe über eine separate CHAIN-Leitung
-- ESP32 als Master mit Web-UI, REST, MQTT und NTP-Uhr
+- ESP32-C3 (Super Mini) als Master mit Web-UI, REST, MQTT und NTP-Uhr
 
 ## Verbindliche Quellen
 
 - `docs/spezifikation.md` — Systemarchitektur, Busprotokoll, Firmware-Konzept, Netzteil, Testplan
-- `docs/schaltplan-daughtercard.md` — vollständige Netzliste, Stückliste, Layout-Vorgaben
+- `docs/schaltplan-daughtercard.md` — vollständige Netzliste, Stückliste, Layout-Vorgaben der Modulsteuerung
+- `docs/schaltplan-master.md` — dasselbe für die Zentralsteuerung
 - `docs/backlog.md` — Aufgabenreihenfolge mit Abnahmekriterien
 - `docs/toolchain.md` — Werkzeugkette und Kommandos
 
-Bei Widerspruch zwischen Spezifikation und Schaltplan gilt die **Netzliste** in `docs/schaltplan-daughtercard.md`.
+Bei Widerspruch zwischen Spezifikation und Schaltplan gilt die **Netzliste** im jeweiligen Schaltplandokument (Kapitel 6).
 
 ## Sprache
 
