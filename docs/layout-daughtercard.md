@@ -5,8 +5,8 @@
 | Bezug | `docs/schaltplan-daughtercard.md` Kapitel 8, Netzliste `hardware/daughtercard/daughtercard.net` |
 | Platine | 74 × 60 mm, 2 Lagen, 1,6 mm, 35 µm Cu, HASL bleifrei |
 | Befestigung | 4 × Bohrung 3,2 mm, je 4 mm von den Ecken |
-| Status | **Vorplatziert.** `hardware/daughtercard/daughtercard.kicad_pcb` enthält alle 48 Bauteile mit Footprint, Netz und einer groben Position, dazu Umriss, 4 Bohrungen und die Netzklassen. Im PCB-Editor bleibt: Bauteile feinjustieren und routen. |
-| Datum | 28.08.2026 |
+| Status | **Geroutet.** Der Betreiber hat die Bauteile platziert (J1–J5 fix), `tools/route_daughtercard.py` hat mit FreeRouting 2.3.0 verdrahtet: 104/104 Netze, 2 Lagen, DRC 0/0, Masseflächen F.Cu + B.Cu mit Stitching. Q1–Q3 vom Betreiber-Layout nach rechts aus dem AC-Korridor gerückt, J6 unter U1. Abschnitt 1/2 unten ist der ursprüngliche T5-Vorschlag; verbindlich ist die `.kicad_pcb`. |
+| Datum | 28.08.2026, geroutet 31.08.2026 |
 
 Koordinaten in diesem Dokument: Ursprung untere linke Ecke, X nach rechts
 (0…74), Y nach oben (0…60). Die `.kicad_pcb` verwendet die KiCad-Konvention
@@ -25,26 +25,42 @@ Netzliste des Schaltplans und die Footprint-Tabelle aus
 
 - Die Bauteil-Footprints tragen den Pfad des zugehörigen Schaltplansymbols;
   „Update PCB from Schematic" ordnet sie also ohne Warnung zu.
-- Netzklassen in der `.kicad_pro`: `AC` (1,0 mm Bahn), `RS485` (0,3 mm Paar),
-  `Power` (0,5 mm). Der 2‑mm‑Abstand der AC‑Bahnen zu Logiknetzen (Abschnitt 3)
-  ist eine **Routing‑Vorgabe von Hand**, keine DRC‑Regel — am Stecker mit
-  2,54‑mm‑Raster wäre er nicht einhaltbar.
-- DRC meldet die unverdrahteten Netze (erwartbar) und rund vier eng benachbarte
-  Bauteilpaare im gedrängten oberen Streifen (R16/JP3/R14/C2 zwischen den
-  Wannensteckern J2/J3) — dort ein paar Millimeter auseinanderziehen.
+- Netzklassen in der `.kicad_pro` (aus `tools/gen_daughtercard_pcb.py`):
+  **alle Bahnen 0,5 mm**, nur **AC1/AC2 1,5 mm** (Betreiber-Vorgabe). GND
+  läuft über die Fläche. Signalbahnen verjüngen sich am SOIC-Raster (1,27 mm)
+  auf 0,375 mm. Abstände: Default/GND 0,2 mm, AC 0,5 mm.
+- **+5V-Durchgangsschiene bei 0,5 mm:** trägt ~1,3 A (IPC-2221, 10 K) — der
+  Kettenstrom von ~0,6 A bei 10 Modulen ist stromtragfähig, aber der
+  Spannungsabfall der +5V-Schiene über 10 Module steigt on-board auf grob
+  0,3 V (+ Stecker + Flachbandkabel). Bei zehn Modulen an einem Netzteil die
+  5-V-Schiene höher einstellen oder die Kette kürzer halten. Siehe
+  `docs/jlc-bestueckung.md` D-5.
+- **AC-Abstand:** Die 2,0-mm-Empfehlung aus Abschnitt 3 lässt sich am
+  2,54-mm-Raster von J1/J4/J5 nicht halten. Q1–Q3/R7–R10 sind aus dem
+  AC-Korridor nach rechts gerückt; die AC-Bahn hält danach ≥ 0,55 mm
+  Kupferabstand zu jeder Logikbahn (> 0,4 mm des ersten Laufs), zum nächsten
+  Logik-Pad ≥ 2,4 mm.
+- **F1** ist eine 0-Ω-Brücke (`R_1206`), kein PTC mehr — sie führt bei der
+  Reihenschaltung den Kettenstrom von +5V.
+- **J1** ist eine **Buchsenleiste** (`PinSocket_2x05_P2.54mm_Vertical`), die
+  Karte wird board-to-board auf die Anzeigenplatine gesteckt.
 - Der Courtyard der Bus-Wannenstecker `IDC-Header_2x05_Vertical` (J2, J3) ist
-  21,4 mm breit. Damit ist der obere Rand die knappste Stelle. Wird es zu eng,
-  sind die Hebel: J2/J3 auf einen unshrouded `PinHeader_2x05` (6,2 mm) umstellen
-  oder die Platinenhöhe erhöhen (Kapitel 8.1 lässt bis knapp 100 mm zu).
-- **J1** ist seit Schaltplan v0.5 eine **Buchsenleiste**
-  (`PinSocket_2x05_P2.54mm_Vertical`, Courtyard ~6 mm), kein Wannenstecker mehr —
-  die Karte wird board-to-board auf die Anzeigenplatine gesteckt. An der
-  Unterkante ist dadurch mehr Luft.
+  21,4 mm breit — der obere Rand ist die knappste Stelle.
+
+### Fertigung
+
+- **Platine schwarz, Bestückungsdruck weiß** (Betreiber-Vorgabe). Im
+  Lagenaufbau der `.kicad_pcb` als Lötstoppmaske „Black" / Silkscreen „White"
+  gesetzt; bei JLCPCB die Bestelloption „Black solder mask, White silkscreen".
+- **Maker-Kennzeichnung** auf der Rückseiten-Silkscreen: GitHub-Marke
+  (octicon `mark-github`, ~8,5 mm, `footprints/logos.pretty/Logo_GitHub`) und
+  der Text „TenOfNine" (Repository-Owner). Gesetzt von `tools/add_silk_marks.py`.
 
 > **Achtung Generatoren:** `gen_daughtercard_sch.py` erzeugt bei jedem Lauf neue
-> UUIDs; die committete `.kicad_sch` und `.kicad_pcb` gehören zusammen. Nach einer
-> Netzlistenänderung beide neu erzeugen (`gen_daughtercard_sch.py … && `
-> `gen_daughtercard_pcb.py …`) und beide committen.
+> UUIDs. Die Platzierung + Verdrahtung in der committeten `.kicad_pcb` wird
+> **nicht** neu erzeugt; sie stammt vom Betreiber bzw. `route_daughtercard.py`.
+> Eine Schaltplanänderung erfordert danach ein UUID-Remapping der Footprint-Pfade
+> (siehe Commit „F1 → 0-Ω-Brücke"), kein Neu-Erzeugen der `.kicad_pcb`.
 
 ---
 
@@ -98,7 +114,7 @@ Erwärmung < 10 K.
 | U2 (TP8485E) | X 33…45, Y 48…54, nahe J2/J3 | kurze RS-485-Paarführung zur Bus-Zone |
 | C2 (100 n) | direkt an U2 Pin 8 / Pin 5 | Abblockung U2 |
 | C3 (10 µF) | X 20, Y 45, nahe der +5V-Einspeisung (F1 / J2.1) | Stützkondensator |
-| F1 (PTC) | X 14, Y 50, in der +5V-Zuführung von J2.1 | Rückstellsicherung (optional bestückt) |
+| F1 (0-Ω-Brücke) | X 14, Y 50, in der +5V-Zuführung von J2.1 | Durchgang +5V_IN → +5V (war PTC) |
 | R1, R3, R5 (Pull-up 10 k) | X 8…16, Y 30…42 | an +5V, nahe U1 |
 | R2, R4, R6 (Serie 1 k) | **nahe J1** (X 20…28, Y 10…18) | wirksame Tiefpass-Reihenfolge: R vor C, R dicht am Steckereingang |
 | C4, C5, C6 (10 n) | **nahe den Portpins von U1** (X 18…24, Y 24…34) | Tiefpass-Kondensator dicht am µC |
