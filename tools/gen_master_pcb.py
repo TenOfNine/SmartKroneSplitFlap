@@ -51,6 +51,10 @@ HOLE_INSET = 4.0
 # Oberkante, Antenne + Cu-Keepout an der Unterkante (y ~21..27). Alle uebrigen
 # Bauteile liegen rechts davon bzw. unterhalb. docs/layout-master.md.
 PLACEMENT: dict[str, tuple[float, float, float]] = {
+    # U1: Modulkoerper endet ~2,7 mm vor der Oberkante, USB-C-Buchse ragt knapp
+    # daran. Fuer klaren Ueberstand im GUI eine kleine Edge.Cuts-Aussparung unter
+    # der USB-C-Buchse einfuegen -- weiter hochsetzen sprengt den Routingkanal
+    # (Leiterbahnen an der Oberkante). Siehe docs/layout-master.md.
     "U1": (18, 14, 0),
     "C4": (32, 6, 0),        # 100n direkt am 5V-Pin von U1
     # --- RS-485 (Mitte, nahe Bus) ---
@@ -308,6 +312,27 @@ def render_png() -> None:
         print(f"PNG: {out.relative_to(REPO)}  ({canvas.width}x{canvas.height})")
 
 
+def render_3d() -> None:
+    """3D-Ansicht (kicad-cli pcb render) von oben und unten -> docs/render-master-*.png.
+    Fuer die Sichtpruefung der U1-Einbaulage (USB-C oben, Antenne unten,
+    5V-Pad rechts oben). Das ESP32-C3-Modul hat kein 3D-Modell -> als Pad-Feld
+    sichtbar, der Bestueckungsdruck (USB-C / ANT / Pin-1) traegt die Aussage."""
+    from shutil import which
+    if not which("kicad-cli"):
+        return
+    cli = ["xvfb-run", "-a", "kicad-cli"] if which("xvfb-run") else ["kicad-cli"]
+    for side in ("top", "bottom"):
+        out = REPO / "docs" / f"render-master-{side}.png"
+        r = subprocess.run([*cli, "pcb", "render", "--side", side,
+                            "--quality", "high", "--background", "opaque",
+                            "-w", "1600", "-h", "1200", "--floor",
+                            "-o", str(out), str(PCB)], capture_output=True, text=True)
+        if r.returncode == 0:
+            print(f"Render: {out.relative_to(REPO)}")
+        else:
+            print(f"[!] Render {side} fehlgeschlagen: {r.stderr.strip()[:200]}")
+
+
 # --- JLCPCB-Export (--jlc) --------------------------------------------------
 
 _HANDSOLDER_RE = re.compile(r"J\d+$")
@@ -387,10 +412,16 @@ def main() -> int:
                     help="nur jlc/BOM.csv + jlc/CPL.csv aus der vorhandenen .kicad_pcb")
     ap.add_argument("--force", action="store_true",
                     help="Neuaufbau auch dann, wenn die .kicad_pcb bereits Leiterbahnen hat")
+    ap.add_argument("--render", action="store_true",
+                    help="nur 3D-Ansicht (oben/unten) aus der vorhandenen .kicad_pcb")
     args = ap.parse_args()
 
     if args.jlc:
         export_jlc()
+        return 0
+
+    if args.render:
+        render_3d()
         return 0
 
     if PCB.is_file() and not args.force:
