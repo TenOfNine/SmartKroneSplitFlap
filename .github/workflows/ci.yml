@@ -75,20 +75,30 @@ jobs:
       - name: Bibliothekstabellen
         run: bash tools/setup.sh --kicad-config
       - name: Netzliste konsistent (versionsunabhaengig)
-        run: python tools/gen_daughtercard_sch.py --check-only
-      - name: ERC
+        run: |
+          python tools/gen_daughtercard_sch.py --check-only
+          python tools/gen_master_sch.py --check-only
+      - name: ERC Daughter Card
         run: >
           xvfb-run -a kicad-cli sch erc --exit-code-violations
           --severity-error --severity-warning
           -o erc-daughtercard.rpt
           hardware/daughtercard/daughtercard.kicad_sch
+      - name: ERC Master
+        run: >
+          xvfb-run -a kicad-cli sch erc --exit-code-violations
+          --severity-error --severity-warning
+          -o erc-master.rpt
+          hardware/master/master.kicad_sch
       - if: failure()
-        run: cat erc-daughtercard.rpt || true
+        run: cat erc-daughtercard.rpt erc-master.rpt || true
       # Informativ: haengt von der genauen KiCad-Symbolbibliothek ab; ein
-      # Patch-Release kann eine Neuerzeugung von krone.kicad_sym noetig machen.
-      - name: Symbolbibliothek aktuell (informativ)
+      # Patch-Release kann eine Neuerzeugung der krone*.kicad_sym noetig machen.
+      - name: Symbolbibliotheken aktuell (informativ)
         continue-on-error: true
-        run: python tools/build_krone_symbols.py --check
+        run: |
+          python tools/build_krone_symbols.py --check
+          python tools/build_krone_master_symbols.py --check
 
   release:
     name: Release-Artefakte

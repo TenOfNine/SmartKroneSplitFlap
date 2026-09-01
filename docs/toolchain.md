@@ -75,6 +75,13 @@ kicad-cli pcb export gerbers -o gerber/ <pcb>
 /usr/bin/python3 tools/gen_manufacturing.py            # committetes Deliverable
 /usr/bin/python3 tools/gen_daughtercard_pcb.py --jlc   # nur BOM/CPL nach jlc/ (Wegwerf, .gitignore)
 
+# Zentralsteuerung (Master, ESP32-C3 Super Mini) -- selber Ablauf wie Daughter Card
+python tools/build_krone_master_symbols.py             # Projektbibliothek krone_master.kicad_sym
+python tools/gen_master_sch.py --erc --pdf --png       # Schaltplan, ERC 0/0
+/usr/bin/python3 tools/gen_master_pcb.py --png --drc   # Vorplatzierung (verweigert Neuaufbau bei vorhandener Verdrahtung; --force)
+/usr/bin/python3 tools/route_master.py                 # FreeRouting + Flaechen + Silk-Marks, DRC 0/0
+/usr/bin/python3 tools/gen_master_manufacturing.py     # Fertigungspaket -> hardware/master/manufacturing/
+
 # Firmware
 pio run  -d firmware/module            # ATtiny1616 kompilieren
 pio run  -d firmware/master            # ESP32 kompilieren
@@ -146,9 +153,16 @@ bash tools/setup_freerouting.sh          # laedt FreeRouting 2.3.0 + JRE 25 nach
 
 Danach `tools/add_silk_marks.py`: Maker-Kennzeichnung (GitHub-Marke +
 Repo-Owner) auf die Rueckseiten-Silkscreen, Lagenaufbau auf schwarze Maske /
-weissen Druck.
+weissen Druck. Mit `--board <pfad>` auch fuer den Master; `tools/route_master.py`
+ruft es selbst am Ende auf (Silk-Texte + Stackup ueberleben den SES-Import nicht).
 
 Der Router-Lauf gehoert an den Schluss, wenn die Bauteilpositionen feststehen.
+
+**Master:** `tools/route_master.py` macht denselben Ablauf fuer
+`hardware/master/master.kicad_pcb` (Netzklassen aus `gen_master_pcb.py`: alle
+Signale 0,5 mm, Versorgung 0,8 mm, kein AC) und erzeugt am Ende `docs/pcb-master.png`.
+`gen_master_pcb.py --png` wuerde die Platine neu aufbauen und die Verdrahtung
+verwerfen -- es verweigert das, solange Bahnen vorhanden sind (`--force` erzwingt).
 
 **KiCad-GUI-Plugin** (fuer die eigene Maschine): Plugin and Content Manager
 (Strg+M) → „Freerouting" → Installieren; ebenfalls Java 25 noetig.
