@@ -21,7 +21,6 @@
  */
 #include <Arduino.h>
 #include <ArduinoJson.h>
-#include <ArduinoOTA.h>
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
@@ -536,7 +535,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=trow><label class=switch><input type=checkbox id=cf_api_write checked><span class=t></span></label>
 <div class=tx><b>REST-Schreib-API</b><span><code>POST /api/text</code>, <code>/mode</code>, <code>/home</code>, <code>/module</code> … Aus = die Anzeige lässt sich nur über diese Oberfläche und MQTT steuern; GET-Status und Einstellungen bleiben erreichbar.</span></div></div>
 <div class=trow><label class=switch><input type=checkbox id=cf_ota_enabled checked><span class=t></span></label>
-<div class=tx><b>OTA-Firmware-Update</b><span>ArduinoOTA im Netz. Aus = Updates nur über USB-C. (Neustart nötig)</span></div></div>
+<div class=tx><b>OTA-Update über die Web-UI</b><span>Erlaubt <code>POST /api/update</code> (Abschnitt „Firmware aktualisieren"). Aus = Updates nur per USB.</span></div></div>
 <div class=trow><label class=switch><input type=checkbox id=cf_mdns_enabled checked><span class=t></span></label>
 <div class=tx><b>mDNS / Bonjour</b><span>Erreichbarkeit unter <code>&lt;node&gt;.local</code>. (Neustart nötig)</span></div></div>
 <p class="hint warn">Die Web-Oberfläche selbst lässt sich hier nicht abschalten.</p>
@@ -551,7 +550,17 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <label class=btn style=cursor:pointer>Wiederherstellen<input type=file id=restore accept="application/json,.json" hidden></label>
 <button class="btn danger" id=reboot>Neu starten</button></div>
 <p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen.</p>
-</div></div>
+</div>
+
+<div class=sect><h3>Firmware aktualisieren</h3>
+<p class=hint>App-Image <code>krone-master-esp32c3.ota.bin</code> hochladen — <b>nicht</b> die <code>.factory.bin</code>. Das Modul schreibt es in die zweite App-Partition und startet neu; bei einem Fehler bleibt die laufende Firmware aktiv.</p>
+<div class="row mt"><label class="btn" style=cursor:pointer>Datei wählen<input type=file id=fw accept=".bin,application/octet-stream" hidden></label>
+<span id=fwname class=hint style=margin:0>keine Datei</span></div>
+<div id=fwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
+<div id=fwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
+<div class="row mt"><button class="btn primary" id=fwgo disabled>Update starten</button>
+<span id=fwoff class="hint warn" style=margin:0;display:none>In den Schnittstellen deaktiviert</span></div>
+</div>
 </div></section>
 </div></div>
 <div id=toast></div>
@@ -657,9 +666,13 @@ $("#timehint").innerHTML=`Aktuell: <b style="font-family:var(--mono);color:var(-
 $("#wdot").className="dot "+(sys.ssid?"ok":"err");
 $("#wkv").innerHTML=`<dt>Verbunden mit</dt><dd>${sys.ssid||"—"}</dd><dt>IP</dt><dd>${sys.ip||"—"}</dd><dt>Signal</dt><dd>${sys.rssi??"—"} dBm</dd>`;
 $("#mqdot").className="dot "+(sys.mqtt_connected?"ok":sys.mqtt_enabled?"warn":"");
-renderSys()}
+otaUiState();renderSys()}
+function otaUiState(){const on=!!cfg.ota_enabled;
+$("#fwoff").style.display=on?"none":"inline";$("#fwgo").disabled=!on||!_fw;
+$("#fw").disabled=!on}
 $("#cf_use_static").onchange=e=>$("#ipf").hidden=!e.target.checked;
 $("#cf_mqtt_enabled").onchange=e=>$("#mqf").style.opacity=e.target.checked?1:.4;
+$("#cf_ota_enabled").onchange=e=>{cfg.ota_enabled=e.target.checked;otaUiState()};
 
 function collectCfg(){return{
 mqtt_host:$("#cf_mqtt_host").value,mqtt_port:+$("#cf_mqtt_port").value,mqtt_user:$("#cf_mqtt_user").value,
@@ -697,6 +710,22 @@ if(!confirm("Alle Einstellungen (inkl. WLAN) aus der Datei übernehmen und neu s
 try{await fetch("/api/backup",{method:"POST",headers:{"Content-Type":"application/json"},body:txt})}catch(_){}
 toast("Wiederhergestellt — Neustart …")};
 
+let _fw=null;
+$("#fw").onchange=e=>{_fw=e.target.files[0]||null;
+$("#fwname").textContent=_fw?`${_fw.name} · ${Math.round(_fw.size/1024)} KB`:"keine Datei";
+otaUiState()};
+$("#fwgo").onclick=()=>{if(!_fw)return;
+if(!/\.bin$/i.test(_fw.name)&&!confirm("Die Datei endet nicht auf .bin — trotzdem einspielen?"))return;
+if(!confirm(`Firmware „${_fw.name}“ einspielen und neu starten?`))return;
+const fd=new FormData();fd.append("firmware",_fw,_fw.name);
+const x=new XMLHttpRequest();x.open("POST","/api/update");
+$("#fwbar").style.display="block";$("#fwfill").style.width="0";$("#fwgo").disabled=true;
+x.upload.onprogress=ev=>{if(ev.lengthComputable)$("#fwfill").style.width=Math.round(100*ev.loaded/ev.total)+"%"};
+x.onload=()=>{if(x.status===200){$("#fwfill").style.width="100%";toast("Update geschrieben — Neustart …")}
+else{$("#fwgo").disabled=false;let m=x.responseText;try{m=JSON.parse(m).error}catch(_){}toast("Update fehlgeschlagen: "+m)}};
+x.onerror=()=>{$("#fwgo").disabled=false;$("#fwbar").style.display="none";toast("Verbindung abgebrochen")};
+x.send(fd)};
+
 function kb(b){return Math.round((b||0)/1024)}
 function renderSys(){
 const hn=sys.hostname||sys.node_id||"—";
@@ -712,7 +741,7 @@ $("#syskv").innerHTML=`
 <dt>RAM</dt><dd>${kb(hf)} / ${kb(ht)} KB frei · ${hpct} % belegt <span style=color:var(--faint)>(min ${kb(sys.heap_min)} KB)</span></dd>
 <dt>Temperatur</dt><dd>${tc}</dd>
 <dt>Programm / OTA</dt><dd>${kb(sys.sketch_used)} KB belegt · ${kb(sys.sketch_free)} KB frei für Update</dd>
-<dt>OTA</dt><dd>${sys.ota_enabled?"aktiv":"aus"}</dd>`}
+<dt>OTA (Web-UI)</dt><dd>${sys.ota_enabled?"erlaubt":"gesperrt"}</dd>`}
 
 // ── Poll-Schleifen ──
 async function refresh(){
@@ -1101,6 +1130,71 @@ static void handle_backup()
     send_json(200, out);
 }
 
+/*
+ * /api/update -- OTA aus dem Browser. Hochgeladen wird das App-Image
+ * (krone-master-esp32c3.ota.bin), NICHT die .factory.bin. Der Upload-Handler
+ * streamt es ueber die Update-Bibliothek in die inaktive App-Partition; bei
+ * Fehler bleibt die laufende Firmware aktiv. Danach Neustart.
+ *
+ * Gated durch den eigenen Schalter cfg.ota_enabled (unabhaengig von api_write).
+ * ArduinoOTA (espota, offener UDP-Port ohne Passwort) gibt es nicht mehr --
+ * Updates laufen ausschliesslich hierueber bzw. per USB.
+ */
+static bool g_ota_ok = false;
+
+static void handle_update_upload()
+{
+    HTTPUpload &up = web.upload();
+    if (up.status == UPLOAD_FILE_START) {
+        g_ota_ok = false;
+        if (!cfg.ota_enabled) {
+            return;                         /* Antwort-Handler schickt 403 */
+        }
+        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Update gestartet: %s",
+                   up.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            Update.printError(Serial);
+            return;
+        }
+        g_ota_ok = true;
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        if (g_ota_ok && Update.write(up.buf, up.currentSize) != up.currentSize) {
+            Update.printError(Serial);
+            g_ota_ok = false;
+        }
+    } else if (up.status == UPLOAD_FILE_END) {
+        if (g_ota_ok && Update.end(true)) {
+            evlog_push(&g_log, millis(), EVLOG_INFO, "ota",
+                       "Update geschrieben (%u B), Neustart", (unsigned)up.totalSize);
+        } else {
+            g_ota_ok = false;
+            Update.printError(Serial);
+        }
+    } else if (up.status == UPLOAD_FILE_ABORTED) {
+        Update.abort();
+        g_ota_ok = false;
+        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Update abgebrochen");
+    }
+}
+
+static void handle_update_done()
+{
+    if (!cfg.ota_enabled) {
+        send_json(403, "{\"error\":\"ota_disabled\"}");
+        return;
+    }
+    if (g_ota_ok && !Update.hasError()) {
+        send_json(200, "{\"ok\":true,\"note\":\"reboot\"}");
+        want_reboot = true;
+        reboot_at = millis() + 1200;        /* Zeit fuer das Flushen der Antwort */
+    } else {
+        char m[96];
+        snprintf(m, sizeof(m), "{\"error\":\"%s\"}",
+                 Update.hasError() ? Update.errorString() : "kein gueltiges Image");
+        send_json(500, m);
+    }
+}
+
 static void web_begin()
 {
     web.on("/", []() { web.send_P(200, "text/html", INDEX_HTML); });
@@ -1121,6 +1215,7 @@ static void web_begin()
     web.on("/api/reboot",    HTTP_POST, handle_reboot);
     web.on("/api/config",    handle_config);
     web.on("/api/backup",    handle_backup);
+    web.on("/api/update",    HTTP_POST, handle_update_done, handle_update_upload);
     web.begin();
 }
 
@@ -1359,10 +1454,6 @@ void setup()
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
 
     web_begin();
-    if (cfg.ota_enabled) {
-        ArduinoOTA.setHostname(cfg.node_id);
-        ArduinoOTA.begin();
-    }
 
     busmaster_start_enumeration(&g_bus, millis());
 }
@@ -1371,9 +1462,6 @@ void loop()
 {
     const uint32_t now = millis();
 
-    if (cfg.ota_enabled) {
-        ArduinoOTA.handle();
-    }
     web.handleClient();
     handle_portal_request();
     mqtt_ensure();
