@@ -10,16 +10,20 @@ zuerst entfernt. Beruehrt keine Leiterbahnen.
 """
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pcbnew
 
 REPO = Path(__file__).resolve().parent.parent
+
+# Vorgabe: Daughter Card. Mit --board <pfad> auch fuer das Master-Board nutzbar;
+# die Logo-Bibliothek wird relativ zur .kicad_pcb gesucht.
 PCB = REPO / "hardware" / "daughtercard" / "daughtercard.kicad_pcb"
 LOGO_LIB = REPO / "hardware" / "daughtercard" / "footprints" / "logos.pretty"
 
 OWNER = "TenOfNine"
-# B.SilkS, mittleres Feld -- klar von den THT-Steckerpads (J1..J6)
+# B.SilkS, mittleres Feld -- klar von den THT-Steckerpads
 LOGO_POS = (34.0, 25.0)
 TEXT_POS = (34.0, 35.0)
 
@@ -85,12 +89,26 @@ def add_marks(board: "pcbnew.BOARD") -> None:
 
 
 def main() -> int:
+    global PCB, LOGO_LIB
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--board", type=Path, default=PCB,
+                    help="Ziel-.kicad_pcb (Vorgabe: Daughter Card)")
+    ap.add_argument("--logo-pos", nargs=2, type=float, metavar=("X", "Y"))
+    ap.add_argument("--text-pos", nargs=2, type=float, metavar=("X", "Y"))
+    args = ap.parse_args()
+    PCB = args.board.resolve()
+    LOGO_LIB = PCB.parent / "footprints" / "logos.pretty"
+    if args.logo_pos:
+        globals()["LOGO_POS"] = tuple(args.logo_pos)
+    if args.text_pos:
+        globals()["TEXT_POS"] = tuple(args.text_pos)
+
     board = pcbnew.LoadBoard(str(PCB))
     clear_existing(board)
     add_marks(board)
     pcbnew.SaveBoard(str(PCB), board)
     set_black_white_stackup_text(PCB)
-    print(f"geschrieben: {PCB.relative_to(REPO)}")
+    print(f"geschrieben: {PCB}")
     return 0
 
 

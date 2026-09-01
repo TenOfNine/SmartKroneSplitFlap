@@ -19,6 +19,7 @@ _autosave-*
 /gerber/
 *.ses
 hardware/daughtercard/jlc/
+hardware/master/jlc/
 # hardware/daughtercard/manufacturing/ ist ein committetes Fertigungspaket
 # (Gerber, BOM, CPL) aus tools/gen_manufacturing.py -- kein Bauartefakt.
 
