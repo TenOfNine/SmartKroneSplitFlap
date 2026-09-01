@@ -85,7 +85,13 @@ def main() -> int:
         cmd += [hex(off), str(BUILD / name)]
     subprocess.run(cmd, check=True, capture_output=True)
 
+    # App-Image (ohne Bootloader/Partitionstabelle) fuer das OTA-Update aus der
+    # Web-UI -- hier NICHT die factory.bin verwenden.
+    ota = OUT / "krone-master-esp32c3.ota.bin"
+    ota.write_bytes((BUILD / "firmware.bin").read_bytes())
+
     digest = hashlib.sha256(factory.read_bytes()).hexdigest()
+    ota_digest = hashlib.sha256(ota.read_bytes()).hexdigest()
     head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
 
@@ -110,20 +116,28 @@ def main() -> int:
         "Bei jeder Firmware-Aenderung neu ausfuehren.\n\n"
         "| Datei | Zweck |\n|---|---|\n"
         "| `index.html` | Web-Flasher (ESP Web Tools). Wird per GitHub Actions als Page veroeffentlicht. |\n"
-        "| `krone-master-esp32c3.factory.bin` | Merged-Image, im Webflasher an **Offset 0x0** flashen (mit „Erase before flash\") |\n"
+        "| `krone-master-esp32c3.factory.bin` | Merged-Image fuer den **Erst-Flash ueber USB** (Offset 0x0) |\n"
+        "| `krone-master-esp32c3.ota.bin` | App-Image fuer das **OTA-Update aus der Web-UI** (Einstellungen > System > Firmware aktualisieren) |\n"
         "| `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |\n\n"
-        f"SHA-256 (`factory.bin`): `{digest}`\n\n"
-        "## Flashen\n\n"
+        f"SHA-256 `factory.bin`: `{digest}`  \n"
+        f"SHA-256 `ota.bin`: `{ota_digest}`\n\n"
+        "## Erst-Flash (USB)\n\n"
         "- **Browser:** <https://tenofnine.github.io/SmartKroneSplitFlap/> "
         "(laedt immer diesen Verzeichnisstand). Chrome/Edge Desktop.\n"
         "- Alternativ [esptool-js](https://espressif.github.io/esptool-js/) — "
-        "Datei an Offset `0x0`, „Erase\" aktivieren. Der C3 Super Mini geht ueber "
+        "`factory.bin` an Offset `0x0`. Der C3 Super Mini geht ueber "
         "die USB-C-Buchse selbsttaetig in den Download-Modus (kein BOOT-Taster).\n"
         "- Kommandozeile:\n\n"
         "  ```\n"
         "  esptool.py --chip esp32c3 -p /dev/ttyACM0 write_flash 0x0 "
         "krone-master-esp32c3.factory.bin\n"
         "  ```\n\n"
+        "## Spaetere Updates (OTA)\n\n"
+        "*Einstellungen > System > Firmware aktualisieren* -> "
+        "`krone-master-esp32c3.ota.bin` hochladen (nicht die `.factory.bin`). "
+        "Kein Toolchain, jeder Browser. Bei Fehler bleibt die alte Firmware aktiv, "
+        "die Einstellungen (NVS) bleiben erhalten. In den *Schnittstellen* "
+        "abschaltbar; ein Netzwerk-OTA (ArduinoOTA) gibt es bewusst nicht.\n\n"
         "Nach dem Boot: Access-Point `krone_anzeige` fuer die WLAN-Einrichtung, "
         "serielle Konsole auf USB-C (115200 Bd). Status-LED (GPIO6): schnelles "
         "Blinken = kein WLAN.\n\n"
@@ -132,8 +146,9 @@ def main() -> int:
         encoding="utf-8",
     )
 
-    kib = factory.stat().st_size // 1024
-    print(f"geschrieben: {OUT.relative_to(REPO)}/  (factory.bin {kib} KiB, sha256 {digest[:12]}…)")
+    print(f"geschrieben: {OUT.relative_to(REPO)}/  "
+          f"(factory.bin {factory.stat().st_size // 1024} KiB, "
+          f"ota.bin {ota.stat().st_size // 1024} KiB)")
     return 0
 
 
