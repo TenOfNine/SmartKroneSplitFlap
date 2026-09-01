@@ -7,7 +7,7 @@ Eigenbau-Steuerung für eine mechanische Fallblattanzeige der KRONE AG aus dem J
 ## Aufbau
 
 ```
-ESP32 (Master, WLAN/REST/MQTT)
+ESP32-C3 (Master, WLAN/REST/MQTT)
   └─ RS-485 half duplex + CHAIN
        ├─ Daughter Card 1 (ATtiny1616) ── Anzeigenmodul 1
        ├─ Daughter Card 2 ────────────── Anzeigenmodul 2
@@ -47,10 +47,10 @@ Jedes Anzeigenmodul erhält eine eigene kleine Steuerplatine, die die Hall-Impul
 | Bereich | Stand |
 |---|---|
 | Spezifikation, Schaltplan (Netzliste) | vollständig, `docs/` |
-| Schaltplan `.kicad_sch` + Footprints + PCB-Netzliste | generiert, ERC 0/0 (`hardware/daughtercard/`) |
-| PCB-Layout `.kicad_pcb` | steht aus |
+| Schaltplan `.kicad_sch` + Footprints + PCB-Netzliste | generiert, ERC 0/0 (Daughter Card + Master) |
+| PCB-Layout `.kicad_pcb` | geroutet, DRC 0 Fehler; Daughter Card bei JLCPCB bestellt, Master als Planungsstand |
 | Modul-Firmware (ATtiny1616) | fertig, `firmware/module/` |
-| Master-Firmware (ESP32) | fertig, `firmware/master/` |
+| Master-Firmware (ESP32-C3 Super Mini) | fertig, `firmware/master/` — Web-Flasher siehe unten |
 | Bus-Werkzeug | `tools/busctl.py` |
 | CI | `.github/workflows/ci.yml` |
 | Offene Messungen O-2, O-5, O-6 | parametrisiert, blockieren die Fertigung nicht |
@@ -65,10 +65,29 @@ bash tools/setup.sh                              # Toolchain, siehe docs/toolcha
 source .venv/bin/activate
 
 pio test -e native -d firmware/module            # 62 Tests
-pio test -e native -d firmware/master            # 33 Tests
+pio test -e native -d firmware/master            # 34 Tests
 python tools/test_busctl.py                      # 13 Tests
 python tools/gen_daughtercard_sch.py --erc --pdf --png
 ```
+
+## Firmware flashen
+
+**Master (ESP32-C3 Super Mini).** Am einfachsten über den Browser-Flasher:
+**<https://tenofnine.github.io/SmartKroneSplitFlap/>**
+
+Nötig: Chrome oder Edge auf dem Desktop, ein USB-C-Kabel **mit Datenadern** an
+die Buchse des Moduls. „Modul verbinden & flashen" drücken — der C3 geht selbst
+in den Download-Modus, kein BOOT-Taster. Nach dem Flashen öffnet die Karte den
+Access-Point `krone_anzeige` für die WLAN-Zugangsdaten. Das fertige Image liegt
+committet unter `firmware/master/prebuilt/`; neu bauen mit
+`python tools/build_master_firmware.py` oder direkt
+`pio run -e esp32c3 -t upload -d firmware/master`.
+
+**Daughter Card (ATtiny1616).** Über die UPDI-Stiftleiste J6. Nötig: ein
+USB-Seriell-Adapter (FTDI o. ä.) mit einem 4,7-kΩ-Widerstand zwischen dessen TX
+und RX; TX/RX gemeinsam an J6 Pin 2 (UPDI), GND an Pin 1, +5 V an Pin 3. Dann
+`pio run -e attiny1616 -t upload -d firmware/module` (Upload-Protokoll
+`serialupdi`; Adapter-Port ggf. per `--upload-port`).
 
 ## Hinweis zu den Originalunterlagen
 
