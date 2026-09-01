@@ -156,7 +156,7 @@ static void test_status_json_reflects_module_state(void)
 
     masterapp_set_text(&app, "X", 0);
 
-    char json[512];
+    char json[1536];
     const size_t len = masterapp_status_json(&app, json, sizeof(json));
     TEST_ASSERT_TRUE(len > 0);
     TEST_ASSERT_NOT_NULL(strstr(json, "\"mode\":\"text\""));
@@ -165,6 +165,11 @@ static void test_status_json_reflects_module_state(void)
     TEST_ASSERT_NOT_NULL(strstr(json, "\"ist\":15"));
     TEST_ASSERT_NOT_NULL(strstr(json, "\"error\":1"));
     TEST_ASSERT_NOT_NULL(strstr(json, "\"corr\":2"));
+    /* neue Felder */
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"blatt\":40"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"fw\":1"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"align\":"));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"enum_busy\":false"));
 }
 
 int main(void)

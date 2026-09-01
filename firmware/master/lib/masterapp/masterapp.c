@@ -137,9 +137,12 @@ size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size)
 {
     int n = snprintf(out, out_size,
                      "{\"mode\":\"%s\",\"sep\":\"%c\",\"text\":\"%s\","
-                     "\"time_valid\":%s,\"modules\":[",
+                     "\"time_valid\":%s,\"align\":%u,\"detected\":%u,"
+                     "\"enum_busy\":%s,\"modules\":[",
                      mode_name(app->mode), app->sep, app->text,
-                     app->time_valid ? "true" : "false");
+                     app->time_valid ? "true" : "false",
+                     (unsigned)app->align, (unsigned)app->bus->module_count,
+                     busmaster_enum_busy(app->bus) ? "true" : "false");
     if (n < 0 || (size_t)n >= out_size) {
         return 0;
     }
@@ -149,10 +152,12 @@ size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size)
         const bm_module_t *m = &app->bus->mod[i];
         n = snprintf(out + pos, out_size - pos,
                      "%s{\"addr\":%u,\"online\":%s,\"ist\":%u,\"ziel\":%u,"
-                     "\"state\":%u,\"error\":%u,\"corr\":%u}",
+                     "\"state\":%u,\"error\":%u,\"corr\":%u,"
+                     "\"blatt\":%u,\"fw\":%u,\"miss\":%u}",
                      (i == 0) ? "" : ",", (unsigned)(i + 1u),
                      m->online ? "true" : "false", m->ist_blatt, m->ziel_blatt,
-                     m->zustand, m->fehler, m->korrektur);
+                     m->zustand, m->fehler, m->korrektur,
+                     m->blattzahl, m->fw_version, m->miss_count);
         if (n < 0 || pos + (size_t)n >= out_size) {
             return 0;
         }
