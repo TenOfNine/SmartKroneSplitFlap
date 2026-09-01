@@ -92,7 +92,10 @@ def main() -> int:
     manifest = {
         "name": "KRONE REW Zentralsteuerung",
         "version": date.today().isoformat(),
-        "new_install_prompt_erase": True,
+        # NICHT erzwungen loeschen: so bleiben Hostname / WLAN / MQTT (NVS) auch
+        # beim Flashen ueber den Browser erhalten. Fuer einen echten Neustart
+        # bietet ESP Web Tools weiterhin "Erase device" an.
+        "new_install_prompt_erase": False,
         "builds": [{
             "chipFamily": "ESP32-C3",
             "parts": [{"path": "krone-master-esp32c3.factory.bin", "offset": 0}],

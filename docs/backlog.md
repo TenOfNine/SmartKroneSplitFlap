@@ -148,14 +148,17 @@ und Freigabe mit dem Betreiber über einen Design-Mockup).
   Sidebar-Navigation, Ansichten Übersicht / Module / Log / Einstellungen.
 - Neues hardwareunabhängiges `lib/eventlog/` (Ereignis-Ringpuffer, host-getestet).
 - REST erweitert (`/api/system`, `/api/log`, `/api/module`, `/api/enumerate`,
-  `/api/time`, `/api/wifi/*`, `/api/reboot`); `/api/config` deckt NTP-Server,
-  Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab.
+  `/api/time`, `/api/wifi/*`, `/api/reboot`, `/api/backup`); `/api/config` deckt
+  Hostname, NTP-Server, Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API
+  / OTA / mDNS ab.
+- System-Ansicht: Hostname einstellbar, CPU-Last, RAM-Auslastung, Chiptemperatur,
+  Programmspeicher. Voll-Backup (inkl. WLAN) als JSON-Datei; NVS überdauert OTA.
 - `busmaster` zählt CRC-Fehler und Timeouts; neu `busmaster_identify()`.
 
 **Fertig, wenn:** `pio run -e esp32c3` kompiliert und `pio test -e native` grün
 bleibt (inkl. `test_eventlog`).
-**Erledigt 01.09.2026** — `pio test -e native` 40/40, Flash ~998 KB (76 %).
-Spezifikation v0.10. Am Gerät noch nicht getestet.
+**Erledigt 01.09.2026** — `pio test -e native` 40/40, Flash ~1002 KB (76,5 %).
+Spezifikation v0.12. Am Gerät noch nicht getestet.
 
 ---
 
