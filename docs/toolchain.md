@@ -98,7 +98,7 @@ python tools/build_master_firmware.py       # + Merged-.bin -> firmware/master/p
 | Tests | `native` | — | unity | — |
 
 `pio test -e native` läuft in `firmware/module/` (6 Suiten) und `firmware/master/`
-(5 Suiten) getrennt.
+(6 Suiten) getrennt.
 
 > In T7 fiel die Wahl auf **bare metal** statt megaTinyCore: knapper Flash-Bedarf
 > (rund 5,3 KB gegen 8 KB Grenze), volle Kontrolle über USART0-RS485, TCB0 und
@@ -130,7 +130,7 @@ Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstan
 
 | Job | Prüfung |
 |---|---|
-| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (34), `python tools/test_busctl.py` (13) |
+| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (40), `python tools/test_busctl.py` (13) |
 | `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32` |
 | `hardware` | KiCad 9, `build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`, `kicad-cli sch erc` (0 Fehler / 0 Warnungen) |
 | `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber sobald ein `.kicad_pcb` existiert |

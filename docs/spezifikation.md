@@ -537,12 +537,33 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 
 | Methode | Pfad | Funktion |
 |---|---|---|
-| GET | `/api/status` | Gesamtstatus als JSON |
+| GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten, erkannte Modulzahl, Enumerationsstatus) |
+| GET | `/api/system` | Uptime, freier/min. Heap, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Bus-CRC-Fehler und -Timeouts, Firmware-Build |
+| GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
+| POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
-| POST | `/api/mode` | `{"mode":"clock_hm","sep":"."}` |
+| POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
 | POST | `/api/home` | optional `{"addr":3}` |
 | POST | `/api/selftest` | startet den Selbsttest |
-| GET/POST | `/api/config` | Konfiguration lesen und schreiben |
+| POST | `/api/module` | `{"addr":3,"action":"home\|stop\|identify"}` (addr 0 = Broadcast) |
+| POST | `/api/enumerate` | Enumeration neu starten |
+| POST | `/api/time` | `{"iso":"2026-09-01T14:07:00"}` — Uhr manuell stellen |
+| GET | `/api/wifi/scan` | erreichbare WLANs (SSID, RSSI, verschlüsselt) |
+| POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall aufs alte Netz nach ~25 s) |
+| POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen |
+| POST | `/api/reboot` | Neustart |
+| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS |
+
+Die schreibenden Steuer-Endpunkte (`/api/text`, `/api/mode`, `/api/home`,
+`/api/selftest`, `/api/module`, `/api/enumerate`) lassen sich über den Schalter
+**REST-Schreib-API** in den Einstellungen sperren (`403`); Statusabfragen und die
+Einstellungen bleiben dann weiter erreichbar. MQTT, OTA und mDNS sind einzeln
+abschaltbar. Die Web-Oberfläche selbst ist nicht abschaltbar.
+
+Die Weboberfläche ist eine einzelne, vom ESP32-C3 ausgelieferte Seite
+(System-Schriften, kein CDN — im LAN ohne Internet nutzbar) mit den Ansichten
+Übersicht (Split-Flap-Statusstreifen, Kacheln, Schnellaktionen), Module (Tabelle),
+Log und Einstellungen.
 
 ### 7.6 MQTT und Home Assistant
 
@@ -738,3 +759,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.7 | 28.08.2026 | T8: Kapitel 7.2 — Softwarestack der Zentralsteuerung dependency-arm gefasst: eingebauter `WebServer` statt `ESPAsyncWebServer`, `Preferences` (NVS) statt `LittleFS`. Funktionsumfang 7.3–7.7 unverändert. |
 | 0.8 | 31.08.2026 | Stückliste 4.6: J1 (zur Anzeige) ist eine **Buchsenleiste 2×5**, die board-to-board direkt auf den Pfostenstecker der Anzeigenplatine gesteckt wird — kein Flachbandkabel an dieser Stelle. J1 ist damit nicht mechanisch kodiert; der Verpolschutz (42 V~ an Pin 2/4) ist über Mechanik, Bestückungsdruck und die Durchgangsprüfung sicherzustellen, siehe Schaltplan 4.1 und `docs/pruefpunkte-j1-buchsenleiste.md`. Pinbelegung unverändert. |
 | 0.9 | 01.09.2026 | Kapitel 7.1: Master-CPU auf **ESP32-C3 Super Mini** (steckbares Aftermarket-Modul) festgelegt. Trägerboard erzeugt 5 V (Eingang) → 3,3 V (Onboard-LDO), RS-485 auf UART1, CHAIN über Pegelwandler 74LVC1G17, Ader 9 als Lötbrücke offen/+5V/+15V mit unbestücktem Aufwärtswandler-Steckplatz. Die 42 V~ laufen nicht über das Master-Board. Schaltplan + geroutete PCB: `docs/schaltplan-master.md`, `hardware/master/`, `tools/gen_master_*.py`, `tools/route_master.py`. ERC 0/0, DRC 0/0. Offene Punkte M-1 (Modul-Pinbelegung), M-2 (Boost), M-3 (CHAIN-Pegel); Firmware-Portierung auf den C3 = Backlog T12. |
+| 0.10 | 01.09.2026 | Kapitel 7.3/7.5: Weboberfläche der Zentralsteuerung überarbeitet (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen). REST um `/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/scan`, `/api/wifi`, `/api/wifi/portal`, `/api/reboot` erweitert; `/api/config` deckt jetzt NTP-Server, Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues hardwareunabhängiges Modul `lib/eventlog` (Ereignis-Ringpuffer, host-getestet). Busmaster zählt CRC-Fehler und Timeouts. |
