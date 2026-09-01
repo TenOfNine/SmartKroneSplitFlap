@@ -505,7 +505,7 @@ Arduino-ESP32, bewusst ohne ESPHome, da bei zehn Modulen die Entity-Verwaltung s
 | Konfiguration | ArduinoJson zum Parsen, Ablage in `Preferences`/NVS |
 | MQTT | PubSubClient mit Home-Assistant-Auto-Discovery |
 | Zeit | `configTzTime`; NTP-Server und Zeitzone in der Web-UI änderbar, Uhr auch manuell stellbar; NTP abschaltbar |
-| Update | ArduinoOTA (abschaltbar) |
+| Update | OTA aus dem Browser (`POST /api/update`), in den Schnittstellen abschaltbar. Kein ArduinoOTA. |
 | mDNS | `<node>.local` (abschaltbar) |
 
 In T8 wurden gegenüber der Erstfassung `ESPAsyncWebServer` durch den eingebauten
@@ -572,8 +572,9 @@ Log und Einstellungen. In den Einstellungen sind unter *System* der Hostname
 (mDNS/OTA/MQTT-Client-ID), die Systemdiagnose (CPU-Last, RAM-Auslastung,
 Chiptemperatur, Programmspeicher) und das **OTA-Update aus dem Browser**
 zusammengefasst — dort lädt man das App-Image `krone-master-esp32c3.ota.bin`
-hoch, das Modul schreibt es in die zweite App-Partition und startet neu. Für die
-Entwicklung bleibt zusätzlich ArduinoOTA (`pio … -t upload`) aktiv.
+hoch, das Modul schreibt es in die zweite App-Partition und startet neu. Ein
+Netzwerk-OTA über ArduinoOTA/espota ist bewusst nicht vorgesehen (offener Port
+ohne Passwort); jenseits des Browsers wird per USB geflasht.
 
 **Persistenz.** Die Konfiguration liegt im NVS und überdauert OTA-Updates. Für
 den Fall eines vollständigen Flash-Löschens gibt es eine Voll­sicherung als
@@ -777,4 +778,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.10 | 01.09.2026 | Kapitel 7.3/7.5: Weboberfläche der Zentralsteuerung überarbeitet (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen). REST um `/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/scan`, `/api/wifi`, `/api/wifi/portal`, `/api/reboot` erweitert; `/api/config` deckt jetzt NTP-Server, Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues hardwareunabhängiges Modul `lib/eventlog` (Ereignis-Ringpuffer, host-getestet). Busmaster zählt CRC-Fehler und Timeouts. |
 | 0.11 | 01.09.2026 | Dokumentationspflege: Dokumentkopf auf die tatsächliche Version gebracht (war seit v0.8 nicht mitgezogen). Kapitel 2.2/7/8.2/Anhang B durchgängig „ESP32-C3" statt „ESP32". Kapitel 7.2/7.3 um die konfigurierbaren Zeit-/Schnittstellen-Einstellungen und die Diagnose-Ansicht ergänzt. Keine inhaltlichen Systemänderungen. |
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
-| 0.13 | 01.09.2026 | Kapitel 7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. |
+| 0.13 | 01.09.2026 | Kapitel 7.2/7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. **ArduinoOTA entfernt** — der passwortlose espota-UDP-Port entfällt; der `ota_enabled`-Schalter gated jetzt `/api/update`. |

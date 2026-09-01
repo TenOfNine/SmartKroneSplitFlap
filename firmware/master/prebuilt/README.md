@@ -1,6 +1,6 @@
 # Vorgebaute Master-Firmware (ESP32-C3 Super Mini)
 
-Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `20d3c51`, 2026-09-01). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `5212ed5`, 2026-09-01). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|
@@ -9,8 +9,8 @@ Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt geb
 | `krone-master-esp32c3.ota.bin` | App-Image fuer das **OTA-Update aus der Web-UI** (Einstellungen > System > Firmware aktualisieren) |
 | `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |
 
-SHA-256 `factory.bin`: `71aa7730e8c29c254d61d2a0959b9686d952c80dc9f287446064bba85f61f1e9`  
-SHA-256 `ota.bin`: `0ecb3be4e598fc31f6e8360e0a650f9761ca8862f3ea21634c829bf581ad909a`
+SHA-256 `factory.bin`: `c06790a48d4768c25023d50611ce35e39c5088b7234a62da139b3d2146e1fdda`  
+SHA-256 `ota.bin`: `b3bbf3b76e3b0bf4b4f567984e99951fc3e0bbb8c901a2f7620861894b5d2765`
 
 ## Erst-Flash (USB)
 

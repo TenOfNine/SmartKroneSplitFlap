@@ -35,10 +35,9 @@ einen simulierten Bus" aus Backlog T8 ab.
 ## Firmware bauen und aufspielen
 
 ```bash
-pio run  -e esp32c3                                    # ~1 MB Flash
-pio run  -e esp32c3 -t upload                          # USB-C
-pio run  -e esp32c3 -t upload --upload-port krone_anzeige.local   # OTA (ArduinoOTA)
-python tools/build_master_firmware.py                  # -> prebuilt/ (factory.bin + ota.bin)
+pio run  -e esp32c3                     # ~1 MB Flash
+pio run  -e esp32c3 -t upload           # USB-C
+python tools/build_master_firmware.py   # -> prebuilt/ (factory.bin + ota.bin)
 ```
 
 **Erst-Flash (USB):** Browser-Flasher **<https://tenofnine.github.io/SmartKroneSplitFlap/>**
@@ -48,7 +47,10 @@ committeten Stand), esptool-js oder `esptool.py`. Datei: `prebuilt/krone-master-
 **Spätere Updates (OTA):** In der Web-UI unter *Einstellungen › System ›
 Firmware aktualisieren* das App-Image `prebuilt/krone-master-esp32c3.ota.bin`
 hochladen (nicht die `.factory.bin`). Kein Toolchain, jeder Browser; bei Fehler
-bleibt die alte Firmware aktiv, die Einstellungen (NVS) bleiben erhalten.
+bleibt die alte Firmware aktiv, die Einstellungen (NVS) bleiben erhalten. Der
+Weg lässt sich in den *Schnittstellen* abschalten (Schalter „OTA-Update über die
+Web-UI"). Ein Netzwerk-OTA à la ArduinoOTA/espota gibt es bewusst nicht — das
+hieße ein offener OTA-Port ohne Passwort.
 
 Pin-/UART-Belegung steht in `platformio.ini` (`build_flags`), damit `main.cpp`
 portabel bleibt; die Vorgaben in `main.cpp` sind dieselben Werte. RS-485 auf
@@ -106,4 +108,6 @@ einspielen. Deshalb setzt das Flasher-Manifest `new_install_prompt_erase: false`
 
 Eingebauter `WebServer` statt `ESPAsyncWebServer`, `Preferences` (NVS) statt
 `LittleFS` — dependency-arm und mit arduino-esp32 3.x ohne Patches lauffähig.
-Begründung in `docs/toolchain.md` Abschnitt 4.
+Begründung in `docs/toolchain.md` Abschnitt 4. **Kein `ArduinoOTA`** — Updates
+laufen über `POST /api/update` (Browser) bzw. USB; das spart einen offenen,
+passwortlosen OTA-Port.
