@@ -28,18 +28,18 @@ Jedes Anzeigenmodul erhält eine eigene kleine Steuerplatine, die die Hall-Impul
 | Triac | Teccor L201E3, sensitives Gate |
 | Modul-CPU | ATtiny1616 |
 | Bus | RS-485, 115200 Bd, TP8485E |
-| Master | ESP32 |
+| Master | ESP32-C3 Super Mini auf Trägerboard |
 
 ## Verzeichnisse
 
 | Pfad | Inhalt |
 |---|---|
-| `docs/` | Spezifikation, Schaltplan, Backlog, Toolchain, Messprotokolle |
-| `hardware/daughtercard/` | KiCad-Projekt der Modulsteuerung |
-| `hardware/master/` | KiCad-Projekt der Zentralsteuerung |
+| `docs/` | Spezifikation, Schaltpläne, Backlog, Toolchain, Symbolprüfungen, Prüfpunkte, Messprotokolle |
+| `hardware/daughtercard/` | KiCad-Projekt der Modulsteuerung (geroutet, Fertigungspaket) |
+| `hardware/master/` | KiCad-Projekt der Zentralsteuerung (geroutet, Fertigungspaket) |
 | `firmware/module/` | ATtiny1616, PlatformIO |
-| `firmware/master/` | ESP32, PlatformIO |
-| `tools/` | Setup-Skript, Schaltplangenerator, Bus-Testwerkzeug |
+| `firmware/master/` | ESP32-C3, PlatformIO (inkl. Web-UI, `prebuilt/` Flash-Image) |
+| `tools/` | Setup, Schaltplan-/PCB-Generatoren, Router-Anbindung, Bus-Testwerkzeug |
 | `reference/` | **Nicht versioniert.** Ablage für die Original-Herstellerunterlagen. |
 
 ## Stand
@@ -65,7 +65,7 @@ bash tools/setup.sh                              # Toolchain, siehe docs/toolcha
 source .venv/bin/activate
 
 pio test -e native -d firmware/module            # 62 Tests
-pio test -e native -d firmware/master            # 34 Tests
+pio test -e native -d firmware/master            # 40 Tests
 python tools/test_busctl.py                      # 13 Tests
 python tools/gen_daughtercard_sch.py --erc --pdf --png
 ```

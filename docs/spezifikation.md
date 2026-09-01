@@ -7,9 +7,9 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.8 |
-| Datum | 28.08.2026 |
-| Status | Entwurf — enthält offene Punkte, siehe Kapitel 11 |
+| Version | 0.11 |
+| Datum | 01.09.2026 |
+| Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
 **Hinweis zur Lesart:** Punkte, die noch nicht durch Messung oder Dokumentation belegt sind, sind mit ⚠️ markiert. Wo eine Entscheidung von einer ausstehenden Messung abhängt, sind beide Varianten ausgearbeitet.
@@ -33,7 +33,7 @@ Ersatz der originalen KRONE-Anzeigersteuerung und der Palettensteuerungen (PST, 
                     └──────────────────────────────┘
                                    │
                     ┌──────────────┴───────────────┐
-                    │ Zentralsteuerung (ESP32)     │
+                    │ Zentralsteuerung (ESP32-C3)  │
                     │  · WLAN, Web-UI, REST, MQTT  │
                     │  · NTP-Uhr                   │
                     │  · RS-485-Master             │
@@ -471,7 +471,7 @@ Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung.
 
 ---
 
-## 7. Zentralsteuerung ESP32
+## 7. Zentralsteuerung ESP32-C3
 
 ### 7.1 Hardware
 
@@ -504,8 +504,9 @@ Arduino-ESP32, bewusst ohne ESPHome, da bei zehn Modulen die Entity-Verwaltung s
 | Web-UI | eingebauter `WebServer` (in T8 gewählt; siehe unten) |
 | Konfiguration | ArduinoJson zum Parsen, Ablage in `Preferences`/NVS |
 | MQTT | PubSubClient mit Home-Assistant-Auto-Discovery |
-| Zeit | `configTzTime` mit `CET-1CEST,M3.5.0,M10.5.0/3` |
-| Update | ArduinoOTA |
+| Zeit | `configTzTime`; NTP-Server und Zeitzone in der Web-UI änderbar, Uhr auch manuell stellbar; NTP abschaltbar |
+| Update | ArduinoOTA (abschaltbar) |
+| mDNS | `<node>.local` (abschaltbar) |
 
 In T8 wurden gegenüber der Erstfassung `ESPAsyncWebServer` durch den eingebauten
 synchronen `WebServer` und `LittleFS` durch `Preferences` (NVS) ersetzt:
@@ -520,11 +521,13 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | WLAN-Konfiguration | Access-Point mit Captive Portal beim Erststart, danach über die Web-UI änderbar |
 | Modulverwaltung | Anzahl per Enumeration automatisch, in der UI überschreib- und sperrbar |
 | Freitext | Eingabe über Web-UI, REST und MQTT; Umlaute und Kleinbuchstaben werden gemappt, unbekannte Zeichen auf Leerbild |
-| Uhrzeit | NTP-gestützt, Format `hh:mm` oder `hh:mm:ss`, Trennzeichen wählbar |
+| Uhrzeit | NTP-gestützt (Server + Zeitzone konfigurierbar), Format `hh:mm` oder `hh:mm:ss`, Trennzeichen wählbar. Ohne erreichbaren NTP-Server auch manuell stellbar (freilaufend, keine gepufferte RTC). |
 | Selbsttest | jedes Modul fährt eine volle Umdrehung, prüft die Zahl der Blattimpulse zwischen zwei Leerbildimpulsen und meldet Timing-Abweichungen |
 | Statusabfrage | Ist-Zeichen, Zustand, Fehlerzähler je Modul in der UI und über REST |
-| Homing | einzeln oder für alle Module |
+| Diagnose | Modul-Detailtabelle (erkannte Blattzahl, FW-Version, verpasste Antworten), Ereignis-Log (Ringpuffer), Bus-CRC-/Timeout-Zähler in der Web-UI |
+| Homing | einzeln oder für alle Module; einzeln auch Stop und Identify |
 | Betriebsartenwahl | Text, Uhr, Leerbild, Aus |
+| Schnittstellen | MQTT, REST-Schreib-API, OTA und mDNS einzeln abschaltbar (Einstellungen). Die Web-Oberfläche selbst nicht. |
 
 ### 7.4 Zeichenabbildung
 
@@ -619,7 +622,7 @@ Die Nennspannung gilt bei Volllast. Bei der vorgesehenen Teillast und einem Ring
 |---|---|
 | 20 Hall-Sensoren à 15 mA | 300 mA |
 | 10 × ATtiny + Transceiver | ca. 100 mA |
-| ESP32 mit WLAN, Spitze | 500 mA |
+| ESP32-C3 mit WLAN, Spitze | 350 mA |
 | **Summe mit Reserve** | **2 A** |
 
 Gewählt: Schaltnetzteil 5 V / 2 A. Verteilung über zwei Adern des Busbandkabels. Bei zehn Modulen und kurzer Kettenlänge sind keine lokalen Regler erforderlich.
@@ -721,7 +724,7 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 |---|---|
 | Palettenmodul | Anzeigenmodul mit Blattsatz, Antrieb und Sensorik |
 | Palettensteuerung (PST) | Originale Steuerelektronik je Modul, hier ersetzt |
-| Anzeigersteuerung | Originale Zentralsteuerung, hier durch den ESP32 ersetzt |
+| Anzeigersteuerung | Originale Zentralsteuerung, hier durch den ESP32-C3 ersetzt |
 | Leerbild | Unbedrucktes Blatt, hier Blatt 1 und 2, zugleich Synchronisationspunkt |
 | Leerbildimpuls | Hall-Impuls, ein Ereignis je voller Blattsatzumdrehung |
 | Blattimpuls / Zählimpuls | Hall-Impuls, ein Ereignis je Blatt |
@@ -760,3 +763,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.8 | 31.08.2026 | Stückliste 4.6: J1 (zur Anzeige) ist eine **Buchsenleiste 2×5**, die board-to-board direkt auf den Pfostenstecker der Anzeigenplatine gesteckt wird — kein Flachbandkabel an dieser Stelle. J1 ist damit nicht mechanisch kodiert; der Verpolschutz (42 V~ an Pin 2/4) ist über Mechanik, Bestückungsdruck und die Durchgangsprüfung sicherzustellen, siehe Schaltplan 4.1 und `docs/pruefpunkte-j1-buchsenleiste.md`. Pinbelegung unverändert. |
 | 0.9 | 01.09.2026 | Kapitel 7.1: Master-CPU auf **ESP32-C3 Super Mini** (steckbares Aftermarket-Modul) festgelegt. Trägerboard erzeugt 5 V (Eingang) → 3,3 V (Onboard-LDO), RS-485 auf UART1, CHAIN über Pegelwandler 74LVC1G17, Ader 9 als Lötbrücke offen/+5V/+15V mit unbestücktem Aufwärtswandler-Steckplatz. Die 42 V~ laufen nicht über das Master-Board. Schaltplan + geroutete PCB: `docs/schaltplan-master.md`, `hardware/master/`, `tools/gen_master_*.py`, `tools/route_master.py`. ERC 0/0, DRC 0/0. Offene Punkte M-1 (Modul-Pinbelegung), M-2 (Boost), M-3 (CHAIN-Pegel); Firmware-Portierung auf den C3 = Backlog T12. |
 | 0.10 | 01.09.2026 | Kapitel 7.3/7.5: Weboberfläche der Zentralsteuerung überarbeitet (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen). REST um `/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/scan`, `/api/wifi`, `/api/wifi/portal`, `/api/reboot` erweitert; `/api/config` deckt jetzt NTP-Server, Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues hardwareunabhängiges Modul `lib/eventlog` (Ereignis-Ringpuffer, host-getestet). Busmaster zählt CRC-Fehler und Timeouts. |
+| 0.11 | 01.09.2026 | Dokumentationspflege: Dokumentkopf auf die tatsächliche Version gebracht (war seit v0.8 nicht mitgezogen). Kapitel 2.2/7/8.2/Anhang B durchgängig „ESP32-C3" statt „ESP32". Kapitel 7.2/7.3 um die konfigurierbaren Zeit-/Schnittstellen-Einstellungen und die Diagnose-Ansicht ergänzt. Keine inhaltlichen Systemänderungen. |
