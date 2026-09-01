@@ -551,7 +551,16 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <label class=btn style=cursor:pointer>Wiederherstellen<input type=file id=restore accept="application/json,.json" hidden></label>
 <button class="btn danger" id=reboot>Neu starten</button></div>
 <p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen.</p>
-</div></div>
+</div>
+
+<div class=sect><h3>Firmware aktualisieren</h3>
+<p class=hint>App-Image <code>krone-master-esp32c3.ota.bin</code> hochladen — <b>nicht</b> die <code>.factory.bin</code>. Das Modul schreibt es in die zweite App-Partition und startet neu; bei einem Fehler bleibt die laufende Firmware aktiv.</p>
+<div class="row mt"><label class="btn" style=cursor:pointer>Datei wählen<input type=file id=fw accept=".bin,application/octet-stream" hidden></label>
+<span id=fwname class=hint style=margin:0>keine Datei</span></div>
+<div id=fwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
+<div id=fwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
+<div class="row mt"><button class="btn primary" id=fwgo disabled>Update starten</button></div>
+</div>
 </div></section>
 </div></div>
 <div id=toast></div>
@@ -696,6 +705,22 @@ const txt=await f.text();try{JSON.parse(txt)}catch(_){return toast("Keine gülti
 if(!confirm("Alle Einstellungen (inkl. WLAN) aus der Datei übernehmen und neu starten?"))return;
 try{await fetch("/api/backup",{method:"POST",headers:{"Content-Type":"application/json"},body:txt})}catch(_){}
 toast("Wiederhergestellt — Neustart …")};
+
+let _fw=null;
+$("#fw").onchange=e=>{_fw=e.target.files[0]||null;
+$("#fwname").textContent=_fw?`${_fw.name} · ${Math.round(_fw.size/1024)} KB`:"keine Datei";
+$("#fwgo").disabled=!_fw};
+$("#fwgo").onclick=()=>{if(!_fw)return;
+if(!/\.bin$/i.test(_fw.name)&&!confirm("Die Datei endet nicht auf .bin — trotzdem einspielen?"))return;
+if(!confirm(`Firmware „${_fw.name}“ einspielen und neu starten?`))return;
+const fd=new FormData();fd.append("firmware",_fw,_fw.name);
+const x=new XMLHttpRequest();x.open("POST","/api/update");
+$("#fwbar").style.display="block";$("#fwfill").style.width="0";$("#fwgo").disabled=true;
+x.upload.onprogress=ev=>{if(ev.lengthComputable)$("#fwfill").style.width=Math.round(100*ev.loaded/ev.total)+"%"};
+x.onload=()=>{if(x.status===200){$("#fwfill").style.width="100%";toast("Update geschrieben — Neustart …")}
+else{$("#fwgo").disabled=false;let m=x.responseText;try{m=JSON.parse(m).error}catch(_){}toast("Update fehlgeschlagen: "+m)}};
+x.onerror=()=>{$("#fwgo").disabled=false;$("#fwbar").style.display="none";toast("Verbindung abgebrochen")};
+x.send(fd)};
 
 function kb(b){return Math.round((b||0)/1024)}
 function renderSys(){
@@ -1101,6 +1126,67 @@ static void handle_backup()
     send_json(200, out);
 }
 
+/*
+ * /api/update -- OTA aus dem Browser. Hochgeladen wird das App-Image
+ * (krone-master-esp32c3.ota.bin), NICHT die .factory.bin. Der Upload-Handler
+ * streamt es ueber die Update-Bibliothek in die inaktive App-Partition; bei
+ * Fehler bleibt die laufende Firmware aktiv. Danach Neustart.
+ */
+static bool g_ota_ok = false;
+
+static void handle_update_upload()
+{
+    HTTPUpload &up = web.upload();
+    if (up.status == UPLOAD_FILE_START) {
+        g_ota_ok = false;
+        if (!cfg.api_write) {
+            return;                         /* Antwort-Handler schickt 403 */
+        }
+        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Update gestartet: %s",
+                   up.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            Update.printError(Serial);
+            return;
+        }
+        g_ota_ok = true;
+    } else if (up.status == UPLOAD_FILE_WRITE) {
+        if (g_ota_ok && Update.write(up.buf, up.currentSize) != up.currentSize) {
+            Update.printError(Serial);
+            g_ota_ok = false;
+        }
+    } else if (up.status == UPLOAD_FILE_END) {
+        if (g_ota_ok && Update.end(true)) {
+            evlog_push(&g_log, millis(), EVLOG_INFO, "ota",
+                       "Update geschrieben (%u B), Neustart", (unsigned)up.totalSize);
+        } else {
+            g_ota_ok = false;
+            Update.printError(Serial);
+        }
+    } else if (up.status == UPLOAD_FILE_ABORTED) {
+        Update.abort();
+        g_ota_ok = false;
+        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Update abgebrochen");
+    }
+}
+
+static void handle_update_done()
+{
+    if (!cfg.api_write) {
+        send_json(403, "{\"error\":\"api_write_disabled\"}");
+        return;
+    }
+    if (g_ota_ok && !Update.hasError()) {
+        send_json(200, "{\"ok\":true,\"note\":\"reboot\"}");
+        want_reboot = true;
+        reboot_at = millis() + 1200;        /* Zeit fuer das Flushen der Antwort */
+    } else {
+        char m[96];
+        snprintf(m, sizeof(m), "{\"error\":\"%s\"}",
+                 Update.hasError() ? Update.errorString() : "kein gueltiges Image");
+        send_json(500, m);
+    }
+}
+
 static void web_begin()
 {
     web.on("/", []() { web.send_P(200, "text/html", INDEX_HTML); });
@@ -1121,6 +1207,7 @@ static void web_begin()
     web.on("/api/reboot",    HTTP_POST, handle_reboot);
     web.on("/api/config",    handle_config);
     web.on("/api/backup",    handle_backup);
+    web.on("/api/update",    HTTP_POST, handle_update_done, handle_update_upload);
     web.begin();
 }
 

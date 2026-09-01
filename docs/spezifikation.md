@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.12 |
+| Version | 0.13 |
 | Datum | 01.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -544,6 +544,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Bus-CRC-Fehler und -Timeouts, Firmware-Build |
 | GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
 | GET/POST | `/api/backup` | Vollsicherung inkl. WLAN-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
+| POST | `/api/update` | OTA aus dem Browser: App-Image (`…ota.bin`) hochladen; das Modul flasht die zweite App-Partition und startet neu |
 | POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
 | POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
@@ -568,8 +569,11 @@ Die Weboberfläche ist eine einzelne, vom ESP32-C3 ausgelieferte Seite
 (System-Schriften, kein CDN — im LAN ohne Internet nutzbar) mit den Ansichten
 Übersicht (Split-Flap-Statusstreifen, Kacheln, Schnellaktionen), Module (Tabelle),
 Log und Einstellungen. In den Einstellungen sind unter *System* der Hostname
-(mDNS/OTA/MQTT-Client-ID) und die Systemdiagnose (CPU-Last, RAM-Auslastung,
-Chiptemperatur, Programmspeicher) zusammengefasst.
+(mDNS/OTA/MQTT-Client-ID), die Systemdiagnose (CPU-Last, RAM-Auslastung,
+Chiptemperatur, Programmspeicher) und das **OTA-Update aus dem Browser**
+zusammengefasst — dort lädt man das App-Image `krone-master-esp32c3.ota.bin`
+hoch, das Modul schreibt es in die zweite App-Partition und startet neu. Für die
+Entwicklung bleibt zusätzlich ArduinoOTA (`pio … -t upload`) aktiv.
 
 **Persistenz.** Die Konfiguration liegt im NVS und überdauert OTA-Updates. Für
 den Fall eines vollständigen Flash-Löschens gibt es eine Voll­sicherung als
@@ -773,3 +777,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.10 | 01.09.2026 | Kapitel 7.3/7.5: Weboberfläche der Zentralsteuerung überarbeitet (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen). REST um `/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/scan`, `/api/wifi`, `/api/wifi/portal`, `/api/reboot` erweitert; `/api/config` deckt jetzt NTP-Server, Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues hardwareunabhängiges Modul `lib/eventlog` (Ereignis-Ringpuffer, host-getestet). Busmaster zählt CRC-Fehler und Timeouts. |
 | 0.11 | 01.09.2026 | Dokumentationspflege: Dokumentkopf auf die tatsächliche Version gebracht (war seit v0.8 nicht mitgezogen). Kapitel 2.2/7/8.2/Anhang B durchgängig „ESP32-C3" statt „ESP32". Kapitel 7.2/7.3 um die konfigurierbaren Zeit-/Schnittstellen-Einstellungen und die Diagnose-Ansicht ergänzt. Keine inhaltlichen Systemänderungen. |
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
+| 0.13 | 01.09.2026 | Kapitel 7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. |
