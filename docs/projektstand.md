@@ -39,7 +39,8 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Master-PCB | `tools/gen_master_pcb.py` (68 × 54 mm, 2 Lagen) + `tools/route_master.py` (FreeRouting 2.3.0 + `finish_routes.py` + Masseflächen + Silk-Marks). Antennen-Keepout unter U1 im Footprint. **DRC 0/0.** Schwarz / weiß, GitHub-Marke + „TenOfNine" auf B.SilkS. | `<dieser>` |
 | Master-Fertigungspaket | `tools/gen_master_manufacturing.py` → `hardware/master/manufacturing/`: Gerber + Zip + BOM (12 Positionen, alle mit geprüfter LCSC-Nummer) + CPL + README. J1–J4, U1-Sockel, JP1 = Handlötung. | `<dieser>` |
 | Symbolprüfung Master | `docs/symbolpruefung-master.md` **freigegeben (01.09.2026)**: 74LVC1G17 gegen Nexperia Rev. 16.1 §6.1, ESP32-C3-Modul-Pinbelegung + Einbaulage aus Fotos, TP8485E Verweis. 3D-Renders `docs/render-master-{top,bottom}.png` für die Sichtkontrolle. | `<dieser>` |
-| Master-Firmware T12 | `firmware/master/` auf ESP32-C3 portiert: `env:esp32c3` (`board = esp32-c3-devkitm-1`), RS-485 auf UART1, GPIO-Konstanten via `build_flags`, Status-LED an GPIO6. `pio test -e native` unverändert 33/33. | `<dieser>` |
+| Master-Firmware T12 | `firmware/master/` auf ESP32-C3 portiert: `env:esp32c3` (`board = esp32-c3-devkitm-1`), RS-485 auf UART1, GPIO-Konstanten via `build_flags`, Status-LED an GPIO6. `pio test -e native` 40/40 (mit `test_eventlog`). | `<dieser>` |
+| Master-Web-UI | Weboberfläche neu (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen, eine `PROGMEM`-Seite ohne CDN). REST erweitert (`/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/*`, `/api/reboot`); `/api/config` deckt NTP-Server, TZ, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues `lib/eventlog` (host-getestet). Busmaster zählt CRC-Fehler + Timeouts. `pio run -e esp32c3`: ~998 KB Flash (76 %). Spez. v0.10. Vorschau des ausgelieferten UI: Artifact. | `<dieser>` |
 
 Nächste sinnvolle Schritte:
 
