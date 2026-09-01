@@ -69,8 +69,9 @@ System). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
 | Methode | Pfad | Body / Zweck |
 |---|---|---|
 | GET | `/api/status` | Anzeige + Module (Ist/Ziel/Zustand/Fehler/Korr./Blattzahl/FW/verpasst) |
-| GET | `/api/system` | Uptime, Heap, WLAN, Uhr, MQTT/OTA/mDNS, Bus-CRC/Timeouts, FW-Build |
+| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), **CPU-Last, Chiptemperatur**, Sketch/OTA-Platz, Hostname, WLAN, Uhr, MQTT/OTA/mDNS, Bus-CRC/Timeouts, FW-Build |
 | GET | `/api/log` | `?sev=info\|warn\|err` — Ereignis-Ringpuffer |
+| GET/POST | `/api/backup` | Vollsicherung **inkl. WLAN-Zugangsdaten** (Download / Restore). POST übernimmt und startet neu. |
 | POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
 | POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
@@ -83,10 +84,17 @@ System). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall nach ~25 s) |
 | POST | `/api/wifi/portal` | Konfigurationsportal öffnen |
 | POST | `/api/reboot` | Neustart |
-| GET/POST | `/api/config` | MQTT, NTP-Server, TZ, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, Schalter MQTT/REST-Schreib-API/OTA/mDNS |
+| GET/POST | `/api/config` | Hostname, MQTT, NTP-Server, TZ, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, Schalter MQTT/REST-Schreib-API/OTA/mDNS |
 
 Die schreibenden Steuer-Endpunkte lassen sich über den Schalter
 **REST-Schreib-API** sperren (`403`). Die Web-Oberfläche selbst nicht.
+
+## Persistenz
+
+Alle Einstellungen (inkl. WLAN- und MQTT-Zugangsdaten) liegen im NVS und
+**überstehen OTA-Updates**. Nur ein USB-Flash mit „Erase" löscht sie — dann in
+den Einstellungen unter *System* die zuvor gesicherte `krone-backup.json` wieder
+einspielen. Deshalb setzt das Flasher-Manifest `new_install_prompt_erase: false`.
 
 ## Abweichungen von Spezifikation 7.2
 

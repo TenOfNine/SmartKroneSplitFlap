@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.11 |
+| Version | 0.12 |
 | Datum | 01.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -541,8 +541,9 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | Methode | Pfad | Funktion |
 |---|---|---|
 | GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten, erkannte Modulzahl, Enumerationsstatus) |
-| GET | `/api/system` | Uptime, freier/min. Heap, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Bus-CRC-Fehler und -Timeouts, Firmware-Build |
+| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Bus-CRC-Fehler und -Timeouts, Firmware-Build |
 | GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
+| GET/POST | `/api/backup` | Vollsicherung inkl. WLAN-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
 | POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
 | POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
@@ -555,7 +556,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall aufs alte Netz nach ~25 s) |
 | POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen |
 | POST | `/api/reboot` | Neustart |
-| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS |
+| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS |
 
 Die schreibenden Steuer-Endpunkte (`/api/text`, `/api/mode`, `/api/home`,
 `/api/selftest`, `/api/module`, `/api/enumerate`) lassen sich über den Schalter
@@ -566,7 +567,14 @@ abschaltbar. Die Web-Oberfläche selbst ist nicht abschaltbar.
 Die Weboberfläche ist eine einzelne, vom ESP32-C3 ausgelieferte Seite
 (System-Schriften, kein CDN — im LAN ohne Internet nutzbar) mit den Ansichten
 Übersicht (Split-Flap-Statusstreifen, Kacheln, Schnellaktionen), Module (Tabelle),
-Log und Einstellungen.
+Log und Einstellungen. In den Einstellungen sind unter *System* der Hostname
+(mDNS/OTA/MQTT-Client-ID) und die Systemdiagnose (CPU-Last, RAM-Auslastung,
+Chiptemperatur, Programmspeicher) zusammengefasst.
+
+**Persistenz.** Die Konfiguration liegt im NVS und überdauert OTA-Updates. Für
+den Fall eines vollständigen Flash-Löschens gibt es eine Voll­sicherung als
+JSON-Datei (inkl. WLAN- und MQTT-Zugangsdaten); das Flasher-Manifest löscht die
+NVS nicht selbsttätig.
 
 ### 7.6 MQTT und Home Assistant
 
@@ -764,3 +772,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.9 | 01.09.2026 | Kapitel 7.1: Master-CPU auf **ESP32-C3 Super Mini** (steckbares Aftermarket-Modul) festgelegt. Trägerboard erzeugt 5 V (Eingang) → 3,3 V (Onboard-LDO), RS-485 auf UART1, CHAIN über Pegelwandler 74LVC1G17, Ader 9 als Lötbrücke offen/+5V/+15V mit unbestücktem Aufwärtswandler-Steckplatz. Die 42 V~ laufen nicht über das Master-Board. Schaltplan + geroutete PCB: `docs/schaltplan-master.md`, `hardware/master/`, `tools/gen_master_*.py`, `tools/route_master.py`. ERC 0/0, DRC 0/0. Offene Punkte M-1 (Modul-Pinbelegung), M-2 (Boost), M-3 (CHAIN-Pegel); Firmware-Portierung auf den C3 = Backlog T12. |
 | 0.10 | 01.09.2026 | Kapitel 7.3/7.5: Weboberfläche der Zentralsteuerung überarbeitet (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen). REST um `/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/scan`, `/api/wifi`, `/api/wifi/portal`, `/api/reboot` erweitert; `/api/config` deckt jetzt NTP-Server, Zeitzone, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues hardwareunabhängiges Modul `lib/eventlog` (Ereignis-Ringpuffer, host-getestet). Busmaster zählt CRC-Fehler und Timeouts. |
 | 0.11 | 01.09.2026 | Dokumentationspflege: Dokumentkopf auf die tatsächliche Version gebracht (war seit v0.8 nicht mitgezogen). Kapitel 2.2/7/8.2/Anhang B durchgängig „ESP32-C3" statt „ESP32". Kapitel 7.2/7.3 um die konfigurierbaren Zeit-/Schnittstellen-Einstellungen und die Diagnose-Ansicht ergänzt. Keine inhaltlichen Systemänderungen. |
+| 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |

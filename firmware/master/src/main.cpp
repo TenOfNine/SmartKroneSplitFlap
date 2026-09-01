@@ -31,6 +31,7 @@
 #include <time.h>
 
 #include "driver/uart.h"
+#include "esp_freertos_hooks.h"
 
 extern "C" {
 #include "busmaster.h"
@@ -115,6 +116,34 @@ static uint32_t last_poll_ms;
 static uint8_t  poll_addr = 1;
 static uint32_t last_time_ms;
 static uint32_t last_mqtt_try;
+
+/* --- grobe CPU-Last ueber den FreeRTOS-Idle-Hook -------------------- */
+static volatile uint32_t g_idle_ticks = 0;
+static uint32_t g_idle_last = 0;
+static uint32_t g_idle_peak = 1;
+static uint32_t g_idle_sample_ms = 0;
+static uint8_t  g_cpu_load = 0;
+
+static bool idle_hook()
+{
+    g_idle_ticks++;
+    return true;
+}
+
+static void cpu_load_tick(uint32_t now)
+{
+    if (now - g_idle_sample_ms < 1000u) {
+        return;
+    }
+    g_idle_sample_ms = now;
+    const uint32_t t = g_idle_ticks;
+    const uint32_t d = t - g_idle_last;   /* Wrap-around ist unkritisch */
+    g_idle_last = t;
+    if (d > g_idle_peak) {
+        g_idle_peak = d;                  /* Selbstkalibrierung: Maximum = ~100 % frei */
+    }
+    g_cpu_load = (g_idle_peak > d) ? (uint8_t)(100u * (g_idle_peak - d) / g_idle_peak) : 0u;
+}
 
 /* WLAN-Wechsel mit Rueckfall auf das alte Netz */
 static bool     wifi_switching = false;
@@ -513,8 +542,16 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <p class="hint warn">Die Web-Oberfläche selbst lässt sich hier nicht abschalten.</p>
 <div class="row mt"><button class="btn primary" data-save=iface>Speichern</button></div></div>
 
-<div class=sect><h3>System</h3><dl class=kv id=syskv></dl>
-<div class="row mt"><button class="btn danger" id=reboot>Neu starten</button></div></div>
+<div class=sect><h3>System</h3>
+<div class=field style=max-width:320px><span class=lbl>Hostname / mDNS-Name</span><input type=text id=cf_node_id placeholder=krone_anzeige></div>
+<p class=hint>Wird für mDNS (<code>&lt;name&gt;.local</code>), OTA und die MQTT-Client-ID verwendet. Nach dem Speichern neu starten.</p>
+<div class="row mt"><button class="btn primary" data-save=host>Hostname speichern</button></div>
+<dl class=kv id=syskv style=margin-top:18px></dl>
+<div class="row mt"><button class=btn id=backup>Einstellungen sichern</button>
+<label class=btn style=cursor:pointer>Wiederherstellen<input type=file id=restore accept="application/json,.json" hidden></label>
+<button class="btn danger" id=reboot>Neu starten</button></div>
+<p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen.</p>
+</div></div>
 </div></section>
 </div></div>
 <div id=toast></div>
@@ -633,7 +670,9 @@ sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").val
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
 api_write:$("#cf_api_write").checked,ota_enabled:$("#cf_ota_enabled").checked,mdns_enabled:$("#cf_mdns_enabled").checked}}
 $$("[data-save]").forEach(b=>b.onclick=async()=>{
-await P("/api/config",collectCfg());toast("Gespeichert");setTimeout(loadCfg,400)});
+await P("/api/config",collectCfg());toast("Gespeichert");setTimeout(loadCfg,400);
+if((b.dataset.save==="host"||b.dataset.save==="iface")&&confirm("Für Hostname/Schnittstellen jetzt neu starten?")){
+await P("/api/reboot",{});toast("Neustart …")}});
 $("#setclock").onclick=async()=>{const v=$("#mtime").value;if(!v)return toast("Zeit wählen");
 await P("/api/time",{iso:v});toast("Uhr gesetzt");setTimeout(refresh,600)};
 
@@ -649,14 +688,31 @@ await P("/api/wifi",{ssid:s.dataset.s,psk:$("#wpsk").value});toast("Verbindet mi
 $("#wportal").onclick=async()=>{if(!confirm("Konfigurationsportal öffnen? Die Karte ist dann kurz nur über den AP „"+(cfg.node_id||"krone_anzeige")+"“ erreichbar."))return;
 await P("/api/wifi/portal",{});toast("Portal wird geöffnet …")};
 $("#reboot").onclick=async()=>{if(!confirm("Zentralsteuerung neu starten?"))return;await P("/api/reboot",{});toast("Neustart …")};
+$("#backup").onclick=async()=>{let t;try{t=await(await fetch("/api/backup")).text()}catch(e){return toast("Sicherung fehlgeschlagen")}
+const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([t],{type:"application/json"}));
+a.download=(cfg.node_id||"krone")+"-backup.json";a.click();URL.revokeObjectURL(a.href);toast("Sicherung heruntergeladen")};
+$("#restore").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
+const txt=await f.text();try{JSON.parse(txt)}catch(_){return toast("Keine gültige JSON-Datei")}
+if(!confirm("Alle Einstellungen (inkl. WLAN) aus der Datei übernehmen und neu starten?"))return;
+try{await fetch("/api/backup",{method:"POST",headers:{"Content-Type":"application/json"},body:txt})}catch(_){}
+toast("Wiederhergestellt — Neustart …")};
 
-function renderSys(){$("#syskv").innerHTML=`
-<dt>Node-ID</dt><dd>${sys.node_id||"—"}</dd>
+function kb(b){return Math.round((b||0)/1024)}
+function renderSys(){
+const hn=sys.hostname||sys.node_id||"—";
+const ht=sys.heap_total||0,hf=sys.heap_free||0;
+const hpct=ht?Math.round(100*(1-hf/ht)):0;
+const tc=(sys.temp_c!=null&&sys.temp_c>-40&&sys.temp_c<150)?sys.temp_c.toFixed(1)+" °C":"—";
+$("#syskv").innerHTML=`
+<dt>Hostname</dt><dd>${hn}${sys.mdns_enabled?` · <span style=color:var(--dim)>${hn}.local</span>`:""}</dd>
 <dt>Firmware</dt><dd>${sys.fw||"—"}</dd>
-<dt>Chip</dt><dd>ESP32-C3</dd>
+<dt>Chip</dt><dd>ESP32-C3 · MAC ${sys.mac||"—"}</dd>
 <dt>Uptime</dt><dd>${dur(sys.uptime_s)}</dd>
-<dt>OTA</dt><dd>${sys.ota_enabled?"aktiv":"aus"}</dd>
-<dt>mDNS</dt><dd>${sys.mdns_enabled?(sys.node_id+".local"):"aus"}</dd>`}
+<dt>CPU-Last</dt><dd>${sys.cpu_load??"—"} % <span style=color:var(--faint)>(grob, Idle-Hook)</span></dd>
+<dt>RAM</dt><dd>${kb(hf)} / ${kb(ht)} KB frei · ${hpct} % belegt <span style=color:var(--faint)>(min ${kb(sys.heap_min)} KB)</span></dd>
+<dt>Temperatur</dt><dd>${tc}</dd>
+<dt>Programm / OTA</dt><dd>${kb(sys.sketch_used)} KB belegt · ${kb(sys.sketch_free)} KB frei für Update</dd>
+<dt>OTA</dt><dd>${sys.ota_enabled?"aktiv":"aus"}</dd>`}
 
 // ── Poll-Schleifen ──
 async function refresh(){
@@ -753,8 +809,14 @@ static void handle_system()
     d["api_write"]      = cfg.api_write;
     d["crc_err"]        = g_bus.crc_errors;
     d["timeouts"]       = g_bus.timeouts;
+    d["hostname"]       = cfg.node_id;
+    d["cpu_load"]       = g_cpu_load;
+    d["heap_total"]     = ESP.getHeapSize();
+    d["temp_c"]         = temperatureRead();
+    d["sketch_used"]    = ESP.getSketchSize();
+    d["sketch_free"]    = ESP.getFreeSketchSpace();
 
-    char out[512];
+    char out[768];
     serializeJson(d, out, sizeof(out));
     send_json(200, out);
 }
@@ -918,55 +980,50 @@ static void handle_reboot()
     ok_json();
 }
 
-static void handle_config()
+/* Konfiguration aus einem JSON-Objekt uebernehmen, in NVS sichern und -- wo
+ * gefahrlos -- sofort anwenden. Von /api/config und /api/backup genutzt. */
+static void apply_config_doc(JsonDocument &doc)
 {
-    if (web.method() == HTTP_POST) {
-        JsonDocument doc;
-        if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
+    auto cpS = [&](const char *k, char *dst, size_t n) {
+        if (doc[k].is<const char *>()) strlcpy(dst, doc[k], n);
+    };
+    cpS("mqtt_host", cfg.mqtt_host, sizeof(cfg.mqtt_host));
+    cpS("mqtt_user", cfg.mqtt_user, sizeof(cfg.mqtt_user));
+    cpS("mqtt_pass", cfg.mqtt_pass, sizeof(cfg.mqtt_pass));
+    cpS("base_topic", cfg.base_topic, sizeof(cfg.base_topic));
+    cpS("node_id", cfg.node_id, sizeof(cfg.node_id));
+    cpS("ntp_server", cfg.ntp_server, sizeof(cfg.ntp_server));
+    cpS("tz", cfg.tz, sizeof(cfg.tz));
+    cpS("ip", cfg.ip, sizeof(cfg.ip));
+    cpS("mask", cfg.mask, sizeof(cfg.mask));
+    cpS("gw", cfg.gw, sizeof(cfg.gw));
+    cpS("dns", cfg.dns, sizeof(cfg.dns));
+    if (doc["mqtt_port"].is<unsigned>())     cfg.mqtt_port = doc["mqtt_port"];
+    if (doc["module_count"].is<unsigned>())  cfg.module_count = doc["module_count"];
+    if (doc["hms_timeout_s"].is<unsigned>()) cfg.hms_timeout_s = doc["hms_timeout_s"];
+    if (doc["sep"].is<const char *>()) { const char *s = doc["sep"]; if (s[0]) cfg.sep = s[0]; }
+    if (doc["align"].is<unsigned>())          cfg.align = doc["align"];
+    if (doc["ntp_enabled"].is<bool>())        cfg.ntp_enabled = doc["ntp_enabled"];
+    if (doc["use_static"].is<bool>())         cfg.use_static = doc["use_static"];
+    if (doc["mqtt_enabled"].is<bool>())       cfg.mqtt_enabled = doc["mqtt_enabled"];
+    if (doc["api_write"].is<bool>())          cfg.api_write = doc["api_write"];
+    if (doc["ota_enabled"].is<bool>())        cfg.ota_enabled = doc["ota_enabled"];
+    if (doc["mdns_enabled"].is<bool>())       cfg.mdns_enabled = doc["mdns_enabled"];
 
-        auto cpS = [&](const char *k, char *dst, size_t n) {
-            if (doc[k].is<const char *>()) strlcpy(dst, doc[k], n);
-        };
-        cpS("mqtt_host", cfg.mqtt_host, sizeof(cfg.mqtt_host));
-        cpS("mqtt_user", cfg.mqtt_user, sizeof(cfg.mqtt_user));
-        cpS("mqtt_pass", cfg.mqtt_pass, sizeof(cfg.mqtt_pass));
-        cpS("base_topic", cfg.base_topic, sizeof(cfg.base_topic));
-        cpS("node_id", cfg.node_id, sizeof(cfg.node_id));
-        cpS("ntp_server", cfg.ntp_server, sizeof(cfg.ntp_server));
-        cpS("tz", cfg.tz, sizeof(cfg.tz));
-        cpS("ip", cfg.ip, sizeof(cfg.ip));
-        cpS("mask", cfg.mask, sizeof(cfg.mask));
-        cpS("gw", cfg.gw, sizeof(cfg.gw));
-        cpS("dns", cfg.dns, sizeof(cfg.dns));
-        if (doc["mqtt_port"].is<unsigned>())    cfg.mqtt_port = doc["mqtt_port"];
-        if (doc["module_count"].is<unsigned>()) cfg.module_count = doc["module_count"];
-        if (doc["hms_timeout_s"].is<unsigned>())cfg.hms_timeout_s = doc["hms_timeout_s"];
-        if (doc["sep"].is<const char *>()) { const char *s = doc["sep"]; if (s[0]) cfg.sep = s[0]; }
-        if (doc["align"].is<unsigned>())         cfg.align = doc["align"];
-        if (doc["ntp_enabled"].is<bool>())       cfg.ntp_enabled = doc["ntp_enabled"];
-        if (doc["use_static"].is<bool>())        cfg.use_static = doc["use_static"];
-        if (doc["mqtt_enabled"].is<bool>())      cfg.mqtt_enabled = doc["mqtt_enabled"];
-        if (doc["api_write"].is<bool>())         cfg.api_write = doc["api_write"];
-        if (doc["ota_enabled"].is<bool>())       cfg.ota_enabled = doc["ota_enabled"];
-        if (doc["mdns_enabled"].is<bool>())      cfg.mdns_enabled = doc["mdns_enabled"];
+    settings_save();
 
-        settings_save();
+    g_app.module_count = cfg.module_count > BUSMASTER_MAX_MODULES
+                             ? BUSMASTER_MAX_MODULES : cfg.module_count;
+    g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
+    g_app.sep = cfg.sep;
+    g_app.align = align_from(cfg.align);
+    g_app.have_shown = false;   /* Anzeige mit neuer Ausrichtung neu setzen */
+    apply_time_config();
+    if (!cfg.mqtt_enabled && mqtt.connected()) mqtt.disconnect();
+}
 
-        /* live anwenden, wo gefahrlos moeglich */
-        g_app.module_count = cfg.module_count > BUSMASTER_MAX_MODULES
-                                 ? BUSMASTER_MAX_MODULES : cfg.module_count;
-        g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
-        g_app.sep = cfg.sep;
-        g_app.align = align_from(cfg.align);
-        g_app.have_shown = false;   /* Anzeige mit neuer Ausrichtung neu setzen */
-        apply_time_config();
-        if (!cfg.mqtt_enabled && mqtt.connected()) mqtt.disconnect();
-
-        ok_json();
-        return;
-    }
-
-    JsonDocument d;
+static void config_to_json(JsonDocument &d)
+{
     d["mqtt_host"]     = cfg.mqtt_host;
     d["mqtt_port"]     = cfg.mqtt_port;
     d["mqtt_user"]     = cfg.mqtt_user;
@@ -989,8 +1046,58 @@ static void handle_config()
     d["api_write"]     = cfg.api_write;
     d["ota_enabled"]   = cfg.ota_enabled;
     d["mdns_enabled"]  = cfg.mdns_enabled;
+}
+
+static void handle_config()
+{
+    if (web.method() == HTTP_POST) {
+        JsonDocument doc;
+        if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
+        apply_config_doc(doc);
+        ok_json();
+        return;
+    }
+    JsonDocument d;
+    config_to_json(d);
     char out[640];
     serializeJson(d, out, sizeof(out));
+    send_json(200, out);
+}
+
+/*
+ * /api/backup -- vollstaendige Sicherung inkl. WLAN-Zugangsdaten. Zweck: nach
+ * einem Flash mit "Erase" (der die NVS-Partition loescht) nicht alles neu
+ * eintragen zu muessen. Bei OTA-Updates bleibt die NVS ohnehin erhalten.
+ */
+static void handle_backup()
+{
+    if (web.method() == HTTP_POST) {
+        JsonDocument doc;
+        if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
+        apply_config_doc(doc);
+        if (doc["wifi_ssid"].is<const char *>()) {
+            const char *ssid = doc["wifi_ssid"];
+            const char *psk  = doc["wifi_psk"] | "";
+            if (strlen(ssid) > 0) {
+                WiFi.begin(ssid, psk);
+                evlog_push(&g_log, millis(), EVLOG_INFO, "wifi",
+                           "Wiederherstellung: verbinde mit \"%s\"", ssid);
+            }
+        }
+        evlog_push(&g_log, millis(), EVLOG_INFO, "sys", "Einstellungen wiederhergestellt");
+        want_reboot = true;
+        reboot_at = millis() + 600;
+        send_json(200, "{\"ok\":true,\"note\":\"reboot\"}");
+        return;
+    }
+
+    JsonDocument d;
+    config_to_json(d);
+    d["wifi_ssid"] = WiFi.SSID();
+    d["wifi_psk"]  = WiFi.psk();
+    char out[832];
+    serializeJson(d, out, sizeof(out));
+    web.sendHeader("Content-Disposition", "attachment; filename=\"krone-backup.json\"");
     send_json(200, out);
 }
 
@@ -1013,6 +1120,7 @@ static void web_begin()
     web.on("/api/wifi/portal", HTTP_POST, handle_wifi_portal);
     web.on("/api/reboot",    HTTP_POST, handle_reboot);
     web.on("/api/config",    handle_config);
+    web.on("/api/backup",    handle_backup);
     web.begin();
 }
 
@@ -1227,6 +1335,7 @@ void setup()
     settings_load();
     evlog_init(&g_log);
     evlog_push(&g_log, 0, EVLOG_INFO, "sys", "Start, Firmware %s", FW_BUILD);
+    esp_register_freertos_idle_hook(idle_hook);
 
     WiFi.mode(WIFI_STA);
     apply_static_ip();
@@ -1273,6 +1382,7 @@ void loop()
     bus_pump(now);
     busmaster_tick(&g_bus, now);
     status_led_tick(now);
+    cpu_load_tick(now);
     poll_events(now);
 
     if (want_reboot && (int32_t)(now - reboot_at) >= 0) {
