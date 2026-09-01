@@ -167,6 +167,16 @@ def write_readme(placed, missing) -> None:
         "> LED D4 einzeln auf Polaritaet/Pin-1 pruefen** und die Drehung dort",
         "> korrigieren, nicht in der CSV.",
         "",
+        "### Bauteil-Hinweise",
+        "",
+        "- Alle Positionen haben eine LCSC-Nummer -- die Bestueckung bleibt im",
+        "  **Economic PCBA** (die gruene LED ist als 0805 `C2297` gesetzt, nicht 0201).",
+        "- **Extended** (je einmalig ~3 USD Ruestkosten, Economic-tauglich):",
+        "  U1 `C614136`, U2 `C94206`, Q1 `C8492` (BSS84), D1-D3 `C19726` (BAT54S).",
+        "- **U1 ATtiny1616-SN (`C614136`)**: JLC-Lager ist knapp (Groessenordnung",
+        "  einige Dutzend). Vor der Bestellung Bestand pruefen; ggf. selbst nachloeten",
+        "  (SOIC-20, 300 mil, gut handlötbar) und aus der BOM/CPL nehmen.",
+        "",
     ]
     if missing:
         lines += [
@@ -217,11 +227,21 @@ def write_readme(placed, missing) -> None:
 
 
 def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--no-gerber", action="store_true",
+                    help="nur BOM/CPL/README neu erzeugen (Gerber unveraendert lassen -- "
+                         "z. B. wenn sich nur LCSC-Nummern geaendert haben)")
+    args = ap.parse_args()
     if not PCB.is_file():
         sys.exit(f"{PCB} fehlt")
     OUT.mkdir(parents=True, exist_ok=True)
-    files = export_gerbers()
-    zip_gerbers(files)
+    if args.no_gerber:
+        print("Gerber unveraendert (--no-gerber)")
+    else:
+        files = export_gerbers()
+        zip_gerbers(files)
     placed, missing = export_bom_cpl()
     write_readme(placed, missing)
     print(f"\nFertigungspaket: {OUT.relative_to(REPO)}")
