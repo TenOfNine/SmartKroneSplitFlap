@@ -229,8 +229,8 @@ def commit(board, nc, path, x0, y0, exact_a, exact_b):
         prev = (wx, wy, cl)
 
 
-def finish(board) -> int:
-    pairs = drc_unconnected(PCB)
+def finish(board, board_path: Path = PCB) -> int:
+    pairs = drc_unconnected(board_path)
     if not pairs:
         return 0
     bb = board.GetBoardEdgesBoundingBox()
