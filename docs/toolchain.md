@@ -86,6 +86,7 @@ python tools/gen_master_sch.py --erc --pdf --png       # Schaltplan, ERC 0/0
 pio run  -e attiny1616 -d firmware/module   # ATtiny1616 kompilieren
 pio run  -e esp32c3    -d firmware/master   # ESP32-C3 Super Mini kompilieren
 pio test -e native     -d firmware/module   # Protokolltests auf dem Host
+python tools/build_master_firmware.py       # + Merged-.bin -> firmware/master/prebuilt/ (Webflasher)
 ```
 
 ## 4. PlatformIO-Ziele

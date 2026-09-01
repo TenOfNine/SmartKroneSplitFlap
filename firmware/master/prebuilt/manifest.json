@@ -1,0 +1,16 @@
+{
+  "name": "KRONE REW Zentralsteuerung",
+  "version": "2026-09-01",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-C3",
+      "parts": [
+        {
+          "path": "krone-master-esp32c3.factory.bin",
+          "offset": 0
+        }
+      ]
+    }
+  ]
+}
