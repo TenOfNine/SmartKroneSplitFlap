@@ -72,6 +72,11 @@ void busmaster_stop(busmaster_t *bm, uint8_t addr)
 {
     send(bm, CMD_STOP, addr, NULL, 0);
 }
+void busmaster_identify(busmaster_t *bm, uint8_t addr, uint8_t seconds)
+{
+    const uint8_t pl[1] = { seconds };
+    send(bm, CMD_IDENTIFY, addr, pl, sizeof(pl));
+}
 
 void busmaster_set_config(busmaster_t *bm, uint8_t addr, uint8_t blattzahl,
                           uint8_t offset, uint8_t vorhalt, uint8_t flags)
@@ -139,7 +144,12 @@ static void apply_status(busmaster_t *bm, uint8_t addr, const uint8_t *p, uint8_
 
 void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
 {
-    if (proto_parser_feed(&bm->parser, byte) != PARSE_FRAME_OK) {
+    const proto_parse_result_t pr = proto_parser_feed(&bm->parser, byte);
+    if (pr == PARSE_ERR_CRC) {
+        bm->crc_errors++;
+        return;
+    }
+    if (pr != PARSE_FRAME_OK) {
         return;
     }
     const proto_frame_t *f = &bm->parser.frame;
@@ -213,6 +223,8 @@ void busmaster_tick(busmaster_t *bm, uint32_t now_ms)
         send(bm, bm->pending_cmd, bm->pending_addr, NULL, 0);
         return;
     }
+
+    bm->timeouts++;
 
     /* endgueltig kein Empfang: Modul offline markieren */
     if (bm->pending_addr >= PROTO_ADDR_MIN &&

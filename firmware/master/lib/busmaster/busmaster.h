@@ -63,6 +63,9 @@ typedef struct {
     bm_enum_phase_t  enum_phase;
     uint8_t          enum_next_addr;
     uint32_t         enum_step_ms;
+
+    uint32_t         crc_errors;     /* CRC-Fehler auf dem Bus seit Start */
+    uint32_t         timeouts;       /* ausgebliebene Antworten (nach Retries) */
 } busmaster_t;
 
 void busmaster_init(busmaster_t *bm,
@@ -83,6 +86,10 @@ void busmaster_poll_status(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
 /* HOME / STOP; addr 0 = Broadcast. */
 void busmaster_home(busmaster_t *bm, uint8_t addr);
 void busmaster_stop(busmaster_t *bm, uint8_t addr);
+
+/* IDENTIFY: das Modul macht sich fuer `seconds` Sekunden bemerkbar
+ * (Status-LED, Spezifikation 5.4). addr einzeln. */
+void busmaster_identify(busmaster_t *bm, uint8_t addr, uint8_t seconds);
 
 /* SET_CONFIG an ein Modul (4 Byte, Spezifikation 5.4 / 6.3). */
 void busmaster_set_config(busmaster_t *bm, uint8_t addr, uint8_t blattzahl,
