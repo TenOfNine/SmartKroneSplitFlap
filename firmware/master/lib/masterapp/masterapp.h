@@ -77,6 +77,9 @@ void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out);
 /* /api/status als JSON. Rueckgabe: geschriebene Laenge (ohne Null) oder 0. */
 size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size);
 
+/* Betriebsart als stabiler Bezeichner ("text", "clock_hm", ...). */
+const char *masterapp_mode_name(app_mode_t mode);
+
 #ifdef __cplusplus
 }
 #endif

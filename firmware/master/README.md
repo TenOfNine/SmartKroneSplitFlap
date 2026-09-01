@@ -27,7 +27,7 @@ pio test -e native
 ```
 
 `test_charmap`, `test_clocktext`, `test_busmaster`, `test_masterapp`,
-`test_hadiscovery`, `test_eventlog` (40 Fälle). `test_masterapp` und
+`test_hadiscovery`, `test_eventlog` (43 Fälle). `test_masterapp` und
 `test_busmaster` treiben die Logik gegen einen **simulierten Bus** (aufgezeichnete
 Sende-Frames, eingespeiste Antworten) — das deckt „REST-Endpunkte antworten gegen
 einen simulierten Bus" aus Backlog T8 ab.
@@ -96,6 +96,28 @@ System). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
 
 Die schreibenden Steuer-Endpunkte lassen sich über den Schalter
 **REST-Schreib-API** sperren (`403`). Die Web-Oberfläche selbst nicht.
+
+## MQTT / Home Assistant
+
+Broker, Port, Benutzer/Passwort und Basis-Topic (Default `krone/anzeige`) unter
+*Einstellungen › MQTT*. Beim Verbinden sendet die Karte die
+Auto-Discovery-Configs unter `homeassistant/…` (retained) — in HA erscheint ein
+Gerät „KRONE Fallblattanzeige" mit Text, Betriebsart, Homing/Selbsttest,
+Sammelfehler und je Modul Zeichen + Online-Status.
+
+- **Verfügbarkeit:** `<base>/status` = `online`/`offline` (Last Will, retained);
+  jede Entity trägt es als `availability_topic` und wird bei Ausfall „nicht
+  verfügbar".
+- **Zustände** werden retained gesendet (`text/state`, `mode/state`,
+  `module/<n>/char` = dargestelltes Zeichen, `module/<n>/online`, `error/state`),
+  Aktualisierung ~1×/s.
+- Broker-Reconnect alle 5 s (im Log sichtbar). Client-ID = Hostname → bei mehreren
+  Mastern eindeutig halten.
+- Kein TLS — nur im vertrauenswürdigen Netz betreiben.
+- Broker-ACL (falls gesetzt): pub+sub auf `krone/anzeige/#`, pub auf
+  `homeassistant/#`.
+
+Details und die Topic-Tabelle: `docs/spezifikation.md` 7.6.
 
 ## Persistenz
 

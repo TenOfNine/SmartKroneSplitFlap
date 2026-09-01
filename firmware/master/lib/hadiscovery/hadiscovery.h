@@ -29,7 +29,8 @@ typedef enum {
  * [a-z0-9_]). module_n wird nur bei HA_ENT_MODULE_* verwendet.
  *
  * config_topic:  <disc_prefix>/<component>/<node>/<object>/config
- * payload:       JSON mit name, unique_id, den passenden Topics und device{}
+ * payload:       JSON mit name, unique_id, den passenden Topics,
+ *                availability_topic (<base_topic>/status) und device{}
  *
  * Rueckgabe: 0 bei Erfolg, -1 bei zu kleinem Puffer.
  */
