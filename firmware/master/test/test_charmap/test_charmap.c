@@ -20,6 +20,28 @@ static void test_blatt_mapping(void)
     TEST_ASSERT_EQUAL_UINT8(1, charmap_blatt('#'));
 }
 
+static void test_char_reverse_mapping(void)
+{
+    TEST_ASSERT_EQUAL_CHAR(' ', charmap_char(1));   /* Leerbild */
+    TEST_ASSERT_EQUAL_CHAR(' ', charmap_char(2));   /* Leerbild */
+    TEST_ASSERT_EQUAL_CHAR('0', charmap_char(3));
+    TEST_ASSERT_EQUAL_CHAR('9', charmap_char(12));
+    TEST_ASSERT_EQUAL_CHAR('A', charmap_char(13));
+    TEST_ASSERT_EQUAL_CHAR('Z', charmap_char(38));
+    TEST_ASSERT_EQUAL_CHAR('-', charmap_char(39));
+    TEST_ASSERT_EQUAL_CHAR('.', charmap_char(40));
+    TEST_ASSERT_EQUAL_CHAR(' ', charmap_char(0));    /* ungueltig */
+    TEST_ASSERT_EQUAL_CHAR(' ', charmap_char(200));  /* ungueltig */
+}
+
+static void test_char_blatt_roundtrip(void)
+{
+    const char *set = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ-.";
+    for (const char *c = set; *c; ++c) {
+        TEST_ASSERT_EQUAL_CHAR(*c, charmap_char(charmap_blatt(*c)));
+    }
+}
+
 static void test_render_left(void)
 {
     uint8_t b[10];
@@ -105,6 +127,8 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_blatt_mapping);
+    RUN_TEST(test_char_reverse_mapping);
+    RUN_TEST(test_char_blatt_roundtrip);
     RUN_TEST(test_render_left);
     RUN_TEST(test_render_right);
     RUN_TEST(test_render_center);

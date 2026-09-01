@@ -37,6 +37,13 @@ typedef enum {
 uint8_t charmap_blatt(char c);
 
 /*
+ * Umkehrung von charmap_blatt: eine Blattnummer (1..40) auf das dargestellte
+ * ASCII-Zeichen abbilden. Leerbild (1..2) und ungueltige Werte -> ' '.
+ * Fuer die MQTT-Anzeige "Zeichen je Modul" (Spezifikation 7.6).
+ */
+char charmap_char(uint8_t blatt);
+
+/*
  * Rendert einen UTF-8-Text in field_width Blattpositionen.
  *
  *  - Kleinbuchstaben -> Grossbuchstaben

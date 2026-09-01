@@ -23,6 +23,23 @@ uint8_t charmap_blatt(char c)
     return CHARMAP_LEERBILD;
 }
 
+char charmap_char(uint8_t blatt)
+{
+    if (blatt >= 3u && blatt <= 12u) {
+        return (char)('0' + (blatt - 3u));
+    }
+    if (blatt >= 13u && blatt <= 38u) {
+        return (char)('A' + (blatt - 13u));
+    }
+    if (blatt == 39u) {
+        return '-';
+    }
+    if (blatt == 40u) {
+        return '.';
+    }
+    return ' ';   /* Blatt 1..2 Leerbild, alles andere ungueltig */
+}
+
 /*
  * UTF-8-Eingabe in eine ASCII-Grossbuchstabenfolge aus dem darstellbaren
  * Zeichenvorrat expandieren. reduce_umlauts = 1 bildet die Umlaute auf ihren
