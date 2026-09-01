@@ -40,7 +40,7 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Master-Fertigungspaket | `tools/gen_master_manufacturing.py` → `hardware/master/manufacturing/`: Gerber + Zip + BOM (12 Positionen, alle mit geprüfter LCSC-Nummer) + CPL + README. J1–J4, U1-Sockel, JP1 = Handlötung. | `c9e5006` |
 | Symbolprüfung Master | `docs/symbolpruefung-master.md` **freigegeben (01.09.2026)**: 74LVC1G17 gegen Nexperia Rev. 16.1 §6.1, ESP32-C3-Modul-Pinbelegung + Einbaulage aus Fotos, TP8485E Verweis. 3D-Renders `docs/render-master-{top,bottom}.png` für die Sichtkontrolle. | `576488c` |
 | Master-Firmware T12 | `firmware/master/` auf ESP32-C3 portiert: `env:esp32c3` (`board = esp32-c3-devkitm-1`), RS-485 auf UART1, GPIO-Konstanten via `build_flags`, Status-LED an GPIO6. `pio test -e native` 40/40 (mit `test_eventlog`). | `3f03c57` |
-| Master-Web-UI (T13) | Weboberfläche neu (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen, eine `PROGMEM`-Seite ohne CDN). REST erweitert (`/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/*`, `/api/reboot`); `/api/config` deckt NTP-Server, TZ, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. Neues `lib/eventlog` (host-getestet). Busmaster zählt CRC-Fehler + Timeouts. `pio run -e esp32c3`: ~998 KB Flash (76 %). Spez. v0.10. Design per Mockup mit dem Betreiber abgestimmt. | `0d163bc`, `680152f` |
+| Master-Web-UI (T13) | Weboberfläche neu (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen, eine `PROGMEM`-Seite ohne CDN). REST erweitert (`/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/*`, `/api/reboot`, `/api/backup`); `/api/config` deckt Hostname, NTP-Server, TZ, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. System-Ansicht: Hostname einstellbar, CPU-Last, RAM, Chiptemperatur, Voll-Backup inkl. WLAN (NVS überdauert OTA). Neues `lib/eventlog` (host-getestet). Busmaster zählt CRC-Fehler + Timeouts. `pio run -e esp32c3`: ~1002 KB Flash. Spez. v0.12. Design per Mockup mit dem Betreiber abgestimmt. | `0d163bc`, `680152f`, PR #6 |
 
 Nächste sinnvolle Schritte:
 
@@ -84,7 +84,7 @@ Nächste sinnvolle Schritte:
 - **GitHub Pages** muss der Betreiber einmalig aktivieren (Settings → Pages →
   Source „GitHub Actions"), damit der Web-Flasher unter
   `tenofnine.github.io/SmartKroneSplitFlap` erreichbar wird.
-- `docs/spezifikation.md` steht auf Version 0.11: vor jeder Änderung die
+- `docs/spezifikation.md` steht auf Version 0.12: vor jeder Änderung die
   Änderungshistorie im Anhang D fortschreiben.
 - **J1-M** (`docs/pruefpunkte-j1-buchsenleiste.md`, Issue #1): mechanische
   Kodierung der J1-Drehlage festlegen.
