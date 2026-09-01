@@ -156,7 +156,8 @@ und Freigabe mit dem Betreiber über einen Design-Mockup).
 - **OTA-Update aus dem Browser** (`POST /api/update`, `Update`-Bibliothek):
   App-Image `krone-master-esp32c3.ota.bin` hochladen → zweite App-Partition →
   Neustart. `tools/build_master_firmware.py` legt `factory.bin` (USB) **und**
-  `ota.bin` (OTA) nach `prebuilt/`.
+  `ota.bin` (OTA) nach `prebuilt/`. `ArduinoOTA` entfernt (passwortloser
+  espota-Port); der `ota_enabled`-Schalter gated jetzt `/api/update`.
 - `busmaster` zählt CRC-Fehler und Timeouts; neu `busmaster_identify()`.
 
 **Fertig, wenn:** `pio run -e esp32c3` kompiliert und `pio test -e native` grün
