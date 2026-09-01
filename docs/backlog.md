@@ -153,6 +153,10 @@ und Freigabe mit dem Betreiber über einen Design-Mockup).
   / OTA / mDNS ab.
 - System-Ansicht: Hostname einstellbar, CPU-Last, RAM-Auslastung, Chiptemperatur,
   Programmspeicher. Voll-Backup (inkl. WLAN) als JSON-Datei; NVS überdauert OTA.
+- **OTA-Update aus dem Browser** (`POST /api/update`, `Update`-Bibliothek):
+  App-Image `krone-master-esp32c3.ota.bin` hochladen → zweite App-Partition →
+  Neustart. `tools/build_master_firmware.py` legt `factory.bin` (USB) **und**
+  `ota.bin` (OTA) nach `prebuilt/`.
 - `busmaster` zählt CRC-Fehler und Timeouts; neu `busmaster_identify()`.
 
 **Fertig, wenn:** `pio run -e esp32c3` kompiliert und `pio test -e native` grün
