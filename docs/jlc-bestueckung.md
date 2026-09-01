@@ -49,7 +49,7 @@ Hinterlegt in `tools/gen_daughtercard_sch.py`, Dict `LCSC`.
 | D1, D2, D3 | BAT54S | SOT-23 | — | **Extended** | im Basic-Snapshot nicht vorhanden; im Cart wählen |
 | Q1 | BSS84 | SOT-23 | — | offen | Kandidat **C8492** (P-MOSFET 50 V / 130 mA) — vor Bestellung Anschlussbild prüfen |
 | D4 | LED grün | 0805 | — | offen | im Cart eine Basic-LED wählen (z. B. KT-0805G) |
-| F1 | PTC 0,5 A | 1206 | — | offen | siehe Entscheidung D-3 |
+| F1 | 0 Ω | 1206 | C17888 | Basic | 0-Ω-Brücke statt PTC (D-3, umgesetzt) |
 
 **Von Hand zu löten (weder in BOM noch CPL):** J1–J6 (Stiftwannen,
 Schraubklemmen, UPDI-Stift). **Nicht bestückt:** JP1–JP3 (Lötbrücken),
@@ -64,7 +64,7 @@ TP1–TP7 (Testpunkte), H1–H4 (Bohrungen), Q3 und R10 (DNP).
 | D1–D3 BAT54S (eine Position) | ja | ~3 USD |
 | Q1 BSS84 | evtl. Basic (C8492) | 0–3 USD |
 | D4 LED | Basic wählbar | 0 USD |
-| F1 PTC | siehe D-3 | 0–3 USD |
+| F1 (0-Ω-Brücke, C17888) | Basic | 0 USD |
 
 Realistisch **3, maximal 5 Extended-Positionen → 9–15 USD** einmalig statt der
 zuvor grob geschätzten 12–18 USD. Bei 10 Platinen sind das ca. 1 USD/Platine.
@@ -106,23 +106,18 @@ Bleibt vorerst **1206 / 50 V (C13585, Basic)**. Alternative 0805 / 25 V
 Umstellung nur sinnvoll, wenn im Layout der Platz an C3 knapp wird. Keine
 Rüstkosten in beiden Fällen.
 
-### D-3 — F1 (Rückstellsicherung, laut Spezifikation optional)
+### D-3 — F1: 0-Ω-Brücke statt PTC ✅ umgesetzt (31.08.2026)
 
-`schaltplan-daughtercard.md` 3 / 8: „PTC 0,5 A, optional. Ist F1 nicht bestückt,
-wird +5V_IN mit +5V gebrückt." Drei Wege:
+F1 liegt im **Durchgangspfad von +5V** (J2.1 → F1 → +5V-Schiene → J3.1). Bei
+10 Modulen in Reihe führt der erste Modulabschnitt die Summe aller nachfolgenden
+Module (~0,6 A) — über dem Hold-Strom einer 0,5-A-PTC. Eine PTC an dieser Stelle
+würde bei voller Kette auslösen bzw. dauerhaft im hochohmigen Bereich hängen.
 
-1. **Echte PTC** (z. B. Littelfuse/Bourns 0,5 A Hold, 1206) — meist Extended,
-   ~3 USD Rüstkosten + Bauteil. Behält die Schutzfunktion.
-2. **0-Ω-Brücke 1206 (C17888, Basic)** an F1s Stelle — keine Kosten, keine
-   Schutzfunktion. Erfordert, F1s Footprint von `Fuse:Fuse_1206` auf
-   `Resistor_SMD:R_1206` zu ändern (elektrisch/mechanisch identische Pads).
-3. **F1 als DNP**, +5V_IN↔+5V von Hand mit Lötklecks über die 1206-Pads
-   gebrückt.
-
-**Empfehlung:** Weg 2 für die erste Serie (Kosten minimal, Absicherung
-übernimmt ohnehin der Firmware-Watchdog + Laufzeitgrenze laut Spez. 8).
-Die PTC bleibt eine spätere Nachrüstoption. **Noch nicht umgesetzt** — wartet
-auf Freigabe, weil es eine Footprint-Änderung ist.
+**Umgesetzt (Betreiberfreigabe 31.08.2026):** F1 ist eine 0-Ω-Brücke.
+Symbol `krone:R`, Wert `0R`, Footprint `Resistor_SMD:R_1206_3216Metric`,
+LCSC **C17888** (Basic, wie R14). Fail-Safe übernehmen der Firmware-Watchdog
+(1 s) und die Laufzeitgrenze nach Fehlercode 0x05 (Spez. 8), nicht die
+Versorgungssicherung. Schaltplan v0.6, Änderungshistorie fortgeschrieben.
 
 ### D-4 — Q1 BSS84: LCSC-Nummer festlegen
 
@@ -130,6 +125,44 @@ C8492 aus dem Basic-Snapshot ist ein P-Kanal-MOSFET 50 V / 130 mA in SOT-23 und
 entspricht dem BSS84-Datenblatt. **Vor der Bestellung** im JLCPCB-Parts-Manager
 Anschlussbild (G/S/D an 1/2/3) und Basic-Status bestätigen, dann in `LCSC`
 eintragen.
+
+### D-5 — Spannungsabfall der +5V-Kette bei 0,5-mm-Bahnen
+
+Der Betreiber hat vorgegeben, alle Leiterbahnen außer AC auf 0,5 mm zu ziehen.
+0,5 mm / 35 µm trägt nach IPC-2221 rund 1,3 A — der Kettenstrom von ~0,6 A auf
++5V bei 10 Modulen ist damit stromtragfähig. Der **Spannungsabfall** steigt
+jedoch: on-board grob 0,3 V über die 10-Modul-Kette, dazu Stecker- und
+Flachbandkabel-Widerstand. +5V −5 % ist 4,75 V; die Hall-Sensoren auf der
+Anzeigenplatine brauchen ihre Nennspannung.
+
+**Optionen:**
+
+1. Zentrale 5-V-Schiene am Netzteil auf ~5,1–5,2 V einstellen.
+2. Weniger Module je Netzteil-Einspeisung (Kette in zwei Stränge teilen).
+3. Falls doch breite +5V-Bahnen gewünscht sind: in
+   `tools/gen_daughtercard_pcb.py` die `Power`-Netzklasse wieder auf 1,5 mm
+   setzen und neu routen (`tools/route_daughtercard.py`).
+
+Ergibt die Messung O-5b, dass VSENS ohnehin aus einer separaten 6-V-Quelle
+gespeist werden muss (R14 raus, Einspeisung über TP6), entschärft das den
+Punkt für die Sensorversorgung.
+
+## Fertigung — schwarze Platine
+
+Betreiber-Vorgabe: **schwarze Lötstoppmaske, weißer Bestückungsdruck.** Im
+Lagenaufbau der `.kicad_pcb` gesetzt (`tools/add_silk_marks.py`: Maske „Black",
+Silk „White"). Bei der JLCPCB-Bestellung die entsprechende Option wählen —
+schwarze Maske ist dort ohne Aufpreis, kann aber die Lieferzeit um ein bis zwei
+Tage verlängern.
+
+**Maker-Kennzeichnung** auf der Rückseiten-Silkscreen:
+
+- GitHub-Marke (octicon `mark-github`), ~8,5 mm, als Footprint
+  `footprints/logos.pretty/Logo_GitHub.kicad_mod` (aus dem SVG getraced).
+- Text „TenOfNine" (Repository-Owner), 2,2 mm.
+
+Beides erzeugt `tools/add_silk_marks.py` idempotent aus der vorhandenen
+`.kicad_pcb`.
 
 ## 5. Export-Werkzeug
 

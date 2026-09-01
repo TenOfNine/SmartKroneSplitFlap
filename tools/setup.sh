@@ -103,6 +103,7 @@ install_apt_packages() {
 		python3-pip
 		xvfb            # kicad-cli-Unterbefehle brauchen ein Display
 		poppler-utils   # pdftoppm fuer die PNG-Vorschau (gen_daughtercard_sch.py --png)
+		python3-numpy   # tools/finish_routes.py (System-Python, Rastersuch-Router)
 	)
 
 	sudo apt-get update -qq
