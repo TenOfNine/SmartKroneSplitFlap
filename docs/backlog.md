@@ -97,6 +97,44 @@ GitHub Action: ERC, beide Firmware-Builds, Host-Tests. Bei einem Tag zusätzlich
 
 ---
 
+## T11 — Master-Hardware (Zentralsteuerung)
+
+Trägerboard für das steckbare **ESP32-C3-Super-Mini**-Modul, das alle
+Logikspannungen und Bussignale außer der 42 V~ erzeugt (Spez. 7.1). Aufbau
+analog zur Daughter Card: Projektbibliothek + Generatoren + FreeRouting.
+
+- `docs/schaltplan-master.md` als verbindliche Quelle der Netzliste.
+- `tools/build_krone_master_symbols.py`, `tools/gen_master_sch.py`,
+  `tools/gen_master_pcb.py`, `tools/route_master.py`,
+  `tools/gen_master_manufacturing.py`.
+- Symbolprüfung `docs/symbolpruefung-master.md` (Regel 5): ESP32-C3-Modul
+  (M-1), 74LVC1G17 (geprüft), TP8485E (Verweis).
+- Offene Punkte: M-1 (Modul-Pinbelegung/Einbaulage), M-2 (Aufwärtswandler DNP
+  bis O-2), M-3 (CHAIN 3,3 V → 5 V: 74LVC1G17 oder 0-Ω-Brücke).
+
+**Fertig, wenn:** `gen_master_sch.py --check-only` sauber, ERC 0/0, DRC 0/0,
+jedes Bauteil hat einen Footprint, das Fertigungspaket liegt in
+`hardware/master/manufacturing/`. **Freigabe** der Symbolprüfung durch den
+Betreiber steht noch aus (M-1).
+
+---
+
+## T12 — Master-Firmware auf ESP32-C3 portieren
+
+`firmware/master/` läuft bislang gegen `esp32dev` (WROOM-32, UART2, GPIO 16/17/5/4).
+Für den ESP32-C3 Super Mini:
+
+- `platformio.ini`: `board = esp32-c3-devkitm-1`.
+- `src/main.cpp`: RS-485 auf **UART1** (der C3 hat nur zwei UARTs, UART0 =
+  USB-Konsole), GPIO-Konstanten nach `docs/schaltplan-master.md` Kap. 6
+  (TX GPIO3, RX GPIO4, DE GPIO10, CHAIN GPIO5, LED GPIO6).
+- CHAIN-Polarität: bei bestücktem 74LVC1G17 nicht invertiert.
+
+**Fertig, wenn:** `pio run -e esp32c3` fehlerfrei kompiliert und die
+Host-Tests (`pio test -e native`) unverändert grün bleiben.
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.

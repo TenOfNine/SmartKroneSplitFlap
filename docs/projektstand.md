@@ -29,8 +29,24 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | J1 → Buchsenleiste | J1 von Wannenstecker auf Buchsenleiste 2×5 (`PinSocket_2x05_P2.54mm_Vertical`, Referenz BKL 10120960) — Karte wird board-to-board auf die Anzeigenplatine gesteckt. Pinbelegung unverändert, ERC 0/0. Schaltplan v0.5, Spez. v0.8. **Offen J1-M**: mechanische Kodierung der Drehlage (nicht kodierter Stecker + 42 V~ an Pin 2/4), siehe `docs/pruefpunkte-j1-buchsenleiste.md`. | `8f22656` |
 | PCB gerouted | Betreiber-Platzierung (J1–J5 fix) → `tools/route_daughtercard.py` (FreeRouting 2.3.0 + `finish_routes.py` für die Reste + GND-Fläche/Stitching beidseitig). **F1 → 0-Ω-Brücke** (D-3), Q1–Q3/R7–R10 aus dem AC-Korridor, J6 unter U1. **Alle Bahnen 0,5 mm außer AC 1,5 mm** (Vorgabe; +5V-Abfall bei 10 Modulen → D-5). Schaltplan v0.7 (UUID-Remapping, kein Neu-Erzeugen). **Platine schwarz / Druck weiß**, GitHub-Marke + „TenOfNine" auf B.SilkS (`tools/add_silk_marks.py`). DRC 0/0, ERC 0/0. | PR #2 |
 | Fertigungspaket | `tools/gen_manufacturing.py` → `hardware/daughtercard/manufacturing/` (committet): `daughtercard-gerbers.zip` + `gerber/` + `BOM.csv` + `CPL.csv` + `README.md`. BOM/CPL ohne J1–J6 (Handlötung), ohne DNP/JP/TP/H. 5 Positionen (D1–D3, Q1, D4) ohne LCSC-Nummer → im JLC-Warenkorb nachtragen. | PR #2 |
+| Daughter Card bestellt | LCSC-Fix (D4→C2297 gegen 0201-Zwang, R8/R12→C149504, Q1→C8492, D1–D3→C19726), Fertigungspaket aktualisiert, bei JLCPCB in Auftrag. | PR #4 |
+
+## T11 — Master-Hardware (ESP32-C3 Super Mini)
+
+| Nachtrag | Ergebnis | Commit |
+|---|---|---|
+| Master-Schaltplan | `hardware/master/master.kicad_sch` aus `docs/schaltplan-master.md` Kap. 6 (`tools/gen_master_sch.py`). ESP32-C3 Super Mini (steckbar), TP8485E @ 3,3 V, Fail-Safe-Bias + fester 120-Ω-Abschluss, CHAIN-Pegelwandler 74LVC1G17 (M-3), Ader-9-Lötbrücke + Boost-Steckplatz DNP (M-2/O-2), 5-V-Eingang, **keine 42 V~**. Projektbibliothek `krone_master.kicad_sym` (13 Symbole, `tools/build_krone_master_symbols.py`), Modul-Footprint `ESP32-C3-SuperMini` von Hand. ERC 0/0. Spez. v0.9. | `<dieser>` |
+| Master-PCB | `tools/gen_master_pcb.py` (68 × 54 mm, 2 Lagen) + `tools/route_master.py` (FreeRouting 2.3.0 + `finish_routes.py` + Masseflächen + Silk-Marks). Antennen-Keepout unter U1 im Footprint. **DRC 0/0.** Schwarz / weiß, GitHub-Marke + „TenOfNine" auf B.SilkS. | `<dieser>` |
+| Master-Fertigungspaket | `tools/gen_master_manufacturing.py` → `hardware/master/manufacturing/`: Gerber + Zip + BOM (12 Positionen, alle mit geprüfter LCSC-Nummer) + CPL + README. J1–J4, U1-Sockel, JP1 = Handlötung. | `<dieser>` |
+| Symbolprüfung Master | `docs/symbolpruefung-master.md`: 74LVC1G17 gegen Nexperia Rev. 16.1 §6.1 geprüft (✅), ESP32-C3-Modul-Pinbelegung + Einbaulage aus Fotos (**M-1, Freigabe offen**), TP8485E Verweis. | `<dieser>` |
 
 Nächste sinnvolle Schritte:
+
+- **T11 abschließen:** `docs/symbolpruefung-master.md` vom Betreiber freigeben
+  (M-1), `master.kicad_sch`/`.kicad_pcb` in der KiCad-GUI + 3D-Ansicht prüfen.
+- **T12:** Master-Firmware auf ESP32-C3 portieren (UART1, GPIO-Konstanten,
+  `board = esp32-c3-devkitm-1`).
+- Bench-Test M-3 (CHAIN 3,3 V direkt vs. 74LVC1G17).
 
 - **PCB routen** in `daughtercard.kicad_pcb`: Bauteile feinjustieren (oberer
   Streifen), Leiterbahnen ziehen (AC-Zone an der Kante!), Massefläche. Danach

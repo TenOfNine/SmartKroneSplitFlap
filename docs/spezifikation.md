@@ -477,11 +477,22 @@ Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung.
 
 | Position | Auswahl |
 |---|---|
-| Modul | ESP32-WROOM-32E, alternativ ESP32-S3 für natives USB |
-| Bustreiber | TP8485E-SR, betrieben mit 3,3 V, /RE fest auf GND |
-| Busabschluss | 120 Ω fest, Fail-Safe-Bias 2 × 680 Ω |
-| CHAIN-Ausgang | ein GPIO für den Start der Enumeration |
-| Versorgung | 5 V aus der Netzteilbaugruppe |
+| Modul | **ESP32-C3 Super Mini** (Aftermarket-Modul), steckbar in Buchsenleisten auf einem Trägerboard |
+| Bustreiber | TP8485E-SR, betrieben mit 3,3 V (vom 3V3-Pin des Moduls), /RE fest auf GND |
+| Busabschluss | 120 Ω fest, Fail-Safe-Bias 2 × 680 Ω (A→+3V3, B→GND) |
+| CHAIN-Ausgang | GPIO über Pegelwandler 3,3 V → 5 V (74LVC1G17); bei Bedarf 0-Ω-Brücke |
+| Versorgung | 5 V aus der Netzteilbaugruppe (Abschnitt 8.2); ESP32-C3 über Onboard-LDO |
+| Triac-Treiberspannung (Ader 9) | Lötbrücke offen / +5 V / +15 V; Aufwärtswandler als unbestückter Steckplatz, siehe O-2 |
+
+Das Trägerboard erzeugt alle Logikspannungen und Bussignale außer der 42 V~. Die
+42 V~ (Ringkerntrafo 2 × 18 V in Reihe) werden **nicht** über das Master-Board
+geführt, sondern direkt an die erste Daughter Card verdrahtet.
+
+Begründung für den ESP32-C3 Super Mini statt des WROOM-32E: kleiner, natives
+USB-C für Flashen und Konsole, ausreichend GPIO für RS-485 + CHAIN + Status-LED
+bei fest verdrahtetem Aufbau, geringere Kosten. Der C3 hat nur zwei UARTs
+(UART0 = USB-Konsole); RS-485 läuft auf UART1 über die GPIO-Matrix. Details:
+`docs/schaltplan-master.md`, Symbolprüfung `docs/symbolpruefung-master.md`.
 
 ### 7.2 Softwarestack
 
@@ -726,3 +737,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.6 | 28.08.2026 | T7: Blatt- und Leerbildimpuls werden über einen Flanken-Interrupt auf PORTA ausgewertet statt über TCB0 Input Capture (Kapitel 4.2). TCB0 stellt die 1-ms-Zeitbasis. Bei ≤ 17 Impulsen/s genügt der Software-Zeitstempel; das spart einen Zeitgeber. |
 | 0.7 | 28.08.2026 | T8: Kapitel 7.2 — Softwarestack der Zentralsteuerung dependency-arm gefasst: eingebauter `WebServer` statt `ESPAsyncWebServer`, `Preferences` (NVS) statt `LittleFS`. Funktionsumfang 7.3–7.7 unverändert. |
 | 0.8 | 31.08.2026 | Stückliste 4.6: J1 (zur Anzeige) ist eine **Buchsenleiste 2×5**, die board-to-board direkt auf den Pfostenstecker der Anzeigenplatine gesteckt wird — kein Flachbandkabel an dieser Stelle. J1 ist damit nicht mechanisch kodiert; der Verpolschutz (42 V~ an Pin 2/4) ist über Mechanik, Bestückungsdruck und die Durchgangsprüfung sicherzustellen, siehe Schaltplan 4.1 und `docs/pruefpunkte-j1-buchsenleiste.md`. Pinbelegung unverändert. |
+| 0.9 | 01.09.2026 | Kapitel 7.1: Master-CPU auf **ESP32-C3 Super Mini** (steckbares Aftermarket-Modul) festgelegt. Trägerboard erzeugt 5 V (Eingang) → 3,3 V (Onboard-LDO), RS-485 auf UART1, CHAIN über Pegelwandler 74LVC1G17, Ader 9 als Lötbrücke offen/+5V/+15V mit unbestücktem Aufwärtswandler-Steckplatz. Die 42 V~ laufen nicht über das Master-Board. Schaltplan + geroutete PCB: `docs/schaltplan-master.md`, `hardware/master/`, `tools/gen_master_*.py`, `tools/route_master.py`. ERC 0/0, DRC 0/0. Offene Punkte M-1 (Modul-Pinbelegung), M-2 (Boost), M-3 (CHAIN-Pegel); Firmware-Portierung auf den C3 = Backlog T12. |
