@@ -83,9 +83,9 @@ python tools/gen_master_sch.py --erc --pdf --png       # Schaltplan, ERC 0/0
 /usr/bin/python3 tools/gen_master_manufacturing.py     # Fertigungspaket -> hardware/master/manufacturing/
 
 # Firmware
-pio run  -d firmware/module            # ATtiny1616 kompilieren
-pio run  -d firmware/master            # ESP32 kompilieren
-pio test -e native -d firmware/module  # Protokolltests auf dem Host
+pio run  -e attiny1616 -d firmware/module   # ATtiny1616 kompilieren
+pio run  -e esp32c3    -d firmware/master   # ESP32-C3 Super Mini kompilieren
+pio test -e native     -d firmware/module   # Protokolltests auf dem Host
 ```
 
 ## 4. PlatformIO-Ziele
@@ -93,7 +93,7 @@ pio test -e native -d firmware/module  # Protokolltests auf dem Host
 | Ziel | Plattform | Board | Framework | Upload |
 |---|---|---|---|---|
 | Modul | `atmelmegaavr` | `ATtiny1616` | keins (bare metal, avr-libc) | `serialupdi` |
-| Master | `espressif32` | `esp32dev` | arduino | `esptool`, später OTA |
+| Master | `espressif32` | `esp32-c3-devkitm-1` | arduino | `esptool` (USB-C), später OTA |
 | Tests | `native` | — | unity | — |
 
 `pio test -e native` läuft in `firmware/module/` (6 Suiten) und `firmware/master/`
@@ -109,9 +109,17 @@ pio test -e native -d firmware/module  # Protokolltests auf dem Host
 > der **eingebaute `WebServer`** statt `ESPAsyncWebServer` (kein `AsyncTCP`,
 > läuft mit arduino-esp32 3.x ohne Patches) und **`Preferences`** (NVS) statt
 > `LittleFS` für die Konfiguration. `WiFiManager` (Captive Portal), `PubSubClient`
-> (MQTT) und `ArduinoJson` bleiben. Das RS-485-Interface nutzt UART2 im
-> Hardware-Halbduplexmodus (`UART_MODE_RS485_HALF_DUPLEX`), DE an GPIO 5.
+> (MQTT) und `ArduinoJson` bleiben.
 > `lib_extra_dirs = ../module/lib` teilt `lib/protocol` mit der Modul-Firmware.
+
+> In T11/T12 auf den **ESP32-C3 Super Mini** (`board = esp32-c3-devkitm-1`)
+> portiert (`hardware/master`). Der C3 hat nur UART0 (USB-Konsole) und UART1 →
+> RS-485 auf **UART1** im Hardware-Halbduplexmodus (`UART_MODE_RS485_HALF_DUPLEX`).
+> Pin-/UART-Belegung kommt aus `platformio.ini` (`build_flags`, Vorgaben =
+> `src/main.cpp`): RX GPIO4, TX GPIO3, DE GPIO10, CHAIN GPIO5 (über den
+> nicht invertierenden Pegelwandler 74LVC1G17), Status-LED GPIO6.
+> `-DARDUINO_USB_CDC_ON_BOOT=1` legt `Serial` auf die USB-C-Buchse.
+> `pio run -e esp32c3`: ~936 KB Flash.
 
 Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstand zwischen TX und RX. Der Widerstand sitzt im Adapter, nicht auf der Daughter Card.
 
@@ -121,7 +129,7 @@ Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstan
 
 | Job | Prüfung |
 |---|---|
-| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (33), `python tools/test_busctl.py` (13) |
+| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (34), `python tools/test_busctl.py` (13) |
 | `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32` |
 | `hardware` | KiCad 9, `build_krone_symbols.py --check`, `gen_daughtercard_sch.py --check-only`, `kicad-cli sch erc` (0 Fehler / 0 Warnungen) |
 | `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber sobald ein `.kicad_pcb` existiert |

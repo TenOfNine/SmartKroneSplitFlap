@@ -38,12 +38,37 @@ extern "C" {
 }
 
 /* --- Hardware ---------------------------------------------------- */
+/*
+ * Pin- und UART-Belegung kommt aus platformio.ini (build_flags), damit dieselbe
+ * Firmware fuer den ESP32-C3 Super Mini (env esp32c3, hardware/master) und
+ * andere ESP32 baut. Die Vorgaben hier = ESP32-C3, docs/schaltplan-master.md
+ * Kap. 6. Der C3 hat nur UART0 (USB-Konsole) und UART1 -> RS-485 auf UART1.
+ */
+#ifndef RS485_UART_NUM
+#  define RS485_UART_NUM 1
+#endif
+#ifndef PIN_RS485_RX
+#  define PIN_RS485_RX 4        /* GPIO4  <- U2 RO  */
+#endif
+#ifndef PIN_RS485_TX
+#  define PIN_RS485_TX 3        /* GPIO3  -> U2 DI  */
+#endif
+#ifndef PIN_RS485_DE
+#  define PIN_RS485_DE 10       /* GPIO10 -> U2 DE (UART-RTS) */
+#endif
+#ifndef PIN_CHAIN
+#  define PIN_CHAIN 5           /* GPIO5  -> 74LVC1G17 (nicht invertierend) -> Bus */
+#endif
+#ifndef PIN_STATUS_LED
+#  define PIN_STATUS_LED 6      /* GPIO6 -> R6 -> D1 gruen; < 0 = keine LED */
+#endif
 
-static constexpr int      RS485_UART   = UART_NUM_2;
-static constexpr int      RS485_RX_PIN = 16;
-static constexpr int      RS485_TX_PIN = 17;
-static constexpr int      RS485_DE_PIN = 5;    /* an XDIR-Logik / RTS */
-static constexpr int      CHAIN_PIN    = 4;    /* CHAIN-Ausgang zur ersten Karte */
+static const uart_port_t  RS485_UART   = static_cast<uart_port_t>(RS485_UART_NUM);
+static constexpr int      RS485_RX_PIN = PIN_RS485_RX;
+static constexpr int      RS485_TX_PIN = PIN_RS485_TX;
+static constexpr int      RS485_DE_PIN = PIN_RS485_DE;
+static constexpr int      CHAIN_PIN    = PIN_CHAIN;
+static constexpr int      STATUS_LED   = PIN_STATUS_LED;
 static constexpr uint32_t BUS_BAUD     = 115200;
 
 static constexpr char TZ_INFO[] = "CET-1CEST,M3.5.0,M10.5.0/3";  /* Spez. 7.2 */
@@ -102,6 +127,11 @@ static void bus_begin()
 
     pinMode(CHAIN_PIN, OUTPUT);
     digitalWrite(CHAIN_PIN, LOW);
+
+    if (STATUS_LED >= 0) {
+        pinMode(STATUS_LED, OUTPUT);
+        digitalWrite(STATUS_LED, LOW);
+    }
 }
 
 static void bus_pump(uint32_t now)
@@ -110,7 +140,33 @@ static void bus_pump(uint32_t now)
     while (uart_read_bytes(RS485_UART, &b, 1, 0) == 1) {
         busmaster_on_rx_byte(&g_bus, b, now);
     }
+    /* CHAIN ist high-aktiv; der 74LVC1G17 hebt 3,3 V -> 5 V nicht invertierend. */
     digitalWrite(CHAIN_PIN, g_bus.chain_active ? HIGH : LOW);
+}
+
+/* --- Status-LED (D1 an GPIO6) ------------------------------ */
+
+static void status_led_tick(uint32_t now)
+{
+    if (STATUS_LED < 0) {
+        return;
+    }
+    const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+    bool trouble = (WiFi.status() != WL_CONNECTED);
+    for (uint8_t i = 0; i < count && !trouble; ++i) {
+        if (!g_bus.mod[i].online || g_bus.mod[i].fehler != 0) {
+            trouble = true;
+        }
+    }
+    bool on;
+    if (WiFi.status() != WL_CONNECTED) {
+        on = (now / 125) & 1;          /* kein WLAN: schnelles Blinken */
+    } else if (trouble) {
+        on = (now / 500) & 1;          /* Modul offline/Fehler: langsames Blinken */
+    } else {
+        on = true;                     /* alles gut: Dauerlicht */
+    }
+    digitalWrite(STATUS_LED, on ? HIGH : LOW);
 }
 
 /* --- Einstellungen -------------------------------------------- */
@@ -422,6 +478,7 @@ void loop()
 
     bus_pump(now);
     busmaster_tick(&g_bus, now);
+    status_led_tick(now);
 
     if (now - last_time_ms >= 500) {
         last_time_ms = now;

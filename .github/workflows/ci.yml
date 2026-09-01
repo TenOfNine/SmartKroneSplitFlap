@@ -52,8 +52,8 @@ jobs:
         run: pio run -e attiny1616 -d firmware/module
       - name: Flash-Verbrauch < 8 KB
         run: python tools/check_flash.py firmware/module/.pio/build/attiny1616/firmware.elf 8192
-      - name: Master-Firmware (ESP32)
-        run: pio run -e esp32 -d firmware/master
+      - name: Master-Firmware (ESP32-C3)
+        run: pio run -e esp32c3 -d firmware/master
 
   hardware:
     name: Schaltplan-ERC

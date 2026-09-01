@@ -1,6 +1,8 @@
 # firmware/master
 
-Zentralsteuerung der Fallblattanzeige (ESP32, PlatformIO, Arduino-ESP32).
+Zentralsteuerung der Fallblattanzeige (**ESP32-C3 Super Mini**, PlatformIO,
+Arduino-ESP32). Zielhardware: `hardware/master`, Pinbelegung
+`docs/schaltplan-master.md` Kap. 6.
 
 ## Aufbau
 
@@ -11,7 +13,7 @@ Zentralsteuerung der Fallblattanzeige (ESP32, PlatformIO, Arduino-ESP32).
 | `lib/busmaster/` | Master-Protokollseite: Frames, Enumeration, Modul-Statustabelle, Timeout/Retry | Spez. 4.5, 5 |
 | `lib/masterapp/` | Betriebsarten, Anzeige-Update bei Änderung, Auto-Rückfall der Sekundenanzeige, Status-JSON | Spez. 7.3, 7.5, 7.7 |
 | `lib/hadiscovery/` | Home-Assistant-MQTT-Auto-Discovery (Config-Topic + Payload je Entity) | Spez. 7.6 |
-| `src/main.cpp` | ESP32-Glue: UART2-RS485, WiFiManager, WebServer/REST, PubSubClient/MQTT, NTP, OTA |
+| `src/main.cpp` | ESP32-C3-Glue: UART1-RS485 (Halbduplex), WiFiManager, WebServer/REST, PubSubClient/MQTT, NTP, OTA, Status-LED |
 
 `lib/protocol/` wird über `lib_extra_dirs = ../module/lib` mit der Modul-Firmware
 geteilt. Die fünf `lib/`-Bausteine sind hardwareunabhängig und auf dem Host getestet.
@@ -31,9 +33,16 @@ einen **simulierten Bus** (aufgezeichnete Sende-Frames, eingespeiste Antworten)
 ## Firmware bauen
 
 ```bash
-pio run -e esp32                  # ~950 KB Flash
-pio run -e esp32 -t upload
+pio run -e esp32c3               # ~936 KB Flash
+pio run -e esp32c3 -t upload     # über die USB-C-Buchse des Moduls
 ```
+
+Pin-/UART-Belegung steht in `platformio.ini` (`build_flags`), damit `main.cpp`
+portabel bleibt; die Vorgaben in `main.cpp` sind dieselben Werte. RS-485 auf
+**UART1** (der C3 hat nur UART0 = USB-Konsole und UART1). CHAIN läuft über den
+nicht invertierenden Pegelwandler 74LVC1G17 (3,3 V → 5 V), bleibt also high-aktiv.
+Die Status-LED (GPIO6, D1): Dauerlicht = alles gut, langsames Blinken = ein Modul
+offline/Fehler, schnelles Blinken = kein WLAN.
 
 Beim Erststart öffnet die Karte einen Access-Point (`krone_anzeige`) mit Captive
 Portal für die WLAN-Zugangsdaten. MQTT-Broker und Modulzahl danach unter
