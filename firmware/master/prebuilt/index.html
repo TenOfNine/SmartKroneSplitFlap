@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KRONE REW Zentralsteuerung — Firmware flashen</title>
+<meta name="description" content="Web-Flasher für die Master-Firmware der KRONE-REW-Fallblattanzeige (ESP32-C3 Super Mini).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f2ec;
+    --surface: #ffffff;
+    --surface-2: #efece4;
+    --border: #d9d4c7;
+    --ink: #1c1b19;
+    --ink-dim: #6c6659;
+    --accent: #a96f00;
+    --accent-strong: #8a5b00;
+    --accent-ink: #fff8ec;
+    --good: #2f7d33;
+    --bad: #b23b2e;
+    --shadow: 0 1px 2px rgba(28,27,25,.06), 0 8px 28px rgba(28,27,25,.08);
+    --seam: #cec8b8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e0e10;
+      --surface: #17171a;
+      --surface-2: #1e1e22;
+      --border: #2c2c33;
+      --ink: #ece9e3;
+      --ink-dim: #9a968d;
+      --accent: #f0a800;
+      --accent-strong: #ffbe2e;
+      --accent-ink: #1a1205;
+      --good: #5cb85c;
+      --bad: #e5705f;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.5);
+      --seam: #35343b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e0e10;
+    --surface: #17171a;
+    --surface-2: #1e1e22;
+    --border: #2c2c33;
+    --ink: #ece9e3;
+    --ink-dim: #9a968d;
+    --accent: #f0a800;
+    --accent-strong: #ffbe2e;
+    --accent-ink: #1a1205;
+    --good: #5cb85c;
+    --bad: #e5705f;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 40px rgba(0,0,0,.5);
+    --seam: #35343b;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 17px/1.6 "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vw, 5rem) clamp(1.1rem, 4vw, 2rem) 4rem;
+  }
+
+  .eyebrow {
+    font: 500 12.5px/1 "IBM Plex Mono", ui-monospace, monospace;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+    margin: 0 0 1rem;
+  }
+  h1 {
+    font: 600 clamp(2rem, 6vw, 2.9rem)/1.08 "IBM Plex Sans", sans-serif;
+    letter-spacing: -.02em;
+    text-wrap: balance;
+    margin: 0 0 .7rem;
+  }
+  .lede {
+    color: var(--ink-dim);
+    font-size: 1.06rem;
+    margin: 0;
+    max-width: 34rem;
+  }
+
+  /* split-flap seam */
+  .seam {
+    position: relative;
+    height: 1px;
+    background: var(--seam);
+    margin: 2.4rem 0;
+  }
+  .seam::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: -3px;
+    width: 7px;
+    height: 7px;
+    transform: translateX(-50%) rotate(45deg);
+    background: var(--bg);
+    border: 1px solid var(--seam);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: clamp(1.4rem, 4vw, 2rem);
+    box-shadow: var(--shadow);
+  }
+  .card--flash { text-align: center; }
+
+  .flash-btn {
+    appearance: none;
+    border: 0;
+    cursor: pointer;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font: 600 1.05rem/1 "IBM Plex Sans", sans-serif;
+    letter-spacing: .01em;
+    padding: 1rem 1.9rem;
+    border-radius: 10px;
+    transition: transform .12s ease, background .12s ease, box-shadow .12s ease;
+    box-shadow: 0 1px 0 rgba(0,0,0,.15);
+  }
+  .flash-btn:hover { background: var(--accent-strong); transform: translateY(-1px); }
+  .flash-btn:active { transform: translateY(0); }
+  .flash-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+
+  .flash-meta {
+    margin-top: 1.1rem;
+    font: 400 13px/1.7 "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--ink-dim);
+    word-break: break-all;
+  }
+  .flash-meta b { color: var(--ink); font-weight: 500; }
+
+  .note {
+    margin-top: 1rem;
+    font-size: .92rem;
+    color: var(--ink-dim);
+  }
+  .note--warn { color: var(--bad); }
+
+  h2 {
+    font: 600 1.18rem/1.3 "IBM Plex Sans", sans-serif;
+    letter-spacing: -.01em;
+    margin: 2.6rem 0 .9rem;
+  }
+  ul.steps { margin: 0; padding: 0; list-style: none; }
+  ul.steps li {
+    position: relative;
+    padding: .55rem 0 .55rem 1.7rem;
+    border-top: 1px solid var(--border);
+  }
+  ul.steps li:first-child { border-top: 0; }
+  ul.steps li::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 1.15rem;
+    width: 7px; height: 7px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  code, kbd {
+    font: 400 .88em/1.5 "IBM Plex Mono", ui-monospace, monospace;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: .1em .4em;
+  }
+  pre {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    overflow-x: auto;
+    font: 400 13px/1.6 "IBM Plex Mono", ui-monospace, monospace;
+    margin: .9rem 0 0;
+  }
+  pre code { background: none; border: 0; padding: 0; }
+
+  .led {
+    display: inline-block;
+    width: .62em; height: .62em;
+    border-radius: 50%;
+    vertical-align: middle;
+    margin-right: .1em;
+  }
+  .led--good { background: var(--good); }
+  .led--warn { background: var(--accent); }
+
+  footer {
+    margin-top: 3.2rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--border);
+    font: 400 13px/1.7 "IBM Plex Mono", ui-monospace, monospace;
+    color: var(--ink-dim);
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.4rem;
+    justify-content: space-between;
+  }
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:hover { color: var(--accent-strong); }
+
+  .fade { opacity: 0; transform: translateY(6px); animation: rise .5s ease forwards; }
+  .fade:nth-child(2) { animation-delay: .05s; }
+  .fade:nth-child(3) { animation-delay: .1s; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .fade { animation: none; opacity: 1; transform: none; }
+    .flash-btn { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <p class="eyebrow fade">KRONE REW &middot; Zentralsteuerung</p>
+  <h1 class="fade">Firmware flashen</h1>
+  <p class="lede fade">
+    Master-Firmware der KRONE-REW-Fallblattanzeige auf ein
+    <b>ESP32-C3 Super Mini</b> spielen &mdash; direkt aus dem Browser, über die
+    USB-C-Buchse des Moduls.
+  </p>
+
+  <div class="seam"></div>
+
+  <div class="card card--flash">
+    <esp-web-install-button manifest="./manifest.json">
+      <button class="flash-btn" slot="activate">Modul verbinden &amp; flashen</button>
+      <span slot="unsupported" class="note note--warn">
+        Dieser Browser kann kein Web Serial. Nutze <b>Chrome</b> oder <b>Edge</b>
+        auf dem Desktop.
+      </span>
+      <span slot="not-allowed" class="note note--warn">
+        Web Serial ist hier blockiert (funktioniert nur über HTTPS).
+      </span>
+    </esp-web-install-button>
+
+    <p class="flash-meta" id="meta">
+      Ziel: <b>ESP32-C3</b> &middot; Image wird geladen&hellip;
+    </p>
+    <p class="note">
+      Beim Flashen wird der Chip <b>komplett gelöscht</b> (auch die
+      WLAN-Zugangsdaten). Kein BOOT-Taster nötig &mdash; der C3 geht über USB
+      selbst in den Download-Modus.
+    </p>
+  </div>
+
+  <h2>Voraussetzungen</h2>
+  <ul class="steps">
+    <li>Chrome oder Edge auf dem <b>Desktop</b> (Web Serial API).</li>
+    <li>USB-C-Kabel <b>mit Datenadern</b> direkt an die Buchse des Moduls.</li>
+    <li>Das Modul muss <b>nicht</b> auf dem Trägerboard stecken.</li>
+  </ul>
+
+  <h2>Nach dem Flashen</h2>
+  <ul class="steps">
+    <li>
+      <span class="led led--warn"></span>
+      Status-LED (GPIO6) blinkt schnell &mdash; noch kein WLAN.
+    </li>
+    <li>
+      Das Modul öffnet den Access-Point <code>krone_anzeige</code>. Dort im
+      Captive-Portal die WLAN-Zugangsdaten eingeben.
+    </li>
+    <li>
+      <span class="led led--good"></span>
+      LED-Dauerlicht = verbunden und alle Module erreichbar. Langsames Blinken =
+      ein Modul offline oder im Fehler.
+    </li>
+    <li>
+      MQTT-Broker und Modulzahl danach unter <code>/api/config</code> oder in der
+      Web-UI des Moduls.
+    </li>
+    <li>Serielle Konsole auf USB-C, 115200&nbsp;Bd.</li>
+  </ul>
+
+  <h2>Ohne Browser</h2>
+  <pre><code>esptool.py --chip esp32c3 -p /dev/ttyACM0 \
+  write_flash 0x0 krone-master-esp32c3.factory.bin</code></pre>
+
+  <footer>
+    <span id="version">firmware/master/prebuilt/</span>
+    <span><a href="https://github.com/TenOfNine/SmartKroneSplitFlap">TenOfNine/SmartKroneSplitFlap</a></span>
+  </footer>
+</main>
+
+<script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<script>
+  // Version + Dateiname aus dem Manifest anzeigen, das ESP Web Tools ohnehin lädt.
+  fetch("./manifest.json", { cache: "no-cache" })
+    .then((r) => r.json())
+    .then((m) => {
+      const part = (m.builds && m.builds[0] && m.builds[0].parts && m.builds[0].parts[0]) || {};
+      const chip = (m.builds && m.builds[0] && m.builds[0].chipFamily) || "ESP32-C3";
+      document.getElementById("meta").innerHTML =
+        "Ziel: <b>" + chip + "</b> &middot; <b>" + (part.path || "?") + "</b>";
+      if (m.version) {
+        document.getElementById("version").textContent = "Version " + m.version;
+      }
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>

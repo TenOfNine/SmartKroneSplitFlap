@@ -1,0 +1,51 @@
+name: Pages – ESP Web Flasher
+
+# Veroeffentlicht firmware/master/prebuilt/ als GitHub Page:
+#   https://tenofnine.github.io/SmartKroneSplitFlap/
+# Der Flasher (index.html) laedt manifest.json + krone-master-esp32c3.factory.bin
+# aus demselben Verzeichnis -- also immer den zuletzt committeten Stand.
+#
+# Einmalig im Repo aktivieren: Settings -> Pages -> Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/master/prebuilt/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Manifest-Version = deployter Commit
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          d=$(git log -1 --format=%cd --date=short)
+          f=firmware/master/prebuilt/manifest.json
+          tmp=$(mktemp)
+          jq --arg v "$d ($sha)" '.version = $v' "$f" > "$tmp" && mv "$tmp" "$f"
+          echo "manifest version -> $d ($sha)"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: firmware/master/prebuilt
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

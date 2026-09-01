@@ -37,9 +37,11 @@ pio run -e esp32c3               # ~936 KB Flash
 pio run -e esp32c3 -t upload     # über die USB-C-Buchse des Moduls
 ```
 
-Ein flash-fertiges Merged-Image für Webflasher (esptool-js / ESP Web Tools) liegt
-committet unter `prebuilt/` und wird von `python tools/build_master_firmware.py`
-erzeugt — bei jeder Firmware-Änderung neu ausführen.
+Ein flash-fertiges Merged-Image für Webflasher liegt committet unter `prebuilt/`
+und wird von `python tools/build_master_firmware.py` erzeugt — bei jeder
+Firmware-Änderung neu ausführen. Browser-Flasher:
+**<https://tenofnine.github.io/SmartKroneSplitFlap/>** (`prebuilt/index.html`,
+per GitHub Actions veröffentlicht — lädt immer den zuletzt committeten Stand).
 
 Pin-/UART-Belegung steht in `platformio.ini` (`build_flags`), damit `main.cpp`
 portabel bleibt; die Vorgaben in `main.cpp` sind dieselben Werte. RS-485 auf
