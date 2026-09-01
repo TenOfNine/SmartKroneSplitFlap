@@ -106,11 +106,14 @@ def main() -> int:
         f"(zuletzt gebaut nahe Commit `{head}`, {date.today().isoformat()}). "
         "Bei jeder Firmware-Aenderung neu ausfuehren.\n\n"
         "| Datei | Zweck |\n|---|---|\n"
+        "| `index.html` | Web-Flasher (ESP Web Tools). Wird per GitHub Actions als Page veroeffentlicht. |\n"
         "| `krone-master-esp32c3.factory.bin` | Merged-Image, im Webflasher an **Offset 0x0** flashen (mit „Erase before flash\") |\n"
         "| `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |\n\n"
         f"SHA-256 (`factory.bin`): `{digest}`\n\n"
         "## Flashen\n\n"
-        "- Webflasher: [esptool-js](https://espressif.github.io/esptool-js/) — "
+        "- **Browser:** <https://tenofnine.github.io/SmartKroneSplitFlap/> "
+        "(laedt immer diesen Verzeichnisstand). Chrome/Edge Desktop.\n"
+        "- Alternativ [esptool-js](https://espressif.github.io/esptool-js/) — "
         "Datei an Offset `0x0`, „Erase\" aktivieren. Der C3 Super Mini geht ueber "
         "die USB-C-Buchse selbsttaetig in den Download-Modus (kein BOOT-Taster).\n"
         "- Kommandozeile:\n\n"
@@ -120,7 +123,9 @@ def main() -> int:
         "  ```\n\n"
         "Nach dem Boot: Access-Point `krone_anzeige` fuer die WLAN-Einrichtung, "
         "serielle Konsole auf USB-C (115200 Bd). Status-LED (GPIO6): schnelles "
-        "Blinken = kein WLAN.\n",
+        "Blinken = kein WLAN.\n\n"
+        "> `index.html` ist handgepflegt und wird von diesem Skript **nicht** "
+        "ueberschrieben.\n",
         encoding="utf-8",
     )
 
