@@ -30,19 +30,15 @@ werden**.
 > LED D4 einzeln auf Polaritaet/Pin-1 pruefen** und die Drehung dort
 > korrigieren, nicht in der CSV.
 
-### Vor der Bestellung LCSC-Nummer nachtragen
+### Bauteil-Hinweise
 
-Folgende Positionen haben in `BOM.csv` noch keine LCSC-Nummer und
-muessen im JLCPCB-Warenkorb zugeordnet werden:
-
-- **D1** -- BAT54S
-- **D2** -- BAT54S
-- **D3** -- BAT54S
-- **Q1** -- BSS84 (P-MOSFET)
-- **D4** -- LED gruen 0805
-
-Hintergrund und Kandidaten: `docs/jlc-bestueckung.md` (D-4 fuer Q1,
-Abschnitt 2 fuer D1-D3 / D4).
+- Alle Positionen haben eine LCSC-Nummer -- die Bestueckung bleibt im
+  **Economic PCBA** (die gruene LED ist als 0805 `C2297` gesetzt, nicht 0201).
+- **Extended** (je einmalig ~3 USD Ruestkosten, Economic-tauglich):
+  U1 `C614136`, U2 `C94206`, Q1 `C8492` (BSS84), D1-D3 `C19726` (BAT54S).
+- **U1 ATtiny1616-SN (`C614136`)**: JLC-Lager ist knapp (Groessenordnung
+  einige Dutzend). Vor der Bestellung Bestand pruefen; ggf. selbst nachloeten
+  (SOIC-20, 300 mil, gut handlötbar) und aus der BOM/CPL nehmen.
 
 ## Von Hand zu loeten (nicht im SMT-Auftrag)
 

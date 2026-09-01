@@ -171,7 +171,7 @@ LCSC: dict[str, str] = {
     "R10": "C17414",                                                   # 10k (DNP)
     "R2": "C17513", "R4": "C17513", "R6": "C17513", "R11": "C17513",   # 1k
     "R13": "C17513", "R15": "C17513",                                  # 1k
-    "R8": "C17407", "R12": "C17407",                                   # 100k
+    "R8": "C149504", "R12": "C149504",                                 # 100k (C17407 stillgelegt)
     "R9": "C17673",                                                    # 4k7
     "R16": "C17437",                                                   # 120R 0805
     # --- Basic Parts: Widerstaende 1206 ---
@@ -182,14 +182,14 @@ LCSC: dict[str, str] = {
     "C3": "C13585",                                                    # 10u 50V 1206 (Reserve-Bulk)
     # --- Basic Part: Transistor ---
     "Q2": "C20526", "Q3": "C20526",                                    # MMBT3904 NPN SOT-23
-    # --- Extended Parts (unvermeidbar, je ~3 USD Ruestkosten einmalig) ---
-    "U1": "C614136",   # ATtiny1616-SNR, SOIC-20
+    # --- Extended Parts (je ~3 USD Ruestkosten einmalig; kein Basic verfuegbar) ---
+    "U1": "C614136",   # ATtiny1616-SNR, SOIC-20  (JLC-Lager knapp -- vor Bestellung pruefen)
     "U2": "C94206",    # TP8485E-SR, RS-485-Transceiver SOIC-8
-    # --- ohne feste Nummer: im Basic-Snapshot nicht vorhanden ---
-    "Q1": "",   # BSS84 P-MOSFET  (Kandidat Basic: C8492 - vor Bestellung pruefen)
-    "D1": "", "D2": "", "D3": "",   # BAT54S Doppel-Schottky (Extended)
-    "D4": "",   # LED gruen 0805
-    "F1": "C17888",  # 0 Ohm 1206 Basic (0-Ohm-Bruecke statt PTC, D-3)
+    "Q1": "C8492",     # LBSS84LT1G (BSS84), SOT-23, Lager > 260k
+    "D1": "C19726", "D2": "C19726", "D3": "C19726",   # BAT54SLT1G (onsemi), SOT-23, Lager > 500k
+    # --- Basic Parts ---
+    "D4": "C2297",    # KT-0805G, gruene LED 0805, Basic (kein 0201 -> Economic PCBA)
+    "F1": "C17888",   # 0 Ohm 1206 Basic (0-Ohm-Bruecke statt PTC, D-3)
 }
 
 # ---------------------------------------------------------------------------

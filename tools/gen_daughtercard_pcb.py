@@ -452,8 +452,8 @@ def export_jlc() -> None:
 
 # LCSC-Nummern, die laut Basic-Snapshot Basic Parts sind (nur fuer die Statistik).
 _BASIC_HINT = {
-    "C17414", "C17513", "C17407", "C17673", "C17437", "C17477", "C17888",
-    "C49678", "C1710", "C13585", "C15850", "C20526",
+    "C17414", "C17513", "C149504", "C17673", "C17437", "C17477", "C17888",
+    "C49678", "C1710", "C13585", "C15850", "C20526", "C2297",
 }
 
 
