@@ -185,3 +185,19 @@ Ausgeschlossen: `#`-Referenzen, H\*, TP\*, JP\*, J1–J6, DNP (Q3, R10).
 `jlc/` steht in `.gitignore` — die Dateien werden **nicht** versioniert, weil sie
 sich mit jeder Platzierungsänderung ändern und aus dem Repo jederzeit neu
 erzeugbar sind.
+
+## 6. Fertigungspaket (committet)
+
+`tools/gen_manufacturing.py` legt das vollständige Bestellpaket unter
+`hardware/daughtercard/manufacturing/` ab — **committet**, weil das Layout
+jetzt steht:
+
+| Datei | Inhalt |
+|---|---|
+| `daughtercard-gerbers.zip` | Gerber (F/B Cu, Paste, Silk, Mask, Edge.Cuts) + Excellon-Bohrdatei + Map + `.gbrjob` |
+| `gerber/` | dieselben Dateien einzeln |
+| `BOM.csv` / `CPL.csv` | SMT-Bestückung, JLCPCB-Format — **ohne J1–J6** (Handlötung), ohne DNP/JP/TP/H |
+| `README.md` | Bestellhinweise: schwarze Maske / weißer Druck, LCSC-Nachtrag für D1–D3/Q1/D4, JLC-Drehungsprüfung, Handlöt-Liste, J1-Verpolwarnung |
+
+Bei jeder Layoutänderung neu erzeugen. Die 5 Positionen ohne LCSC-Nummer
+(D1–D3, Q1, D4) trägt der Nutzer im JLCPCB-Warenkorb nach.

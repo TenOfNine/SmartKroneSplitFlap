@@ -71,8 +71,9 @@ xvfb-run -a kicad-cli sch export pdf -o docs/daughtercard.pdf <sch>
 # Fertigungsdaten
 kicad-cli pcb export gerbers -o gerber/ <pcb>
 
-# JLCPCB-Bestückung: jlc/BOM.csv + jlc/CPL.csv (nach finaler Platzierung)
-/usr/bin/python3 tools/gen_daughtercard_pcb.py --jlc   # siehe docs/jlc-bestueckung.md
+# Fertigungspaket (Gerber + BOM + CPL) -> hardware/daughtercard/manufacturing/
+/usr/bin/python3 tools/gen_manufacturing.py            # committetes Deliverable
+/usr/bin/python3 tools/gen_daughtercard_pcb.py --jlc   # nur BOM/CPL nach jlc/ (Wegwerf, .gitignore)
 
 # Firmware
 pio run  -d firmware/module            # ATtiny1616 kompilieren
