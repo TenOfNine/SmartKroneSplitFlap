@@ -112,10 +112,11 @@ analog zur Daughter Card: Projektbibliothek + Generatoren + FreeRouting.
 - Offene Punkte: M-1 (Modul-Pinbelegung/Einbaulage), M-2 (Aufwärtswandler DNP
   bis O-2), M-3 (CHAIN 3,3 V → 5 V: 74LVC1G17 oder 0-Ω-Brücke).
 
-**Fertig, wenn:** `gen_master_sch.py --check-only` sauber, ERC 0/0, DRC 0/0,
+**Fertig, wenn:** `gen_master_sch.py --check-only` sauber, ERC 0/0, DRC 0 Fehler,
 jedes Bauteil hat einen Footprint, das Fertigungspaket liegt in
-`hardware/master/manufacturing/`. **Freigabe** der Symbolprüfung durch den
-Betreiber steht noch aus (M-1).
+`hardware/master/manufacturing/`. **Erledigt 01.09.2026** — Symbolprüfung vom
+Betreiber freigegeben (M-1). Offen: Sichtkontrolle der U1-Einbaulage am Render,
+Bench-Test M-3 vor der Bestellung.
 
 ---
 
@@ -132,6 +133,9 @@ Für den ESP32-C3 Super Mini:
 
 **Fertig, wenn:** `pio run -e esp32c3` fehlerfrei kompiliert und die
 Host-Tests (`pio test -e native`) unverändert grün bleiben.
+**Erledigt 01.09.2026** — `esp32c3`-Env (~936 KB Flash), RS-485 auf UART1,
+Pins via `build_flags`, Status-LED an GPIO6. `pio test -e native` 34/34.
+Am Gerät noch nicht getestet.
 
 ---
 

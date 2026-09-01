@@ -4,7 +4,7 @@
 |---|---|
 | Zweck | Gegenprüfung der Schaltplan-Symbolpins gegen Datenblatt / Board-Silk, vor dem finalen Layout |
 | Bezug | CLAUDE.md, harte Regel 5 · `docs/schaltplan-master.md` · Backlog T11 |
-| Status | **noch nicht freigegeben** — M-1 wartet auf die Bestätigung des Betreibers |
+| Status | **freigegeben** (Betreiber, 01.09.2026, im Chat). Der Betreiber prüft die U1-Einbaulage zusätzlich an `docs/render-master-*.png` gegen ein echtes Modul. |
 | Datum | 01.09.2026 |
 
 > Ein erfolgreicher ERC-Lauf beweist nicht, dass eine Pinbelegung stimmt. ERC läuft
@@ -40,22 +40,22 @@ Einbaulage laut Betreiber: **USB-C/BOOT/RST an der Oberkante, Antenne (Aufdruck
 
 | Pad | Board-Silk | Symbol-Pinname | Symbol-Pintyp | Netzliste (Kap. 6.3) | Bewertung |
 |---:|---|---|---|---|---|
-| 1 | 5V | `5V` | power_in | +5V_IN | ⬜ zu bestätigen |
-| 2 | G (GND) | `GND` | power_in | GND | ⬜ |
-| 3 | 3V3 | `3V3` | power_out | +3V3 | ⬜ 3,3-V-Ausgang des Onboard-LDO |
-| 4 | 4 | `GPIO4` | bidirectional | RO (UART1 RX) | ⬜ |
-| 5 | 3 | `GPIO3` | bidirectional | DI (UART1 TX) | ⬜ |
-| 6 | 2 | `GPIO2` | bidirectional | — (NC) | ⬜ Strapping |
-| 7 | 1 | `GPIO1` | bidirectional | IO1_RSV | ⬜ |
-| 8 | 0 | `GPIO0` | bidirectional | IO0_RSV | ⬜ |
-| 9 | 5 | `GPIO5` | bidirectional | CHAIN_GPIO | ⬜ |
-| 10 | 6 | `GPIO6` | bidirectional | LED_DRV | ⬜ |
-| 11 | 7 | `GPIO7` | bidirectional | IO7_RSV | ⬜ |
-| 12 | 8 | `GPIO8` | bidirectional | — (NC) | ⬜ Strapping, Onboard-LED |
-| 13 | 9 | `GPIO9` | bidirectional | — (NC) | ⬜ Strapping, BOOT-Taster |
-| 14 | 10 | `GPIO10` | bidirectional | DE | ⬜ |
-| 15 | 20 | `GPIO20` | bidirectional | — (NC) | ⬜ UART0 RX (USB-Konsole) |
-| 16 | 21 | `GPIO21` | bidirectional | — (NC) | ⬜ UART0 TX (USB-Konsole) |
+| 1 | 5V | `5V` | power_in | +5V_IN | ✅ |
+| 2 | G (GND) | `GND` | power_in | GND | ✅ |
+| 3 | 3V3 | `3V3` | power_out | +3V3 | ✅ 3,3-V-Ausgang des Onboard-LDO |
+| 4 | 4 | `GPIO4` | bidirectional | RO (UART1 RX) | ✅ |
+| 5 | 3 | `GPIO3` | bidirectional | DI (UART1 TX) | ✅ |
+| 6 | 2 | `GPIO2` | bidirectional | — (NC) | ✅ Strapping |
+| 7 | 1 | `GPIO1` | bidirectional | IO1_RSV | ✅ |
+| 8 | 0 | `GPIO0` | bidirectional | IO0_RSV | ✅ |
+| 9 | 5 | `GPIO5` | bidirectional | CHAIN_GPIO | ✅ |
+| 10 | 6 | `GPIO6` | bidirectional | LED_DRV | ✅ |
+| 11 | 7 | `GPIO7` | bidirectional | IO7_RSV | ✅ |
+| 12 | 8 | `GPIO8` | bidirectional | — (NC) | ✅ Strapping, Onboard-LED |
+| 13 | 9 | `GPIO9` | bidirectional | — (NC) | ✅ Strapping, BOOT-Taster |
+| 14 | 10 | `GPIO10` | bidirectional | DE | ✅ |
+| 15 | 20 | `GPIO20` | bidirectional | — (NC) | ✅ UART0 RX (USB-Konsole) |
+| 16 | 21 | `GPIO21` | bidirectional | — (NC) | ✅ UART0 TX (USB-Konsole) |
 
 ### 1.3 Kritische Einzelprüfung Versorgung + Einbaulage
 
@@ -164,9 +164,11 @@ zulässiger Mischbetrieb.
 
 | Baustein | Symbol | Ergebnis | Bestätigt von | Datum |
 |---|---|---|---|---|
-| 74LVC1G17GV | `74LVC1G17` | Pinbelegung deckungsgleich mit Nexperia Rev. 16.1 §6.1 (GV/SOT753) | — | **offen** |
+| 74LVC1G17GV | `74LVC1G17` | Pinbelegung deckungsgleich mit Nexperia Rev. 16.1 §6.1 (GV/SOT753) | Betreiber (phi.hoffmann@hotmail.de), im Chat | 01.09.2026 |
 | TP8485E-SR | `TP8485E-SR` | unverändert ggü. `docs/symbolpruefung.md` (freigegeben 27.08.2026) | Betreiber | 27.08.2026 |
-| ESP32-C3 Super Mini | `ESP32-C3-SuperMini` (Symbol + Footprint) | Pin-Reihenfolge + Einbaulage aus den Fotos, Abschnitt 1.2 / 1.3 | — | **offen (M-1)** |
+| ESP32-C3 Super Mini | `ESP32-C3-SuperMini` (Symbol + Footprint) | Pin-Reihenfolge + Einbaulage aus den Fotos, Abschnitt 1.2 / 1.3 | Betreiber, im Chat | 01.09.2026 |
 
-**T11 gilt erst als abgeschlossen, wenn die beiden offenen Zeilen bestätigt sind.**
-Bis dahin ist die geroutete PCB ein Planungsstand, keine Fertigungsfreigabe.
+**M-1 ist damit geschlossen.** Der Betreiber gleicht die U1-Einbaulage zusätzlich
+an `docs/render-master-top.png` mit einem echten Modul ab (Pin-1-Punkt = 5V rechts
+oben, neben „USB-C"); eine reine Sichtkontrolle, kein Änderungsbedarf am Symbol
+oder Footprint erwartet.

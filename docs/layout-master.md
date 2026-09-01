@@ -17,8 +17,14 @@ python  tools/build_krone_master_symbols.py
 python  tools/gen_master_sch.py --erc --pdf --png
 /usr/bin/python3 tools/gen_master_pcb.py --png --drc      # Platzierung + Vorschau
 /usr/bin/python3 tools/route_master.py                    # FreeRouting + Flächen (+ Silk-Marks)
+/usr/bin/python3 tools/gen_master_pcb.py --render         # 3D-Ansicht oben/unten -> docs/render-master-*.png
 /usr/bin/python3 tools/gen_master_manufacturing.py        # Gerber/BOM/CPL
 ```
+
+`docs/render-master-top.png` / `-bottom.png` sind für die Sichtprüfung der
+U1-Einbaulage: **Pin-1-Punkt (= 5V) rechts oben** neben dem „USB-C"-Aufdruck,
+„ANT: keine Cu-Flaeche" an der Unterkante. Das Modul selbst hat kein 3D-Modell —
+der Bestückungsdruck trägt die Aussage.
 
 - `gen_master_pcb.py` verweigert den Neuaufbau, wenn die `.kicad_pcb` schon
   Leiterbahnen hat (`--force` überschreibt). Die Vorschau der gerouteten Platine
@@ -44,7 +50,7 @@ python  tools/gen_master_sch.py --erc --pdf --png
 
 | Bereich | Inhalt |
 |---|---|
-| **U1 links** | Modul belegt das linke Drittel. USB-C/BOOT/RST überragen die Oberkante. Antenne + Cu-Keepout an der Unterkante des Moduls. |
+| **U1 links** | Modul belegt das linke Drittel. Antenne + Cu-Keepout an der Unterkante des Moduls. Der Modulkörper endet ~2,7 mm vor der Oberkante; die USB-C-Buchse ragt knapp daran. **Für klaren Überstand im GUI eine kleine `Edge.Cuts`-Aussparung unter der USB-C-Buchse einfügen** — U1 weiter hochsetzen sprengt den Routingkanal an der Oberkante (getestet: 13 `copper_edge_clearance`-Fehler). |
 | **Logik Mitte** | U2 (RS-485) nahe J2, U3 (CHAIN) darunter, Bias/Abschluss R1–R3 zwischen U2 und J2. |
 | **Bus oben rechts** | J2 (Wannenstecker), Flachband nach oben. |
 | **Versorgung unten links** | J1 (Schraubklemme), C3 (Bulk), FB1 (Ferrit) in Richtung U1. |

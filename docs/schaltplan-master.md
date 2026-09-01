@@ -7,7 +7,7 @@
 | Revision | 0.1 (01.09.2026) |
 | Erzeugt von | `tools/gen_master_sch.py` → `hardware/master/master.kicad_sch` |
 | Projektbibliothek | `hardware/master/symbols/krone_master.kicad_sym` (`tools/build_krone_master_symbols.py`) |
-| Status | ERC 0/0, PCB geroutet (DRC 0/0). Symbolprüfung `docs/symbolpruefung-master.md` **noch nicht freigegeben** (M-1..M-3). |
+| Status | ERC 0/0, PCB geroutet (DRC 0 Fehler). Symbolprüfung `docs/symbolpruefung-master.md` **freigegeben** (01.09.2026); M-3 (CHAIN-Pegel) auf dem Tisch, M-2 (Boost) an O-2 gebunden. |
 
 **Verbindliche Quelle** für Netzliste und Bestückung ist Kapitel 6 dieses
 Dokuments. Bei Widerspruch zur Spezifikation gilt die Netzliste (analog
@@ -175,8 +175,8 @@ Dann Modul-Trimmer auf **15,0 V** stellen, einstecken, JP1 auf +15 V.
 - `DE` an GPIO10, zusätzlich R4 = 10 kΩ nach GND: bei Reset/Boot treibt der
   Transceiver den Bus nicht.
 - ESP32-C3 hat nur zwei UARTs; UART0 = USB-C-Konsole. **RS-485 läuft auf UART1**
-  (per GPIO-Matrix frei auf GPIO3/GPIO4/GPIO10 gelegt). Das ist eine
-  Firmware-Anpassung (T12), nicht Teil dieser Hardware.
+  (per GPIO-Matrix frei auf GPIO3/GPIO4/GPIO10 gelegt). In der Firmware umgesetzt
+  (T12, `firmware/master/`): `pio run -e esp32c3` kompiliert, Host-Tests grün.
 - Abschluss R1 = 120 Ω fest, Bias R2/R3 = 2 × 680 Ω (A→+3V3, B→GND).
 
 ### 5.3 CHAIN-Pegelwandler (M-3)
@@ -343,11 +343,11 @@ Masseflächen) routet zweilagig; DRC 0/0.
 
 | Nr | Punkt | Wirkung | Status |
 |---|---|---|---|
-| M-1 | ESP32-C3-Super-Mini Symbol/Footprint ↔ Board-Silk + Einbaulage | Gate fürs Layout | belegt durch Fotos, formale Freigabe offen |
+| M-1 | ESP32-C3-Super-Mini Symbol/Footprint ↔ Board-Silk + Einbaulage | Gate fürs Layout | ✅ freigegeben 01.09.2026 (`symbolpruefung-master.md`); Sichtkontrolle am Render durch den Betreiber |
 | M-2 | Aufwärtswandler-Modul | J4 bleibt DNP | wartet auf O-2 |
 | M-3 | CHAIN 3,3 V → 5 V: U3 nötig oder R7-Brücke | Bestückungsvariante | auf dem Tisch zu prüfen |
 | O-2 | 5 V oder 12–20 V an Anzeige-Pin 9 (Spez.) | JP1-Stellung, Boost | offen |
-| T12 | Master-Firmware auf ESP32-C3 portieren (UART1, GPIO-Konstanten) | Firmware, nicht Hardware | offen |
+| T12 | Master-Firmware auf ESP32-C3 portieren (UART1, GPIO-Konstanten) | Firmware | ✅ kompiliert (`pio run -e esp32c3`), am Gerät noch nicht getestet |
 
 ---
 
