@@ -4,8 +4,8 @@
 |---|---|
 | Zweck | Vorbereitung der SMT-Bestückung bei JLCPCB: LCSC-Nummern, Basic- vs. Extended-Part-Einordnung, zweite Anschlussbild-Prüfung der Symbole, offene Entscheidungen. |
 | Bezug | Nutzeranforderung „so viele Basic Parts wie möglich" · CLAUDE.md Regel 1 (keine Nummer ungeprüft übernehmen) · Regel 5 (Pinbelegung gegen Datenblatt) |
-| Stand | 31.08.2026 — **Entwurf, noch nicht bestellt.** Bauteilpositionen ändern sich noch. |
-| Werkzeug | `tools/gen_daughtercard_pcb.py --jlc` erzeugt `hardware/daughtercard/jlc/BOM.csv` + `CPL.csv` (`.gitignore`, Bauartefakt). |
+| Stand | 01.09.2026 — Layout steht, LCSC-Nummern gegen das **JLCPCB-API geprüft** (Lager, Basic/Extended). Alle Positionen zugeordnet. |
+| Werkzeug | `tools/gen_manufacturing.py` → `hardware/daughtercard/manufacturing/` (committet). `--jlc` in `gen_daughtercard_pcb.py` ist der Wegwerf-Export nach `jlc/`. |
 
 ---
 
@@ -16,17 +16,20 @@ Rüstkosten) und **Extended Parts** (einmalige „Extended Part Fee", derzeit
 ca. 3 USD je Position, unabhängig von der Stückzahl). Für eine Kleinserie von
 10 Platinen fallen die Rüstkosten prozentual stark ins Gewicht.
 
-Alle Chip-Widerstände und -Kondensatoren der Bauformen 0402/0603/0805/1206 bei
-JLCPCB sind Basic Parts. Die Schaltung ist so ausgelegt, dass **nur die drei
-aktiven Halbleiter U1, U2 und der BAT54S** zwingend Extended sind.
+Alle Chip-Widerstände und -Kondensatoren sowie die grüne LED (`C2297`) und der
+MMBT3904 (`C20526`) sind Basic Parts. **Extended** sind U1 (ATtiny1616),
+U2 (TP8485E), Q1 (BSS84) und D1–D3 (BAT54S) — für diese gibt es bei JLC kein
+Basic-Äquivalent. Extended heißt ~3 USD einmalige Rüstkosten je Position und
+bleibt Economic-PCBA-tauglich.
 
 ## 2. Stückliste mit LCSC-Zuordnung
 
-Quelle der Basic-Nummern: JLCPCB-„Basic Parts Library"-Liste (Snapshot in
-`/tmp/jlcbasic.csv` zum Bearbeitungszeitpunkt). **Jede Nummer ist vor der
-Bestellung im JLCPCB-Parts-Manager gegen Wert, Bauform und Anschlussbild zu
-prüfen** — der Snapshot kann veraltet sein und Basic/Extended-Einstufungen
-ändern sich.
+Die Nummern wurden am 01.09.2026 gegen das JLCPCB-Teile-API geprüft
+(`.../v1/shoppingCart/smtGood/selectSmtComponentList`): Bauform, Basic/Extended
+und Lagerbestand. Ein früherer Snapshot (`/tmp/jlcbasic.csv`) war teils veraltet
+— **C17407** (100 kΩ) war darin Basic, ist bei JLC inzwischen stillgelegt und
+durch **C149504** ersetzt. Trotzdem vor der Bestellung im Parts-Manager
+Anschlussbild und Lager nochmals ansehen.
 
 Hinterlegt in `tools/gen_daughtercard_sch.py`, Dict `LCSC`.
 
@@ -34,7 +37,7 @@ Hinterlegt in `tools/gen_daughtercard_sch.py`, Dict `LCSC`.
 |---|---|---|---|---|---|
 | R1, R3, R5, R7 | 10 kΩ | 0805 | C17414 | Basic | |
 | R2, R4, R6, R11, R13, R15 | 1 kΩ | 0805 | C17513 | Basic | |
-| R8, R12 | 100 kΩ | 0805 | C17407 | Basic | |
+| R8, R12 | 100 kΩ | 0805 | **C149504** | Basic | C17407 von JLC stillgelegt |
 | R9 | 4,7 kΩ | 0805 | C17673 | Basic | |
 | R16 | 120 Ω | 0805 | C17437 | Basic | **war 1206** — siehe Entscheidung D-1 |
 | R14 | 0 Ω | 1206 | C17888 | Basic | Handlöt-Brücke, Bauform bewusst groß |
@@ -44,11 +47,11 @@ Hinterlegt in `tools/gen_daughtercard_sch.py`, Dict `LCSC`.
 | C3 | 10 µF / 50 V | 1206 | C13585 | Basic | Reserve-Bulk; siehe D-2 |
 | Q2 | MMBT3904 | SOT-23 | C20526 | Basic | NPN, Triac-Treiberstufe |
 | Q3 | MMBT3904 | SOT-23 | (C20526) | — | **DNP**, nicht bestückt |
-| U1 | ATtiny1616-SNR | SOIC-20 | C614136 | **Extended** | ~1,57 USD + Rüstkosten |
-| U2 | TP8485E-SR | SOIC-8 | C94206 | **Extended** | ~0,30 USD + Rüstkosten |
-| D1, D2, D3 | BAT54S | SOT-23 | — | **Extended** | im Basic-Snapshot nicht vorhanden; im Cart wählen |
-| Q1 | BSS84 | SOT-23 | — | offen | Kandidat **C8492** (P-MOSFET 50 V / 130 mA) — vor Bestellung Anschlussbild prüfen |
-| D4 | LED grün | 0805 | — | offen | im Cart eine Basic-LED wählen (z. B. KT-0805G) |
+| U1 | ATtiny1616-SNR | SOIC-20 | C614136 | **Extended** | **JLC-Lager knapp (Dutzend)** — vor Bestellung prüfen, ggf. selbst nachlöten |
+| U2 | TP8485E-SR | SOIC-8 | C94206 | **Extended** | Lager > 100 k |
+| D1, D2, D3 | BAT54S | SOT-23 | **C19726** | **Extended** | BAT54SLT1G (onsemi), SOT-23, Lager > 500 k |
+| Q1 | BSS84 | SOT-23 | **C8492** | **Extended** | LBSS84LT1G (LRC), SOT-23, Lager > 260 k. Pinout G/S/D 1/2/3 wie Symbol geprüft |
+| D4 | LED grün | 0805 | **C2297** | Basic | KT-0805G — **0805, kein 0201** → Economic PCBA bleibt |
 | F1 | 0 Ω | 1206 | C17888 | Basic | 0-Ω-Brücke statt PTC (D-3, umgesetzt) |
 
 **Von Hand zu löten (weder in BOM noch CPL):** J1–J6 (Stiftwannen,
@@ -119,12 +122,25 @@ LCSC **C17888** (Basic, wie R14). Fail-Safe übernehmen der Firmware-Watchdog
 (1 s) und die Laufzeitgrenze nach Fehlercode 0x05 (Spez. 8), nicht die
 Versorgungssicherung. Schaltplan v0.6, Änderungshistorie fortgeschrieben.
 
-### D-4 — Q1 BSS84: LCSC-Nummer festlegen
+### D-4 — Q1 BSS84 ✅ festgelegt (01.09.2026)
 
-C8492 aus dem Basic-Snapshot ist ein P-Kanal-MOSFET 50 V / 130 mA in SOT-23 und
-entspricht dem BSS84-Datenblatt. **Vor der Bestellung** im JLCPCB-Parts-Manager
-Anschlussbild (G/S/D an 1/2/3) und Basic-Status bestätigen, dann in `LCSC`
-eintragen.
+**Q1 = `C8492`** (LBSS84LT1G von LRC, SOT-23, Lager > 260 k). Kein Basic-BSS84
+bei JLC verfügbar → Extended (~3 USD einmalig, Economic-PCBA-tauglich). Pinout
+G/S/D an 1/2/3 entspricht dem KiCad-Symbol (Phase-12-Prüfung). Der erste
+JLC-Auto-Match (`C7420340`) hatte nur 7 Stück auf Lager.
+
+### D-6 — LED, 100 k, BAT54S neu zugeordnet (01.09.2026)
+
+Bei der JLC-Prüfung des Fertigungspakets aufgefallen:
+
+- **D4 (grüne LED):** ohne LCSC-Nummer hatte JLC eine **0201**-LED zugeordnet →
+  Zwang zu *Standard PCBA* (25 USD/Seite, Platine auf 74 × 70 mm vergrößert).
+  Fest gesetzt auf **`C2297`** (KT-0805G, 0805, Basic) → **Economic PCBA bleibt,
+  Platinenmaß unverändert.**
+- **R8, R12 (100 kΩ):** `C17407` von JLC stillgelegt, Bestand 0 → **`C149504`**
+  (Basic, Lager > 5 M).
+- **D1–D3 (BAT54S):** fest auf **`C19726`** (BAT54SLT1G, onsemi, SOT-23,
+  Lager > 500 k) statt „im Cart wählen".
 
 ### D-5 — Spannungsabfall der +5V-Kette bei 0,5-mm-Bahnen
 
@@ -197,7 +213,9 @@ jetzt steht:
 | `daughtercard-gerbers.zip` | Gerber (F/B Cu, Paste, Silk, Mask, Edge.Cuts) + Excellon-Bohrdatei + Map + `.gbrjob` |
 | `gerber/` | dieselben Dateien einzeln |
 | `BOM.csv` / `CPL.csv` | SMT-Bestückung, JLCPCB-Format — **ohne J1–J6** (Handlötung), ohne DNP/JP/TP/H |
-| `README.md` | Bestellhinweise: schwarze Maske / weißer Druck, LCSC-Nachtrag für D1–D3/Q1/D4, JLC-Drehungsprüfung, Handlöt-Liste, J1-Verpolwarnung |
+| `README.md` | Bestellhinweise: schwarze Maske / weißer Druck, Extended-Teile + U1-Lagerwarnung, JLC-Drehungsprüfung, Handlöt-Liste, J1-Verpolwarnung |
 
-Bei jeder Layoutänderung neu erzeugen. Die 5 Positionen ohne LCSC-Nummer
-(D1–D3, Q1, D4) trägt der Nutzer im JLCPCB-Warenkorb nach.
+Bei jeder Layoutänderung neu erzeugen (`--no-gerber`, wenn sich nur
+LCSC-Nummern geändert haben). **Alle Positionen haben eine LCSC-Nummer** — im
+JLC-Warenkorb ist nichts mehr manuell zuzuordnen. Einzige Restunsicherheit:
+U1 `C614136` (ATtiny1616) hat bei JLC nur wenige Dutzend auf Lager.
