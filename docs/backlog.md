@@ -188,6 +188,32 @@ Spezifikation v0.14. Am Gerät noch nicht gegen einen Broker getestet.
 
 ---
 
+## T15 — Sicherheitspaket Zentralsteuerung
+
+Die Web-/REST-Schnittstelle war ohne Authentifizierung erreichbar und `/api/update`
+nahm jedes gültige ESP32-C3-Image an. Prüfauftrag des Betreibers.
+
+- **Signiertes Browser-OTA.** Container `krone-master-esp32c3.kota` (Magic,
+  `img_len`, SHA-256, ECDSA-P-256-Signatur über den Header). `lib/otaverify`
+  (Parser, host-getestet), `src/ota_sign.cpp` (mbedTLS-Verify + Streaming-SHA),
+  `tools/ota_keys.py` (Schlüssel + Signatur), Public Key einkompiliert
+  (`lib/otaverify/ota_pubkey.h`), privater Schlüssel nie im Repo.
+  `build_master_firmware.py` signiert automatisch. `docs/firmware-signing.md`.
+- **Zugriffsschutz.** `guard()`-Wrapper vor jedem Endpunkt: Herkunftsfilter
+  `net_scope` (0 alle / 1 RFC1918 + eigenes Subnetz, Vorgabe / 2 nur eigenes
+  Subnetz) + optionale HTTP-Basic-Auth (`admin_user`/`admin_pass`, Passwort nie
+  ausgeliefert). Einstellungen › *Zugriffsschutz*. NF-9.
+- **Repo-Hygiene.** Private E-Mail aus `pruefpunkte-*.md` / `symbolpruefung*.md`
+  entfernt; `docs/messprotokolle/*.jpg` ohne EXIF und auf 2000 px verkleinert
+  (19 MB → 2,3 MB); `.gitignore` um Schlüsselmuster ergänzt.
+
+**Fertig, wenn:** `pio run -e esp32c3` kompiliert, `pio test -e native` grün,
+Sign-/Verify-Roundtrip geprüft.
+**Erledigt 08.09.2026** — `pio test -e native` 50/50, Flash ~1010 KB (77,0 %).
+Spezifikation v0.16. mbedTLS-Verify am Gerät noch nicht getestet.
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.

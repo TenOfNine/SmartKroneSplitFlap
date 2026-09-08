@@ -83,6 +83,13 @@ committet unter `firmware/master/prebuilt/`; neu bauen mit
 `python tools/build_master_firmware.py` oder direkt
 `pio run -e esp32c3 -t upload -d firmware/master`.
 
+Spätere Updates laufen über die Web-UI (*Einstellungen › Firmware aktualisieren*):
+den **signierten Container** `firmware/master/prebuilt/krone-master-esp32c3.kota`
+hochladen. Das Modul verlangt eine gültige ECDSA-Signatur des Projektschlüssels —
+Einrichtung siehe [`docs/firmware-signing.md`](docs/firmware-signing.md). Der
+Zugriff auf Web-UI/REST ist ab Werk auf private Netze beschränkt und lässt sich
+mit einem Passwort schützen (*Einstellungen › Zugriffsschutz*).
+
 **Daughter Card (ATtiny1616).** Über die UPDI-Stiftleiste J6. Nötig: ein
 USB-Seriell-Adapter (FTDI o. ä.) mit einem 4,7-kΩ-Widerstand zwischen dessen TX
 und RX; TX/RX gemeinsam an J6 Pin 2 (UPDI), GND an Pin 1, +5 V an Pin 3. Dann
