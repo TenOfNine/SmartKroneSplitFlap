@@ -54,6 +54,10 @@ jobs:
         run: python tools/check_flash.py firmware/module/.pio/build/attiny1616/firmware.elf 8192
       - name: Master-Firmware (ESP32-C3)
         run: pio run -e esp32c3 -d firmware/master
+      - name: Prebuilt-OTA-Container gegen den einkompilierten Public Key pruefen
+        run: |
+          pip install cryptography
+          python tools/ota_keys.py verify firmware/master/prebuilt/krone-master-esp32c3.kota
 
   hardware:
     name: Schaltplan-ERC

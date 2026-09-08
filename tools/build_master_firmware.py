@@ -6,19 +6,23 @@ firmware/master/prebuilt/ ab (fuer Webflasher / esptool-js / ESP Web Tools).
 
 Erzeugt:
   firmware/master/prebuilt/
-    krone-master-esp32c3.factory.bin   Merged-Image, an Offset 0x0 flashen
+    krone-master-esp32c3.factory.bin   Merged-Image, an Offset 0x0 flashen (USB)
+    krone-master-esp32c3.kota          signierter App-Container fuers Browser-OTA
     manifest.json                      Manifest fuer ESP Web Tools
     README.md                          Kurzanleitung + SHA-256
 
-Die Einzeldateien (bootloader/partitions/boot_app0/app) stehen weiter unter
-firmware/master/.pio/build/esp32c3/ (gitignored). Bei jeder Firmware-Aenderung
-neu ausfuehren.
+Der .kota-Container wird mit tools/ota_keys.py signiert (privater Schluessel aus
+KRONE_OTA_KEY oder ~/.config/krone/ota-signing.pem). Fehlt der Schluessel, wird
+nur die factory.bin erzeugt. Die Einzeldateien (bootloader/partitions/boot_app0/
+app) stehen weiter unter firmware/master/.pio/build/esp32c3/ (gitignored). Bei
+jeder Firmware-Aenderung neu ausfuehren.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import date
@@ -53,6 +57,22 @@ def _esptool() -> list[str]:
     return [sys.executable, str(et)]
 
 
+def _sign_ota(image: Path, out: Path) -> bool:
+    """firmware.bin -> signierter .kota-Container. True, wenn signiert."""
+    env = os.environ.get("KRONE_OTA_KEY", "")
+    key_path = Path(env) if (env and "BEGIN" not in env) else (
+        Path.home() / ".config" / "krone" / "ota-signing.pem")
+    if not (env and "BEGIN" in env) and not key_path.is_file():
+        print(f"WARNUNG: kein OTA-Signaturschluessel ({key_path}); {out.name} wird "
+              f"nicht erzeugt. 'python tools/ota_keys.py init' anlegen.", file=sys.stderr)
+        return False
+    r = subprocess.run([sys.executable, str(REPO / "tools" / "ota_keys.py"),
+                        "sign", str(image), str(out)])
+    if r.returncode != 0:
+        sys.exit("Signieren fehlgeschlagen.")
+    return True
+
+
 def _boot_app0() -> Path:
     base = REPO.home() / ".platformio" / "packages" / "framework-arduinoespressif32"
     p = next(base.rglob("boot_app0.bin"), None)
@@ -85,13 +105,17 @@ def main() -> int:
         cmd += [hex(off), str(BUILD / name)]
     subprocess.run(cmd, check=True, capture_output=True)
 
-    # App-Image (ohne Bootloader/Partitionstabelle) fuer das OTA-Update aus der
-    # Web-UI -- hier NICHT die factory.bin verwenden.
-    ota = OUT / "krone-master-esp32c3.ota.bin"
-    ota.write_bytes((BUILD / "firmware.bin").read_bytes())
+    # Signierter Container fuer das OTA-Update aus der Web-UI (App-Image +
+    # Header mit SHA-256 und ECDSA-P-256-Signatur). Ohne privaten Schluessel
+    # wird er uebersprungen -- der USB-Erst-Flash bleibt moeglich.
+    ota = OUT / "krone-master-esp32c3.kota"
+    old_ota_bin = OUT / "krone-master-esp32c3.ota.bin"
+    if old_ota_bin.exists():
+        old_ota_bin.unlink()
+    signed = _sign_ota(BUILD / "firmware.bin", ota)
 
     digest = hashlib.sha256(factory.read_bytes()).hexdigest()
-    ota_digest = hashlib.sha256(ota.read_bytes()).hexdigest()
+    ota_digest = hashlib.sha256(ota.read_bytes()).hexdigest() if signed else "(nicht signiert -- kein Schluessel)"
     head = subprocess.run(["git", "-C", str(REPO), "rev-parse", "--short", "HEAD"],
                           capture_output=True, text=True).stdout.strip()
 
@@ -117,10 +141,10 @@ def main() -> int:
         "| Datei | Zweck |\n|---|---|\n"
         "| `index.html` | Web-Flasher (ESP Web Tools). Wird per GitHub Actions als Page veroeffentlicht. |\n"
         "| `krone-master-esp32c3.factory.bin` | Merged-Image fuer den **Erst-Flash ueber USB** (Offset 0x0) |\n"
-        "| `krone-master-esp32c3.ota.bin` | App-Image fuer das **OTA-Update aus der Web-UI** (Einstellungen > System > Firmware aktualisieren) |\n"
+        "| `krone-master-esp32c3.kota` | **signierter** App-Container fuer das **OTA-Update aus der Web-UI** (Einstellungen > Firmware aktualisieren). Header mit SHA-256 + ECDSA-P-256-Signatur; das Modul lehnt fremde/manipulierte Dateien ab. Siehe `docs/firmware-signing.md`. |\n"
         "| `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |\n\n"
         f"SHA-256 `factory.bin`: `{digest}`  \n"
-        f"SHA-256 `ota.bin`: `{ota_digest}`\n\n"
+        f"SHA-256 `kota`: `{ota_digest}`\n\n"
         "## Erst-Flash (USB)\n\n"
         "- **Browser:** <https://tenofnine.github.io/SmartKroneSplitFlap/> "
         "(laedt immer diesen Verzeichnisstand). Chrome/Edge Desktop.\n"
@@ -133,11 +157,13 @@ def main() -> int:
         "krone-master-esp32c3.factory.bin\n"
         "  ```\n\n"
         "## Spaetere Updates (OTA)\n\n"
-        "*Einstellungen > System > Firmware aktualisieren* -> "
-        "`krone-master-esp32c3.ota.bin` hochladen (nicht die `.factory.bin`). "
-        "Kein Toolchain, jeder Browser. Bei Fehler bleibt die alte Firmware aktiv, "
-        "die Einstellungen (NVS) bleiben erhalten. In den *Schnittstellen* "
-        "abschaltbar; ein Netzwerk-OTA (ArduinoOTA) gibt es bewusst nicht.\n\n"
+        "*Einstellungen > Firmware aktualisieren* -> "
+        "`krone-master-esp32c3.kota` hochladen (nicht die `.factory.bin`). "
+        "Das Modul prueft Signatur und Pruefsumme, schreibt in die zweite "
+        "App-Partition und startet neu; fremde oder beschaedigte Dateien werden "
+        "abgelehnt, die laufende Firmware bleibt aktiv. Kein Toolchain, jeder "
+        "Browser. In den *Schnittstellen* abschaltbar; ein Netzwerk-OTA "
+        "(ArduinoOTA) gibt es bewusst nicht.\n\n"
         "Nach dem Boot: Access-Point `krone_anzeige` fuer die WLAN-Einrichtung, "
         "serielle Konsole auf USB-C (115200 Bd). Status-LED (GPIO6): schnelles "
         "Blinken = kein WLAN.\n\n"
@@ -146,9 +172,10 @@ def main() -> int:
         encoding="utf-8",
     )
 
+    kota_note = f"{ota.stat().st_size // 1024} KiB" if signed else "uebersprungen"
     print(f"geschrieben: {OUT.relative_to(REPO)}/  "
           f"(factory.bin {factory.stat().st_size // 1024} KiB, "
-          f"ota.bin {ota.stat().st_size // 1024} KiB)")
+          f"kota {kota_note})")
     return 0
 
 
