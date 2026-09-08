@@ -383,7 +383,7 @@ a{color:var(--cool)}::selection{background:var(--amber);color:var(--ai)}
 .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.row.mt{margin-top:12px}
 input[type=text],input[type=password],input[type=number],input[type=datetime-local],select{background:var(--p2);border:1px solid var(--line);border-radius:var(--rs);padding:9px 11px;width:100%;outline:0}
 input:focus,select:focus{border-color:var(--amberd)}
-.field{display:flex;flex-direction:column;gap:6px}.field .lbl{color:var(--dim)}
+.field{display:flex;flex-direction:column;gap:6px}.field .lbl{color:var(--dim)}.field[hidden]{display:none}
 .btn{background:var(--p3);border:1px solid var(--line);border-radius:var(--rs);padding:9px 15px;cursor:pointer;font-weight:600;color:var(--ink)}
 .btn:hover{border-color:var(--faint);background:var(--p2)}
 .btn.primary{background:var(--amber);border-color:var(--amber);color:var(--ai)}.btn.primary:hover{background:#ffbe52}
@@ -421,6 +421,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 .switch .t::after{content:"";position:absolute;left:2px;top:2px;width:16px;height:16px;border-radius:50%;background:var(--dim);transition:.15s}
 .switch input:checked+.t{background:rgba(86,184,119,.28);border-color:var(--ok)}
 .switch input:checked+.t::after{left:18px;background:var(--ok)}
+.switch input:disabled{cursor:default}.switch input:disabled+.t{opacity:.4}
 .trow{display:flex;align-items:flex-start;gap:14px;padding:12px 0;border-top:1px solid var(--ls)}
 .trow:first-of-type{border-top:0}.trow .tx{flex:1;min-width:0}.trow .tx b{font-weight:600;display:block}.trow .tx span{font-size:12px;color:var(--faint)}
 .collapse{margin-top:12px;padding-left:14px;border-left:2px solid var(--line)}.collapse[hidden]{display:none}
@@ -507,7 +508,11 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=tx><b>Zeit über NTP beziehen</b><span>Aus = die Uhr wird ausschließlich manuell gestellt (freilaufend, ESP32-C3 ohne gepufferte RTC).</span></div></div>
 <div class="grid c2" style=margin-top:12px>
 <div class=field><span class=lbl>NTP-Server</span><input type=text id=cf_ntp_server></div>
-<div class=field><span class=lbl>Zeitzone (POSIX TZ)</span><input type=text id=cf_tz></div></div>
+<div class=field><span class=lbl>Zeitzone</span><select id=cf_tzsel></select></div></div>
+<div class=field style="margin-top:10px" hidden id=tzcustf><span class=lbl>POSIX-TZ-String</span><input type=text id=cf_tz></div>
+<div class=trow style=margin-top:12px><label class=switch><input type=checkbox id=cf_dst checked><span class=t></span></label>
+<div class=tx><b>Sommerzeit (DST)</b><span>Automatische Sommer-/Winterzeit-Umstellung nach den Regeln der gewählten Zone. Aus = ganzjährig Normalzeit.</span></div></div>
+<p class=hint id=tzhint></p>
 <div class="row mt"><button class="btn primary" data-save=time>Speichern &amp; synchronisieren</button></div>
 <div class="row" style=margin-top:16px><input type=datetime-local id=mtime style=max-width:240px>
 <button class=btn id=setclock>Uhr manuell setzen</button></div>
@@ -653,12 +658,51 @@ return `<div class=e><time>+${dur(e.t/1000)}</time>${pill}<div><span class=who>$
 // ── Einstellungen ──
 const CF=["mqtt_host","mqtt_port","mqtt_user","mqtt_pass","base_topic","node_id","modules","hms","ntp_server","tz","ip","mask","gw","dns"];
 const CB=["use_static","ntp_enabled","mqtt_enabled","api_write","ota_enabled","mdns_enabled"];
+// Zeitzonen: [Anzeige, Normalzeit-TZ, TZ mit Sommerzeitregel ("" = Zone ohne DST)]
+const TZ=[
+["Berlin · Paris · Madrid · Rom · Wien","CET-1","CET-1CEST,M3.5.0,M10.5.0/3"],
+["London · Dublin · Lissabon","GMT0","GMT0BST,M3.5.0/1,M10.5.0"],
+["Athen · Helsinki · Kiew · Bukarest","EET-2","EET-2EEST,M3.5.0/3,M10.5.0/4"],
+["Moskau · Istanbul","MSK-3",""],
+["UTC","UTC0",""],
+["New York · Toronto","EST5","EST5EDT,M3.2.0,M11.1.0"],
+["Chicago · Mexiko-Stadt","CST6","CST6CDT,M3.2.0,M11.1.0"],
+["Denver","MST7","MST7MDT,M3.2.0,M11.1.0"],
+["Los Angeles · Vancouver","PST8","PST8PDT,M3.2.0,M11.1.0"],
+["São Paulo","BRT3",""],
+["Buenos Aires","ART3",""],
+["Dubai · Abu Dhabi","GST-4",""],
+["Indien (Kolkata)","IST-5:30",""],
+["Bangkok · Jakarta","ICT-7",""],
+["Peking · Singapur · Hongkong","CST-8",""],
+["Tokio · Seoul","JST-9",""],
+["Sydney · Melbourne","AEST-10","AEST-10AEDT,M10.1.0,M4.1.0/3"],
+["Auckland","NZST-12","NZST-12NZDT,M9.5.0,M4.1.0/3"]];
+(function(){const s=$("#cf_tzsel");if(!s)return;
+TZ.forEach((z,i)=>s.add(new Option(z[0],i)));
+s.add(new Option("Andere (POSIX-TZ-String) …","custom"));
+s.onchange=tzUi;$("#cf_dst").onchange=tzUi;$("#cf_tz").oninput=tzUi;})();
+function tzString(){const s=$("#cf_tzsel");if(!s)return cfg.tz||"";
+if(s.value==="custom")return $("#cf_tz").value.trim();
+const z=TZ[+s.value];return($("#cf_dst").checked&&z[2])?z[2]:z[1];}
+function tzUi(){const s=$("#cf_tzsel"),c=s.value==="custom",z=c?null:TZ[+s.value],hasDst=!!(z&&z[2]);
+$("#tzcustf").hidden=!c;
+$("#cf_dst").disabled=c||!hasDst;
+if(!c&&!hasDst)$("#cf_dst").checked=false;
+$("#tzhint").textContent=(c?"POSIX-TZ-String: ":"Gespeichert wird: ")+(tzString()||"—");}
+function tzLoad(tz){const s=$("#cf_tzsel");if(!s)return;
+let i=TZ.findIndex(z=>z[2]===tz),dst=true;
+if(i<0){i=TZ.findIndex(z=>z[1]===tz);dst=false;}
+if(i<0){s.value="custom";$("#cf_tz").value=tz;}
+else{s.value=String(i);$("#cf_dst").checked=dst;}
+tzUi();}
 async function loadCfg(){try{cfg=await J("/api/config")}catch(e){return}
 $("#cf_hms").value=Math.round((cfg.hms_timeout_s||600)/60);
 $("#cf_modules").value=cfg.module_count;
 $("#cf_mqtt_port").value=cfg.mqtt_port;
 ["mqtt_host","mqtt_user","mqtt_pass","base_topic","node_id","ntp_server","tz","ip","mask","gw","dns"].forEach(k=>{const el=$("#cf_"+k);if(el)el.value=cfg[k]??""});
 $("#cf_sep").value=cfg.sep||".";
+tzLoad(cfg.tz||"CET-1CEST,M3.5.0,M10.5.0/3");
 CB.forEach(k=>{const el=$("#cf_"+k);if(el)el.checked=!!cfg[k]});
 $("#ipf").hidden=!cfg.use_static;$("#mqf").style.opacity=cfg.mqtt_enabled?1:.4;
 $("#iphint").innerHTML=cfg.use_static?"Feste Adresse — wird beim Speichern übernommen.":`Aktuell per DHCP: <b style="font-family:var(--mono);color:var(--ink)">${sys.ip||"—"}</b>`;
@@ -678,7 +722,7 @@ function collectCfg(){return{
 mqtt_host:$("#cf_mqtt_host").value,mqtt_port:+$("#cf_mqtt_port").value,mqtt_user:$("#cf_mqtt_user").value,
 mqtt_pass:$("#cf_mqtt_pass").value,base_topic:$("#cf_base_topic").value,node_id:$("#cf_node_id")?.value||cfg.node_id,
 module_count:+$("#cf_modules").value,hms_timeout_s:(+$("#cf_hms").value||10)*60,
-ntp_server:$("#cf_ntp_server").value,tz:$("#cf_tz").value,ntp_enabled:$("#cf_ntp_enabled").checked,
+ntp_server:$("#cf_ntp_server").value,tz:tzString(),ntp_enabled:$("#cf_ntp_enabled").checked,
 sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
 api_write:$("#cf_api_write").checked,ota_enabled:$("#cf_ota_enabled").checked,mdns_enabled:$("#cf_mdns_enabled").checked}}
@@ -741,7 +785,10 @@ $("#syskv").innerHTML=`
 <dt>RAM</dt><dd>${kb(hf)} / ${kb(ht)} KB frei · ${hpct} % belegt <span style=color:var(--faint)>(min ${kb(sys.heap_min)} KB)</span></dd>
 <dt>Temperatur</dt><dd>${tc}</dd>
 <dt>Programm / OTA</dt><dd>${kb(sys.sketch_used)} KB belegt · ${kb(sys.sketch_free)} KB frei für Update</dd>
-<dt>OTA (Web-UI)</dt><dd>${sys.ota_enabled?"erlaubt":"gesperrt"}</dd>`}
+<dt>OTA (Web-UI)</dt><dd>${sys.ota_enabled?"erlaubt":"gesperrt"}</dd>
+<dt>Zeitzone</dt><dd>${tzName(sys.tz)}</dd>`}
+function tzName(tz){if(!tz)return"—";const z=TZ.find(z=>z[1]===tz||z[2]===tz);
+return z?z[0]+(z[2]===tz?" · Sommerzeit":z[2]?" · Normalzeit":""):tz;}
 
 // ── Poll-Schleifen ──
 async function refresh(){
