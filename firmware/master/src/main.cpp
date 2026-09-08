@@ -24,6 +24,7 @@
 #include <ESPmDNS.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
+#include <Update.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
@@ -38,8 +39,10 @@ extern "C" {
 #include "eventlog.h"
 #include "hadiscovery.h"
 #include "masterapp.h"
+#include "otaverify.h"
 #include "protocol.h"
 }
+#include "ota_sign.h"
 
 /* --- Hardware --------------------------------------------------------- */
 #ifndef RS485_UART_NUM
@@ -109,6 +112,11 @@ struct Settings {
     bool     api_write      = true;
     bool     ota_enabled    = true;
     bool     mdns_enabled   = true;
+
+    /* Zugriffsschutz */
+    char     admin_user[24] = "admin";
+    char     admin_pass[48] = "";        /* leer = keine Anmeldung noetig */
+    uint8_t  net_scope      = 1;         /* 0 alle, 1 RFC1918 (Vorgabe), 2 nur eigenes Subnetz */
 } cfg;
 
 static uint32_t last_poll_ms;
@@ -257,6 +265,11 @@ static void settings_load()
     cfg.api_write    = prefs.getBool("api_write", cfg.api_write);
     cfg.ota_enabled  = prefs.getBool("ota_en", cfg.ota_enabled);
     cfg.mdns_enabled = prefs.getBool("mdns_en", cfg.mdns_enabled);
+
+    prefs.getString("adm_user", cfg.admin_user, sizeof(cfg.admin_user));
+    if (!cfg.admin_user[0]) strlcpy(cfg.admin_user, "admin", sizeof(cfg.admin_user));
+    prefs.getString("adm_pass", cfg.admin_pass, sizeof(cfg.admin_pass));
+    cfg.net_scope = prefs.getUChar("net_scope", cfg.net_scope);
     prefs.end();
 }
 
@@ -285,6 +298,9 @@ static void settings_save()
     prefs.putBool("api_write", cfg.api_write);
     prefs.putBool("ota_en", cfg.ota_enabled);
     prefs.putBool("mdns_en", cfg.mdns_enabled);
+    prefs.putString("adm_user", cfg.admin_user);
+    prefs.putString("adm_pass", cfg.admin_pass);
+    prefs.putUChar("net_scope", cfg.net_scope);
     prefs.end();
 }
 
@@ -546,6 +562,20 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <p class="hint warn">Die Web-Oberfläche selbst lässt sich hier nicht abschalten.</p>
 <div class="row mt"><button class="btn primary" data-save=iface>Speichern</button></div></div>
 
+<div class=sect><h3>Zugriffsschutz</h3>
+<div class=field style=max-width:360px><span class=lbl>Zugriff von</span><select id=cf_net_scope>
+<option value=1>Private Netze (RFC1918) — empfohlen</option>
+<option value=2>Nur eigenes Subnetz</option>
+<option value=0>Alle Adressen zulassen</option></select></div>
+<p class=hint>Anfragen von außerhalb werden mit <code>403</code> abgewiesen. Bei „Private Netze" oder „eigenes Subnetz" greift eine Portweiterleitung aus dem Internet nicht mehr. mDNS, MQTT und NTP sind ausgehend und nicht betroffen.</p>
+<div class="grid c2" style=margin-top:12px>
+<div class=field><span class=lbl>Benutzername</span><input type=text id=cf_admin_user autocomplete=username></div>
+<div class=field><span class=lbl>Passwort</span><input type=password id=cf_admin_pass autocomplete=new-password placeholder="(leer = keine Anmeldung)"></div></div>
+<div class=trow style=margin-top:10px><label class=switch><input type=checkbox id=cf_admin_clear><span class=t></span></label>
+<div class=tx><b>Passwort entfernen</b><span>Anmeldung wieder abschalten. Sonst bleibt ein gesetztes Passwort erhalten, wenn das Feld leer bleibt.</span></div></div>
+<p class=hint id=authhint></p>
+<div class="row mt"><button class="btn primary" data-save=access>Speichern</button></div></div>
+
 <div class=sect><h3>System</h3>
 <div class=field style=max-width:320px><span class=lbl>Hostname / mDNS-Name</span><input type=text id=cf_node_id placeholder=krone_anzeige></div>
 <p class=hint>Wird für mDNS (<code>&lt;name&gt;.local</code>), OTA und die MQTT-Client-ID verwendet. Nach dem Speichern neu starten.</p>
@@ -558,8 +588,8 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 </div>
 
 <div class=sect><h3>Firmware aktualisieren</h3>
-<p class=hint>App-Image <code>krone-master-esp32c3.ota.bin</code> hochladen — <b>nicht</b> die <code>.factory.bin</code>. Das Modul schreibt es in die zweite App-Partition und startet neu; bei einem Fehler bleibt die laufende Firmware aktiv.</p>
-<div class="row mt"><label class="btn" style=cursor:pointer>Datei wählen<input type=file id=fw accept=".bin,application/octet-stream" hidden></label>
+<p class=hint>Signierten Container <code>krone-master-esp32c3.kota</code> hochladen. Das Modul prüft <b>Herkunft (Signatur)</b> und Prüfsumme, schreibt dann in die zweite App-Partition und startet neu. Fremde, manipulierte oder beschädigte Dateien werden abgewiesen; die laufende Firmware bleibt aktiv.</p>
+<div class="row mt"><label class="btn" style=cursor:pointer>Datei wählen<input type=file id=fw accept=".kota,application/octet-stream" hidden></label>
 <span id=fwname class=hint style=margin:0>keine Datei</span></div>
 <div id=fwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
 <div id=fwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
@@ -703,6 +733,13 @@ $("#cf_mqtt_port").value=cfg.mqtt_port;
 ["mqtt_host","mqtt_user","mqtt_pass","base_topic","node_id","ntp_server","tz","ip","mask","gw","dns"].forEach(k=>{const el=$("#cf_"+k);if(el)el.value=cfg[k]??""});
 $("#cf_sep").value=cfg.sep||".";
 tzLoad(cfg.tz||"CET-1CEST,M3.5.0,M10.5.0/3");
+$("#cf_net_scope").value=String(cfg.net_scope??1);
+$("#cf_admin_user").value=cfg.admin_user||"admin";
+$("#cf_admin_pass").value="";$("#cf_admin_clear").checked=false;
+$("#cf_admin_pass").placeholder=cfg.admin_set?"(gesetzt — leer lassen = unverändert)":"(leer = keine Anmeldung)";
+$("#authhint").textContent=cfg.admin_set
+?"Anmeldung aktiv. Nach dem Speichern fragt der Browser neu nach."
+:"Ohne Passwort ist die Oberfläche im zugelassenen Netz ohne Anmeldung erreichbar.";
 CB.forEach(k=>{const el=$("#cf_"+k);if(el)el.checked=!!cfg[k]});
 $("#ipf").hidden=!cfg.use_static;$("#mqf").style.opacity=cfg.mqtt_enabled?1:.4;
 $("#iphint").innerHTML=cfg.use_static?"Feste Adresse — wird beim Speichern übernommen.":`Aktuell per DHCP: <b style="font-family:var(--mono);color:var(--ink)">${sys.ip||"—"}</b>`;
@@ -718,16 +755,22 @@ $("#cf_use_static").onchange=e=>$("#ipf").hidden=!e.target.checked;
 $("#cf_mqtt_enabled").onchange=e=>$("#mqf").style.opacity=e.target.checked?1:.4;
 $("#cf_ota_enabled").onchange=e=>{cfg.ota_enabled=e.target.checked;otaUiState()};
 
-function collectCfg(){return{
+function collectCfg(){const o={
 mqtt_host:$("#cf_mqtt_host").value,mqtt_port:+$("#cf_mqtt_port").value,mqtt_user:$("#cf_mqtt_user").value,
 mqtt_pass:$("#cf_mqtt_pass").value,base_topic:$("#cf_base_topic").value,node_id:$("#cf_node_id")?.value||cfg.node_id,
 module_count:+$("#cf_modules").value,hms_timeout_s:(+$("#cf_hms").value||10)*60,
 ntp_server:$("#cf_ntp_server").value,tz:tzString(),ntp_enabled:$("#cf_ntp_enabled").checked,
 sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
-api_write:$("#cf_api_write").checked,ota_enabled:$("#cf_ota_enabled").checked,mdns_enabled:$("#cf_mdns_enabled").checked}}
+api_write:$("#cf_api_write").checked,ota_enabled:$("#cf_ota_enabled").checked,mdns_enabled:$("#cf_mdns_enabled").checked,
+net_scope:+$("#cf_net_scope").value,admin_user:$("#cf_admin_user").value||"admin"};
+// admin_pass nur mitschicken, wenn ein neues gesetzt oder "entfernen" gewählt wurde
+if($("#cf_admin_clear").checked)o.admin_pass="";
+else if($("#cf_admin_pass").value)o.admin_pass=$("#cf_admin_pass").value;
+return o}
 $$("[data-save]").forEach(b=>b.onclick=async()=>{
-await P("/api/config",collectCfg());toast("Gespeichert");setTimeout(loadCfg,400);
+await P("/api/config",collectCfg());
+toast(b.dataset.save==="access"?"Zugriffsschutz gespeichert":"Gespeichert");setTimeout(loadCfg,400);
 if((b.dataset.save==="host"||b.dataset.save==="iface")&&confirm("Für Hostname/Schnittstellen jetzt neu starten?")){
 await P("/api/reboot",{});toast("Neustart …")}});
 $("#setclock").onclick=async()=>{const v=$("#mtime").value;if(!v)return toast("Zeit wählen");
@@ -759,8 +802,8 @@ $("#fw").onchange=e=>{_fw=e.target.files[0]||null;
 $("#fwname").textContent=_fw?`${_fw.name} · ${Math.round(_fw.size/1024)} KB`:"keine Datei";
 otaUiState()};
 $("#fwgo").onclick=()=>{if(!_fw)return;
-if(!/\.bin$/i.test(_fw.name)&&!confirm("Die Datei endet nicht auf .bin — trotzdem einspielen?"))return;
-if(!confirm(`Firmware „${_fw.name}“ einspielen und neu starten?`))return;
+if(!/\.kota$/i.test(_fw.name)&&!confirm("Die Datei endet nicht auf .kota — das signierte App-Image wird erwartet. Trotzdem hochladen?"))return;
+if(!confirm(`Firmware „${_fw.name}“ prüfen und einspielen?`))return;
 const fd=new FormData();fd.append("firmware",_fw,_fw.name);
 const x=new XMLHttpRequest();x.open("POST","/api/update");
 $("#fwbar").style.display="block";$("#fwfill").style.width="0";$("#fwgo").disabled=true;
@@ -785,7 +828,8 @@ $("#syskv").innerHTML=`
 <dt>RAM</dt><dd>${kb(hf)} / ${kb(ht)} KB frei · ${hpct} % belegt <span style=color:var(--faint)>(min ${kb(sys.heap_min)} KB)</span></dd>
 <dt>Temperatur</dt><dd>${tc}</dd>
 <dt>Programm / OTA</dt><dd>${kb(sys.sketch_used)} KB belegt · ${kb(sys.sketch_free)} KB frei für Update</dd>
-<dt>OTA (Web-UI)</dt><dd>${sys.ota_enabled?"erlaubt":"gesperrt"}</dd>
+<dt>OTA (Web-UI)</dt><dd>${sys.ota_enabled?"erlaubt":"gesperrt"} · ${sys.ota_signed?"nur signiert":"unsigniert"}</dd>
+<dt>Zugriff</dt><dd>${["alle Adressen","private Netze (RFC1918)","nur eigenes Subnetz"][sys.net_scope??1]} · Anmeldung ${sys.auth_on?"aktiv":"aus"}</dd>
 <dt>Zeitzone</dt><dd>${tzName(sys.tz)}</dd>`}
 function tzName(tz){if(!tz)return"—";const z=TZ.find(z=>z[1]===tz||z[2]===tz);
 return z?z[0]+(z[2]===tz?" · Sommerzeit":z[2]?" · Normalzeit":""):tz;}
@@ -829,6 +873,63 @@ static bool body_json(JsonDocument &doc)
         return false;
     }
     return deserializeJson(doc, web.arg("plain")) == DeserializationError::Ok;
+}
+
+/* ---- Zugriffsschutz: Herkunft + optionale Anmeldung --------------- */
+
+/* true, wenn die anfragende IP nach cfg.net_scope zugelassen ist.
+ * 0 = alle, 1 = private Bereiche (RFC1918) + eigenes Subnetz, 2 = nur
+ * eigenes Subnetz. SoftAP-Portal und localhost immer erlaubt. */
+static bool client_is_local()
+{
+    const IPAddress r = web.client().remoteIP();
+    const uint32_t ri = (uint32_t)r;
+    if (ri == 0 || r[0] == 127) {
+        return true;
+    }
+    if (WiFi.getMode() & WIFI_AP) {
+        const IPAddress ap = WiFi.softAPIP();
+        if (r[0] == ap[0] && r[1] == ap[1] && r[2] == ap[2]) return true;
+    }
+    if (cfg.net_scope == 0) {
+        return true;
+    }
+    const uint32_t mask = (uint32_t)WiFi.subnetMask();
+    if (mask != 0 && ((uint32_t)WiFi.localIP() & mask) == (ri & mask)) {
+        return true;                                  /* eigenes Subnetz */
+    }
+    if (cfg.net_scope == 2) {
+        return false;
+    }
+    if (r[0] == 10) return true;
+    if (r[0] == 172 && r[1] >= 16 && r[1] <= 31) return true;
+    if (r[0] == 192 && r[1] == 168) return true;
+    if (r[0] == 169 && r[1] == 254) return true;      /* link-local */
+    return false;
+}
+
+static bool auth_required() { return cfg.admin_pass[0] != 0; }
+
+static bool auth_ok()
+{
+    return !auth_required() || web.authenticate(cfg.admin_user, cfg.admin_pass);
+}
+
+/* Handler-Wrapper: erst Herkunft, dann Anmeldung, dann der eigentliche
+ * Handler. Wird auf alle registrierten Endpunkte angewendet. */
+static WebServer::THandlerFunction guard(WebServer::THandlerFunction h)
+{
+    return [h]() {
+        if (!client_is_local()) {
+            send_json(403, "{\"error\":\"net_scope\"}");
+            return;
+        }
+        if (!auth_ok()) {
+            web.requestAuthentication();
+            return;
+        }
+        h();
+    };
 }
 
 /* ================================================================== */
@@ -883,6 +984,9 @@ static void handle_system()
     d["ota_enabled"]    = cfg.ota_enabled;
     d["mdns_enabled"]   = cfg.mdns_enabled;
     d["api_write"]      = cfg.api_write;
+    d["auth_on"]        = auth_required();
+    d["net_scope"]      = cfg.net_scope;
+    d["ota_signed"]     = true;
     d["crc_err"]        = g_bus.crc_errors;
     d["timeouts"]       = g_bus.timeouts;
     d["hostname"]       = cfg.node_id;
@@ -892,7 +996,7 @@ static void handle_system()
     d["sketch_used"]    = ESP.getSketchSize();
     d["sketch_free"]    = ESP.getFreeSketchSpace();
 
-    char out[768];
+    char out[832];
     serializeJson(d, out, sizeof(out));
     send_json(200, out);
 }
@@ -1076,6 +1180,13 @@ static void apply_config_doc(JsonDocument &doc)
     cpS("mask", cfg.mask, sizeof(cfg.mask));
     cpS("gw", cfg.gw, sizeof(cfg.gw));
     cpS("dns", cfg.dns, sizeof(cfg.dns));
+    cpS("admin_user", cfg.admin_user, sizeof(cfg.admin_user));
+    if (!cfg.admin_user[0]) strlcpy(cfg.admin_user, "admin", sizeof(cfg.admin_user));
+    /* admin_pass wird nur uebernommen, wenn die UI den Schluessel mitschickt
+     * (Feld ausgefuellt oder "entfernen" angehakt -> leerer String). */
+    cpS("admin_pass", cfg.admin_pass, sizeof(cfg.admin_pass));
+    if (doc["net_scope"].is<unsigned>() && (unsigned)doc["net_scope"] <= 2)
+        cfg.net_scope = doc["net_scope"];
     if (doc["mqtt_port"].is<unsigned>())     cfg.mqtt_port = doc["mqtt_port"];
     if (doc["module_count"].is<unsigned>())  cfg.module_count = doc["module_count"];
     if (doc["hms_timeout_s"].is<unsigned>()) cfg.hms_timeout_s = doc["hms_timeout_s"];
@@ -1128,6 +1239,9 @@ static void config_to_json(JsonDocument &d)
     d["api_write"]     = cfg.api_write;
     d["ota_enabled"]   = cfg.ota_enabled;
     d["mdns_enabled"]  = cfg.mdns_enabled;
+    d["admin_user"]    = cfg.admin_user;
+    d["admin_set"]     = cfg.admin_pass[0] != 0;   /* Passwort selbst nie ausliefern */
+    d["net_scope"]     = cfg.net_scope;
 }
 
 static void handle_config()
@@ -1141,7 +1255,7 @@ static void handle_config()
     }
     JsonDocument d;
     config_to_json(d);
-    char out[640];
+    char out[768];
     serializeJson(d, out, sizeof(out));
     send_json(200, out);
 }
@@ -1175,100 +1289,170 @@ static void handle_backup()
 
     JsonDocument d;
     config_to_json(d);
-    d["wifi_ssid"] = WiFi.SSID();
-    d["wifi_psk"]  = WiFi.psk();
-    char out[832];
+    d["admin_pass"] = cfg.admin_pass;   /* in der Sicherung, nicht ueber /api/config */
+    d["wifi_ssid"]  = WiFi.SSID();
+    d["wifi_psk"]   = WiFi.psk();
+    char out[960];
     serializeJson(d, out, sizeof(out));
     web.sendHeader("Content-Disposition", "attachment; filename=\"krone-backup.json\"");
     send_json(200, out);
 }
 
 /*
- * /api/update -- OTA aus dem Browser. Hochgeladen wird das App-Image
- * (krone-master-esp32c3.ota.bin), NICHT die .factory.bin. Der Upload-Handler
- * streamt es ueber die Update-Bibliothek in die inaktive App-Partition; bei
- * Fehler bleibt die laufende Firmware aktiv. Danach Neustart.
+ * /api/update -- OTA aus dem Browser. Hochgeladen wird der signierte Container
+ * krone-master-esp32c3.kota (siehe tools/ota_keys.py, docs/firmware-signing.md):
+ * 108-Byte-Header (Magic, img_len, SHA-256, ECDSA-P-256-Signatur) + App-Image.
  *
- * Gated durch den eigenen Schalter cfg.ota_enabled (unabhaengig von api_write).
- * ArduinoOTA (espota, offener UDP-Port ohne Passwort) gibt es nicht mehr --
- * Updates laufen ausschliesslich hierueber bzw. per USB.
+ * Ablauf im Upload-Handler:
+ *   1. Header puffern, otaverify_parse_header() -> Magic/Version/Laenge
+ *   2. ota_sign_verify_header() -> Signatur gegen den einkompilierten Public Key
+ *   3. Image streamend an Update.write() + Streaming-SHA-256
+ *   4. UPLOAD_FILE_END: SHA gegen den Header-Hash; erst dann Update.end()
+ * Schlaegt ein Schritt fehl, wird Update.abort() gerufen und die laufende
+ * Firmware bleibt aktiv.
+ *
+ * Zugang: guard() (Herkunft + Anmeldung) + Schalter cfg.ota_enabled.
+ * Kein ArduinoOTA/espota.
  */
-static bool g_ota_ok = false;
+static bool         g_ota_ok      = false;   /* Image wird geschrieben        */
+static bool         g_ota_begun   = false;   /* Update.begin() gerufen        */
+static size_t       g_ota_hdr_have = 0;
+static uint8_t      g_ota_hdr[OTA_HEADER_LEN];
+static ota_header_t g_ota_h;
+static uint32_t     g_ota_img_seen = 0;
+static char         g_ota_err[56]  = "";
+
+static void ota_fail(const char *why)
+{
+    strlcpy(g_ota_err, why, sizeof(g_ota_err));
+    if (g_ota_begun) Update.abort();
+    g_ota_ok = false;
+    g_ota_begun = false;
+    evlog_push(&g_log, millis(), EVLOG_ERR, "ota", "abgelehnt: %s", why);
+}
 
 static void handle_update_upload()
 {
     HTTPUpload &up = web.upload();
+
     if (up.status == UPLOAD_FILE_START) {
         g_ota_ok = false;
-        if (!cfg.ota_enabled) {
-            return;                         /* Antwort-Handler schickt 403 */
+        g_ota_begun = false;
+        g_ota_hdr_have = 0;
+        g_ota_img_seen = 0;
+        g_ota_err[0] = 0;
+        if (!client_is_local() || !auth_ok()) { strlcpy(g_ota_err, "kein Zugriff", sizeof(g_ota_err)); return; }
+        if (!cfg.ota_enabled)                 { strlcpy(g_ota_err, "ota_disabled", sizeof(g_ota_err)); return; }
+        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Upload: %s", up.filename.c_str());
+        return;
+    }
+
+    if (up.status == UPLOAD_FILE_WRITE) {
+        if (g_ota_err[0]) return;
+        const uint8_t *p = up.buf;
+        size_t n = up.currentSize;
+
+        /* 1) Header vervollstaendigen */
+        if (g_ota_hdr_have < OTA_HEADER_LEN) {
+            const size_t take = (OTA_HEADER_LEN - g_ota_hdr_have < n)
+                                    ? OTA_HEADER_LEN - g_ota_hdr_have : n;
+            memcpy(g_ota_hdr + g_ota_hdr_have, p, take);
+            g_ota_hdr_have += take;
+            p += take;
+            n -= take;
+            if (g_ota_hdr_have < OTA_HEADER_LEN) return;
+
+            const ota_hdr_result_t hr = otaverify_parse_header(
+                g_ota_hdr, OTA_HEADER_LEN, ESP.getFreeSketchSpace(), &g_ota_h);
+            if (hr != OTA_HDR_OK) { ota_fail(otaverify_strerror(hr)); return; }
+            if (!ota_sign_verify_header(g_ota_hdr, OTA_SIGNED_LEN, g_ota_h.sig)) {
+                ota_fail("Signatur ungueltig"); return;
+            }
+            if (!Update.begin(g_ota_h.img_len)) { ota_fail(Update.errorString()); return; }
+            g_ota_begun = true;
+            ota_sha256_begin();
+            g_ota_ok = true;
         }
-        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Update gestartet: %s",
-                   up.filename.c_str());
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
-            Update.printError(Serial);
-            return;
+
+        /* 2) restliche Bytes = App-Image */
+        if (!g_ota_ok || n == 0) return;
+        if (g_ota_img_seen + n > g_ota_h.img_len) {
+            n = g_ota_h.img_len - g_ota_img_seen;   /* Anhaengsel abschneiden */
         }
-        g_ota_ok = true;
-    } else if (up.status == UPLOAD_FILE_WRITE) {
-        if (g_ota_ok && Update.write(up.buf, up.currentSize) != up.currentSize) {
-            Update.printError(Serial);
-            g_ota_ok = false;
+        if (n == 0) return;
+        ota_sha256_update(p, n);
+        if (Update.write((uint8_t *)p, n) != n) { ota_fail(Update.errorString()); return; }
+        g_ota_img_seen += n;
+        return;
+    }
+
+    if (up.status == UPLOAD_FILE_END) {
+        if (!g_ota_ok) return;
+        uint8_t h[OTA_SHA_LEN];
+        ota_sha256_finish(h);
+        if (g_ota_img_seen != g_ota_h.img_len ||
+            memcmp(h, g_ota_h.img_sha256, OTA_SHA_LEN) != 0) {
+            ota_fail("Hash stimmt nicht"); return;
         }
-    } else if (up.status == UPLOAD_FILE_END) {
-        if (g_ota_ok && Update.end(true)) {
+        if (Update.end(true)) {
+            g_ota_begun = false;
             evlog_push(&g_log, millis(), EVLOG_INFO, "ota",
-                       "Update geschrieben (%u B), Neustart", (unsigned)up.totalSize);
+                       "Update geschrieben (%u B), Neustart", (unsigned)g_ota_img_seen);
         } else {
-            g_ota_ok = false;
-            Update.printError(Serial);
+            ota_fail(Update.errorString());
         }
-    } else if (up.status == UPLOAD_FILE_ABORTED) {
-        Update.abort();
-        g_ota_ok = false;
-        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Update abgebrochen");
+        return;
+    }
+
+    if (up.status == UPLOAD_FILE_ABORTED) {
+        ota_fail("Upload abgebrochen");
     }
 }
 
 static void handle_update_done()
 {
-    if (!cfg.ota_enabled) {
+    if (!cfg.ota_enabled && (!g_ota_err[0] || !strcmp(g_ota_err, "ota_disabled"))) {
         send_json(403, "{\"error\":\"ota_disabled\"}");
         return;
     }
-    if (g_ota_ok && !Update.hasError()) {
+    if (g_ota_ok && !Update.hasError() && !g_ota_err[0]) {
         send_json(200, "{\"ok\":true,\"note\":\"reboot\"}");
         want_reboot = true;
         reboot_at = millis() + 1200;        /* Zeit fuer das Flushen der Antwort */
     } else {
         char m[96];
         snprintf(m, sizeof(m), "{\"error\":\"%s\"}",
-                 Update.hasError() ? Update.errorString() : "kein gueltiges Image");
+                 g_ota_err[0] ? g_ota_err
+                              : (Update.hasError() ? Update.errorString() : "kein gueltiges Image"));
         send_json(500, m);
     }
 }
 
 static void web_begin()
 {
-    web.on("/", []() { web.send_P(200, "text/html", INDEX_HTML); });
-    web.on("/api/status",    HTTP_GET,  handle_status);
-    web.on("/api/system",    HTTP_GET,  handle_system);
-    web.on("/api/log",       HTTP_GET,  handle_log);
-    web.on("/api/log/clear", HTTP_POST, handle_log_clear);
-    web.on("/api/text",      HTTP_POST, handle_text);
-    web.on("/api/mode",      HTTP_POST, handle_mode);
-    web.on("/api/home",      HTTP_POST, handle_home);
-    web.on("/api/selftest",  HTTP_POST, handle_selftest);
-    web.on("/api/module",    HTTP_POST, handle_module);
-    web.on("/api/enumerate", HTTP_POST, handle_enumerate);
-    web.on("/api/time",      HTTP_POST, handle_time);
-    web.on("/api/wifi/scan", HTTP_GET,  handle_wifi_scan);
-    web.on("/api/wifi",      HTTP_POST, handle_wifi_connect);
-    web.on("/api/wifi/portal", HTTP_POST, handle_wifi_portal);
-    web.on("/api/reboot",    HTTP_POST, handle_reboot);
-    web.on("/api/config",    handle_config);
-    web.on("/api/backup",    handle_backup);
-    web.on("/api/update",    HTTP_POST, handle_update_done, handle_update_upload);
+    /* guard() = Herkunftsfilter (cfg.net_scope) + optionale Basic-Auth
+     * (cfg.admin_pass). Gilt fuer jeden Endpunkt inkl. der Startseite. */
+    web.on("/", guard([]() { web.send_P(200, "text/html", INDEX_HTML); }));
+    web.on("/api/status",    HTTP_GET,  guard(handle_status));
+    web.on("/api/system",    HTTP_GET,  guard(handle_system));
+    web.on("/api/log",       HTTP_GET,  guard(handle_log));
+    web.on("/api/log/clear", HTTP_POST, guard(handle_log_clear));
+    web.on("/api/text",      HTTP_POST, guard(handle_text));
+    web.on("/api/mode",      HTTP_POST, guard(handle_mode));
+    web.on("/api/home",      HTTP_POST, guard(handle_home));
+    web.on("/api/selftest",  HTTP_POST, guard(handle_selftest));
+    web.on("/api/module",    HTTP_POST, guard(handle_module));
+    web.on("/api/enumerate", HTTP_POST, guard(handle_enumerate));
+    web.on("/api/time",      HTTP_POST, guard(handle_time));
+    web.on("/api/wifi/scan", HTTP_GET,  guard(handle_wifi_scan));
+    web.on("/api/wifi",      HTTP_POST, guard(handle_wifi_connect));
+    web.on("/api/wifi/portal", HTTP_POST, guard(handle_wifi_portal));
+    web.on("/api/reboot",    HTTP_POST, guard(handle_reboot));
+    web.on("/api/config",    guard(handle_config));
+    web.on("/api/backup",    guard(handle_backup));
+    /* Der Upload-Handler prueft Herkunft/Anmeldung selbst (laeuft vor der
+     * Antwort); der Antwort-Handler zusaetzlich ueber guard(). */
+    web.on("/api/update",    HTTP_POST, guard(handle_update_done), handle_update_upload);
     web.begin();
 }
 

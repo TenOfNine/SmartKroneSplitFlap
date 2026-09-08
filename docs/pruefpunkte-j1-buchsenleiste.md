@@ -67,5 +67,5 @@ ohne die bisherige mechanische Sperre.
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| J1 als nicht kodierte Buchsenleiste 2×5, board-to-board — Bauform freigegeben, Verpolschutz über Mechanik + Druck + Durchgangsprüfung | Betreiber (phi.hoffmann@hotmail.de), im Chat | 31.08.2026 |
+| J1 als nicht kodierte Buchsenleiste 2×5, board-to-board — Bauform freigegeben, Verpolschutz über Mechanik + Druck + Durchgangsprüfung | Betreiber, im Chat | 31.08.2026 |
 | Mechanische Kodierung J1-M festgelegt | — | offen |
