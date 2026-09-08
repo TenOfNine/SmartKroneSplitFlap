@@ -55,7 +55,7 @@ Daraus folgt:
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| 6.4 gilt, Reserve-GPIOs unbeschaltet — **freigegeben** | Betreiber (phi.hoffmann@hotmail.de), im Chat | 28.08.2026 |
+| 6.4 gilt, Reserve-GPIOs unbeschaltet — **freigegeben** | Betreiber, im Chat | 28.08.2026 |
 
 ---
 
@@ -110,7 +110,7 @@ Netzliste 6.1 / 6.2 in v0.2 entsprechend geändert:
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| BAT54S-Zuordnung A→GND, K→+5V, COM→Signal — **freigegeben** | Betreiber (phi.hoffmann@hotmail.de), im Chat | 28.08.2026 |
+| BAT54S-Zuordnung A→GND, K→+5V, COM→Signal — **freigegeben** | Betreiber, im Chat | 28.08.2026 |
 
 ---
 

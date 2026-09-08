@@ -27,6 +27,12 @@ hardware/master/jlc/
 docs/erc-*.rpt
 docs/drc-*.rpt
 
+# private Schluessel -- nie versionieren (OTA-Signatur, siehe docs/firmware-signing.md)
+*.pem
+*.key
+*-signing*
+ota-signing*
+
 # Sonstiges
 .DS_Store
 

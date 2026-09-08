@@ -164,7 +164,7 @@ zulässiger Mischbetrieb.
 
 | Baustein | Symbol | Ergebnis | Bestätigt von | Datum |
 |---|---|---|---|---|
-| 74LVC1G17GV | `74LVC1G17` | Pinbelegung deckungsgleich mit Nexperia Rev. 16.1 §6.1 (GV/SOT753) | Betreiber (phi.hoffmann@hotmail.de), im Chat | 01.09.2026 |
+| 74LVC1G17GV | `74LVC1G17` | Pinbelegung deckungsgleich mit Nexperia Rev. 16.1 §6.1 (GV/SOT753) | Betreiber, im Chat | 01.09.2026 |
 | TP8485E-SR | `TP8485E-SR` | unverändert ggü. `docs/symbolpruefung.md` (freigegeben 27.08.2026) | Betreiber | 27.08.2026 |
 | ESP32-C3 Super Mini | `ESP32-C3-SuperMini` (Symbol + Footprint) | Pin-Reihenfolge + Einbaulage aus den Fotos, Abschnitt 1.2 / 1.3 | Betreiber, im Chat | 01.09.2026 |
 
