@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.14 |
-| Datum | 01.09.2026 |
+| Version | 0.15 |
+| Datum | 02.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -504,7 +504,7 @@ Arduino-ESP32, bewusst ohne ESPHome, da bei zehn Modulen die Entity-Verwaltung s
 | Web-UI | eingebauter `WebServer` (in T8 gewählt; siehe unten) |
 | Konfiguration | ArduinoJson zum Parsen, Ablage in `Preferences`/NVS |
 | MQTT | PubSubClient mit Home-Assistant-Auto-Discovery |
-| Zeit | `configTzTime`; NTP-Server und Zeitzone in der Web-UI änderbar, Uhr auch manuell stellbar; NTP abschaltbar |
+| Zeit | `configTzTime`; NTP-Server frei eintragbar, Zeitzone als Städte-Auswahlliste mit separatem Sommerzeit-Schalter (die UI setzt daraus den POSIX-TZ-String, „Andere" erlaubt weiterhin die Direkteingabe), Uhr auch manuell stellbar; NTP abschaltbar |
 | Update | OTA aus dem Browser (`POST /api/update`), in den Schnittstellen abschaltbar. Kein ArduinoOTA. |
 | mDNS | `<node>.local` (abschaltbar) |
 
@@ -521,7 +521,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | WLAN-Konfiguration | Access-Point mit Captive Portal beim Erststart, danach über die Web-UI änderbar |
 | Modulverwaltung | Anzahl per Enumeration automatisch, in der UI überschreib- und sperrbar |
 | Freitext | Eingabe über Web-UI, REST und MQTT; Umlaute und Kleinbuchstaben werden gemappt, unbekannte Zeichen auf Leerbild |
-| Uhrzeit | NTP-gestützt (Server + Zeitzone konfigurierbar), Format `hh:mm` oder `hh:mm:ss`, Trennzeichen wählbar. Ohne erreichbaren NTP-Server auch manuell stellbar (freilaufend, keine gepufferte RTC). |
+| Uhrzeit | NTP-gestützt (Server frei, Zeitzone als Städteliste + Sommerzeit-Schalter), Format `hh:mm` oder `hh:mm:ss`, Trennzeichen wählbar. Ohne erreichbaren NTP-Server auch manuell stellbar (freilaufend, keine gepufferte RTC). |
 | Selbsttest | jedes Modul fährt eine volle Umdrehung, prüft die Zahl der Blattimpulse zwischen zwei Leerbildimpulsen und meldet Timing-Abweichungen |
 | Statusabfrage | Ist-Zeichen, Zustand, Fehlerzähler je Modul in der UI und über REST |
 | Diagnose | Modul-Detailtabelle (erkannte Blattzahl, FW-Version, verpasste Antworten), Ereignis-Log (Ringpuffer), Bus-CRC-/Timeout-Zähler in der Web-UI |
@@ -796,4 +796,5 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.11 | 01.09.2026 | Dokumentationspflege: Dokumentkopf auf die tatsächliche Version gebracht (war seit v0.8 nicht mitgezogen). Kapitel 2.2/7/8.2/Anhang B durchgängig „ESP32-C3" statt „ESP32". Kapitel 7.2/7.3 um die konfigurierbaren Zeit-/Schnittstellen-Einstellungen und die Diagnose-Ansicht ergänzt. Keine inhaltlichen Systemänderungen. |
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
 | 0.13 | 01.09.2026 | Kapitel 7.2/7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. **ArduinoOTA entfernt** — der passwortlose espota-UDP-Port entfällt; der `ota_enabled`-Schalter gated jetzt `/api/update`. |
+| 0.15 | 02.09.2026 | Kapitel 7.3/7.5: Zeitzone in der Web-UI als Auswahlliste mit Städtenamen (Berlin, London, New York … 18 Einträge) statt freiem POSIX-String, dazu ein eigener **Sommerzeit-Schalter**. Die Oberfläche baut daraus den POSIX-TZ-String für `configTzTime` und stellt den Schalter bei Zonen ohne Sommerzeit ab. „Andere" behält die Direkteingabe. `/api/config` und das Backup speichern unverändert den fertigen TZ-String. Keine Firmware-Schnittstellen- oder Hardware-Änderung. |
 | 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |

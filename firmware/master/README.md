@@ -68,8 +68,9 @@ Portal für die WLAN-Zugangsdaten. MQTT-Broker und Modulzahl danach unter
 Eine vom ESP32-C3 ausgelieferte Seite (System-Schriften, kein CDN, ~14 KB),
 Dark-Theme, Ansichten **Übersicht** (Split-Flap-Statusstreifen, Kacheln,
 Schnellaktionen), **Module** (Tabelle), **Log**, **Einstellungen** (WLAN wechseln,
-feste IP, NTP-Server/Zeitzone/Uhr manuell, MQTT, Anzeige, Schnittstellen-Schalter,
-System). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
+feste IP, NTP-Server + Zeitzone als Städteliste mit Sommerzeit-Schalter + Uhr
+manuell, MQTT, Anzeige, Schnittstellen-Schalter, System). Der Quelltext ist
+`INDEX_HTML` in `src/main.cpp`.
 
 ## REST
 
