@@ -161,7 +161,7 @@ USART0-Standardposition) nachgezogen. Die Datenblatt-gegen-Symbol-Prüfung
 
 | Baustein | Symbol | Ergebnis | Bestätigt von | Datum |
 |---|---|---|---|---|
-| ATtiny1616-SNR | `ATtiny1616-S` | Pinbelegung deckungsgleich mit DS40002204A §4.2 | Betreiber (phi.hoffmann@hotmail.de), im Chat | 27.08.2026 |
-| TP8485E-SR | `MAX3485` (als `TP8485E-SR`) | Pinbelegung deckungsgleich mit TP8485E Rev. D | Betreiber (phi.hoffmann@hotmail.de), im Chat | 27.08.2026 |
+| ATtiny1616-SNR | `ATtiny1616-S` | Pinbelegung deckungsgleich mit DS40002204A §4.2 | Betreiber, im Chat | 27.08.2026 |
+| TP8485E-SR | `MAX3485` (als `TP8485E-SR`) | Pinbelegung deckungsgleich mit TP8485E Rev. D | Betreiber, im Chat | 27.08.2026 |
 
 T3 gilt damit als erledigt. Die Symbolablage nach Abschnitt 4 wird in T4 umgesetzt.
