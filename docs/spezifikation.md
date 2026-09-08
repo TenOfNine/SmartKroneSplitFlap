@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.15 |
-| Datum | 02.09.2026 |
+| Version | 0.16 |
+| Datum | 08.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -505,7 +505,8 @@ Arduino-ESP32, bewusst ohne ESPHome, da bei zehn Modulen die Entity-Verwaltung s
 | Konfiguration | ArduinoJson zum Parsen, Ablage in `Preferences`/NVS |
 | MQTT | PubSubClient mit Home-Assistant-Auto-Discovery |
 | Zeit | `configTzTime`; NTP-Server frei eintragbar, Zeitzone als Städte-Auswahlliste mit separatem Sommerzeit-Schalter (die UI setzt daraus den POSIX-TZ-String, „Andere" erlaubt weiterhin die Direkteingabe), Uhr auch manuell stellbar; NTP abschaltbar |
-| Update | OTA aus dem Browser (`POST /api/update`), in den Schnittstellen abschaltbar. Kein ArduinoOTA. |
+| Update | Signiertes OTA aus dem Browser (`POST /api/update`, Container `.kota` mit ECDSA-P-256-Signatur, Prüfung über mbedTLS), in den Schnittstellen abschaltbar. Kein ArduinoOTA. Siehe `docs/firmware-signing.md`. |
+| Zugriffsschutz | Herkunftsfilter (`cfg.net_scope`: alle / RFC1918 / eigenes Subnetz) + optionale HTTP-Basic-Auth (`cfg.admin_pass`), beide über einen Handler-Wrapper auf allen Endpunkten |
 | mDNS | `<node>.local` (abschaltbar) |
 
 In T8 wurden gegenüber der Erstfassung `ESPAsyncWebServer` durch den eingebauten
@@ -528,6 +529,8 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | Homing | einzeln oder für alle Module; einzeln auch Stop und Identify |
 | Betriebsartenwahl | Text, Uhr, Leerbild, Aus |
 | Schnittstellen | MQTT, REST-Schreib-API, OTA und mDNS einzeln abschaltbar (Einstellungen). Die Web-Oberfläche selbst nicht. |
+| Zugriffsschutz | *Einstellungen › Zugriffsschutz*: Herkunft der Anfragen (alle / private Netze / eigenes Subnetz) und optionales Admin-Passwort (HTTP-Basic-Auth). Vorgabe: private Netze, kein Passwort. |
+| Firmware-Update | *Einstellungen › Firmware aktualisieren*: signierten `.kota`-Container hochladen; das Modul prüft Herkunft und Prüfsumme, sonst nur USB. Details `docs/firmware-signing.md`. |
 
 ### 7.4 Zeichenabbildung
 
@@ -541,10 +544,10 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | Methode | Pfad | Funktion |
 |---|---|---|
 | GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten, erkannte Modulzahl, Enumerationsstatus) |
-| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Bus-CRC-Fehler und -Timeouts, Firmware-Build |
+| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Zugriffsschutz (`net_scope`, `auth_on`, `ota_signed`), Bus-CRC-Fehler und -Timeouts, Firmware-Build |
 | GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
-| GET/POST | `/api/backup` | Vollsicherung inkl. WLAN-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
-| POST | `/api/update` | OTA aus dem Browser: App-Image (`…ota.bin`) hochladen; das Modul flasht die zweite App-Partition und startet neu |
+| GET/POST | `/api/backup` | Vollsicherung inkl. WLAN- und Admin-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
+| POST | `/api/update` | Signiertes OTA aus dem Browser: Container `krone-master-esp32c3.kota` hochladen (Feld `firmware`); das Modul prüft Signatur + SHA-256, flasht die zweite App-Partition und startet neu. Fehlerfall: `500` mit Grund, laufende Firmware bleibt aktiv |
 | POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
 | POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
@@ -557,29 +560,40 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall aufs alte Netz nach ~25 s) |
 | POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen |
 | POST | `/api/reboot` | Neustart |
-| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS |
+| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, `net_scope`, `admin_user`, `admin_pass` (nur schreibend), sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS. `admin_pass` wird nie ausgeliefert (`/api/config` GET meldet nur `admin_set`) |
 
-Die schreibenden Steuer-Endpunkte (`/api/text`, `/api/mode`, `/api/home`,
-`/api/selftest`, `/api/module`, `/api/enumerate`) lassen sich über den Schalter
-**REST-Schreib-API** in den Einstellungen sperren (`403`); Statusabfragen und die
+**Zugriffsschutz.** Ein Handler-Wrapper prüft vor *jedem* Endpunkt zwei Dinge:
+
+1. **Herkunft** (`cfg.net_scope`): `0` = alle, `1` = private Bereiche nach RFC 1918
+   plus eigenes Subnetz (Vorgabe), `2` = nur eigenes Subnetz. Nicht zugelassene
+   Quell-IPs bekommen `403`. Da eine Portweiterleitung im Router die echte
+   öffentliche Quelladresse durchreicht, greift ein Internetzugriff bei `1`/`2`
+   nicht mehr. SoftAP-Portal und `127.0.0.1` sind immer erlaubt.
+2. **Anmeldung** (`cfg.admin_pass`): ist ein Passwort gesetzt, verlangen alle
+   Endpunkte HTTP-Basic-Auth (`401` sonst). Ohne Passwort entfällt die Anmeldung.
+
+Zusätzlich lassen sich die schreibenden Steuer-Endpunkte (`/api/text`,
+`/api/mode`, `/api/home`, `/api/selftest`, `/api/module`, `/api/enumerate`) über
+den Schalter **REST-Schreib-API** sperren (`403`); Statusabfragen und die
 Einstellungen bleiben dann weiter erreichbar. MQTT, OTA und mDNS sind einzeln
 abschaltbar. Die Web-Oberfläche selbst ist nicht abschaltbar.
 
 Die Weboberfläche ist eine einzelne, vom ESP32-C3 ausgelieferte Seite
 (System-Schriften, kein CDN — im LAN ohne Internet nutzbar) mit den Ansichten
 Übersicht (Split-Flap-Statusstreifen, Kacheln, Schnellaktionen), Module (Tabelle),
-Log und Einstellungen. In den Einstellungen sind unter *System* der Hostname
+Log und Einstellungen. Die Einstellungen bündeln unter anderem den Hostname
 (mDNS/OTA/MQTT-Client-ID), die Systemdiagnose (CPU-Last, RAM-Auslastung,
-Chiptemperatur, Programmspeicher) und das **OTA-Update aus dem Browser**
-zusammengefasst — dort lädt man das App-Image `krone-master-esp32c3.ota.bin`
-hoch, das Modul schreibt es in die zweite App-Partition und startet neu. Ein
-Netzwerk-OTA über ArduinoOTA/espota ist bewusst nicht vorgesehen (offener Port
-ohne Passwort); jenseits des Browsers wird per USB geflasht.
+Chiptemperatur, Programmspeicher), den **Zugriffsschutz** (Herkunft + Passwort)
+und das **signierte OTA-Update aus dem Browser** — dort lädt man den Container
+`krone-master-esp32c3.kota` hoch, das Modul prüft Signatur und Prüfsumme, schreibt
+in die zweite App-Partition und startet neu. Ein Netzwerk-OTA über
+ArduinoOTA/espota ist bewusst nicht vorgesehen (offener Port ohne Passwort);
+jenseits des Browsers wird per USB geflasht. Details `docs/firmware-signing.md`.
 
 **Persistenz.** Die Konfiguration liegt im NVS und überdauert OTA-Updates. Für
 den Fall eines vollständigen Flash-Löschens gibt es eine Voll­sicherung als
-JSON-Datei (inkl. WLAN- und MQTT-Zugangsdaten); das Flasher-Manifest löscht die
-NVS nicht selbsttätig.
+JSON-Datei (inkl. WLAN-, MQTT- und Admin-Zugangsdaten); das Flasher-Manifest
+löscht die NVS nicht selbsttätig.
 
 ### 7.6 MQTT und Home Assistant
 
@@ -678,9 +692,10 @@ Die Sekundärwicklung des 42-V~-Trafos bleibt **potenzialfrei**. Sie darf an kei
 | NF-3 | Ausfall des WLAN oder des MQTT-Brokers beeinträchtigt die Anzeige nicht; der zuletzt gesetzte Inhalt bleibt stehen |
 | NF-4 | Ausfall einer einzelnen Daughter Card legt die übrigen Module nicht lahm |
 | NF-5 | Alle 42-V~-führenden Teile berührsicher; Trafo als Sicherheitstransformator nach EN 61558 |
-| NF-6 | Firmware-Update der Zentralsteuerung über OTA, der Modulsteuerungen über UPDI |
+| NF-6 | Firmware-Update der Zentralsteuerung über signiertes Browser-OTA (ECDSA P-256), der Modulsteuerungen über UPDI. Ein nicht mit dem Projektschlüssel signierter Container wird abgelehnt. |
 | NF-7 | Kein Modul darf durch einen Firmwarefehler dauerhaft bestromt bleiben, siehe 6.4 |
 | NF-8 | Konfiguration überlebt Stromausfall |
+| NF-9 | Die Zentralsteuerung verarbeitet HTTP-Anfragen im Auslieferungszustand nur aus privaten Netzen (RFC 1918); Herkunftsbereich und ein optionales Admin-Passwort sind konfigurierbar |
 
 ---
 
@@ -797,4 +812,5 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
 | 0.13 | 01.09.2026 | Kapitel 7.2/7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. **ArduinoOTA entfernt** — der passwortlose espota-UDP-Port entfällt; der `ota_enabled`-Schalter gated jetzt `/api/update`. |
 | 0.15 | 02.09.2026 | Kapitel 7.3/7.5: Zeitzone in der Web-UI als Auswahlliste mit Städtenamen (Berlin, London, New York … 18 Einträge) statt freiem POSIX-String, dazu ein eigener **Sommerzeit-Schalter**. Die Oberfläche baut daraus den POSIX-TZ-String für `configTzTime` und stellt den Schalter bei Zonen ohne Sommerzeit ab. „Andere" behält die Direkteingabe. `/api/config` und das Backup speichern unverändert den fertigen TZ-String. Keine Firmware-Schnittstellen- oder Hardware-Änderung. |
+| 0.16 | 08.09.2026 | Kapitel 7.2/7.3/7.5, 9: Sicherheitspaket der Zentralsteuerung. (1) **Signiertes Browser-OTA** — `/api/update` nimmt nur den Container `krone-master-esp32c3.kota` an (Magic, SHA-256, ECDSA-P-256-Signatur über einen einkompilierten Public Key, Prüfung per mbedTLS); neuer host-getesteter Parser `lib/otaverify`, Signaturwerkzeug `tools/ota_keys.py`, `docs/firmware-signing.md`. (2) **Zugriffsschutz** — Herkunftsfilter `net_scope` (Vorgabe: private Netze RFC 1918) + optionale HTTP-Basic-Auth, als Wrapper auf allen Endpunkten; NF-9. (3) Doku: private E-Mail aus den Prüfpunkt-/Symbolprüfungs-Tabellen entfernt, Messfotos ohne EXIF und verkleinert. Keine Hardware-Änderung. |
 | 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |

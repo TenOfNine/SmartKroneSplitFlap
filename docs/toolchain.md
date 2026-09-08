@@ -86,7 +86,8 @@ python tools/gen_master_sch.py --erc --pdf --png       # Schaltplan, ERC 0/0
 pio run  -e attiny1616 -d firmware/module   # ATtiny1616 kompilieren
 pio run  -e esp32c3    -d firmware/master   # ESP32-C3 Super Mini kompilieren
 pio test -e native     -d firmware/module   # Protokolltests auf dem Host
-python tools/build_master_firmware.py       # + Merged-.bin -> firmware/master/prebuilt/ (Webflasher)
+python tools/ota_keys.py init               # einmalig: OTA-Signaturschluessel (docs/firmware-signing.md)
+python tools/build_master_firmware.py       # factory.bin (USB) + signierte .kota -> firmware/master/prebuilt/
 ```
 
 ## 4. PlatformIO-Ziele
@@ -130,7 +131,7 @@ Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstan
 
 | Job | Prüfung |
 |---|---|
-| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (43), `python tools/test_busctl.py` (13) |
+| `host-tests` | `pio test -e native` in `firmware/module` (62) und `firmware/master` (50), `python tools/test_busctl.py` (13) |
 | `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32c3` |
 | `hardware` | KiCad 9, `build_krone_symbols.py --check` + `build_krone_master_symbols.py --check` (informativ), `gen_daughtercard_sch.py --check-only` + `gen_master_sch.py --check-only`, `kicad-cli sch erc` für beide Schaltpläne (0 Fehler / 0 Warnungen) |
 | `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber der Daughter Card |
