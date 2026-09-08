@@ -1,16 +1,16 @@
 # Vorgebaute Master-Firmware (ESP32-C3 Super Mini)
 
-Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `4607213`, 2026-09-08). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `031ea0a`, 2026-09-08). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|
 | `index.html` | Web-Flasher (ESP Web Tools). Wird per GitHub Actions als Page veroeffentlicht. |
 | `krone-master-esp32c3.factory.bin` | Merged-Image fuer den **Erst-Flash ueber USB** (Offset 0x0) |
-| `krone-master-esp32c3.ota.bin` | App-Image fuer das **OTA-Update aus der Web-UI** (Einstellungen > System > Firmware aktualisieren) |
+| `krone-master-esp32c3.kota` | **signierter** App-Container fuer das **OTA-Update aus der Web-UI** (Einstellungen > Firmware aktualisieren). Header mit SHA-256 + ECDSA-P-256-Signatur; das Modul lehnt fremde/manipulierte Dateien ab. Siehe `docs/firmware-signing.md`. |
 | `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |
 
-SHA-256 `factory.bin`: `58df1fc513181dbbd39420bb0abe79039046546cd5cc730ae36c102478460f88`  
-SHA-256 `ota.bin`: `d4b6e2c347ffac3c19a68e5bcd33b82daad82542897b276609f4c72f283877bc`
+SHA-256 `factory.bin`: `712aecbec1670f08cfe8d858446773d5b45632c988f87e9169cdd6686a91b0be`  
+SHA-256 `kota`: `3c19fba961c83d267acd2c109f0b27887f9b3eae128f3de8b1384e6539f9d8b9`
 
 ## Erst-Flash (USB)
 
@@ -24,7 +24,7 @@ SHA-256 `ota.bin`: `d4b6e2c347ffac3c19a68e5bcd33b82daad82542897b276609f4c72f2838
 
 ## Spaetere Updates (OTA)
 
-*Einstellungen > System > Firmware aktualisieren* -> `krone-master-esp32c3.ota.bin` hochladen (nicht die `.factory.bin`). Kein Toolchain, jeder Browser. Bei Fehler bleibt die alte Firmware aktiv, die Einstellungen (NVS) bleiben erhalten. In den *Schnittstellen* abschaltbar; ein Netzwerk-OTA (ArduinoOTA) gibt es bewusst nicht.
+*Einstellungen > Firmware aktualisieren* -> `krone-master-esp32c3.kota` hochladen (nicht die `.factory.bin`). Das Modul prueft Signatur und Pruefsumme, schreibt in die zweite App-Partition und startet neu; fremde oder beschaedigte Dateien werden abgelehnt, die laufende Firmware bleibt aktiv. Kein Toolchain, jeder Browser. In den *Schnittstellen* abschaltbar; ein Netzwerk-OTA (ArduinoOTA) gibt es bewusst nicht.
 
 Nach dem Boot: Access-Point `krone_anzeige` fuer die WLAN-Einrichtung, serielle Konsole auf USB-C (115200 Bd). Status-LED (GPIO6): schnelles Blinken = kein WLAN.
 
