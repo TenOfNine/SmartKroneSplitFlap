@@ -30,8 +30,9 @@ docs/drc-*.rpt
 # private Schluessel -- nie versionieren (OTA-Signatur, siehe docs/firmware-signing.md)
 *.pem
 *.key
-*-signing*
+*.pkcs8
 ota-signing*
+ota_keys*.json
 
 # Sonstiges
 .DS_Store
