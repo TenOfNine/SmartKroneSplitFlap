@@ -27,7 +27,7 @@ pio test -e native
 ```
 
 `test_charmap`, `test_clocktext`, `test_busmaster`, `test_masterapp`,
-`test_hadiscovery`, `test_eventlog` (43 Fälle). `test_masterapp` und
+`test_hadiscovery`, `test_eventlog`, `test_otaverify` (50 Fälle). `test_masterapp` und
 `test_busmaster` treiben die Logik gegen einen **simulierten Bus** (aufgezeichnete
 Sende-Frames, eingespeiste Antworten) — das deckt „REST-Endpunkte antworten gegen
 einen simulierten Bus" aus Backlog T8 ab.
@@ -37,20 +37,22 @@ einen simulierten Bus" aus Backlog T8 ab.
 ```bash
 pio run  -e esp32c3                     # ~1 MB Flash
 pio run  -e esp32c3 -t upload           # USB-C
-python tools/build_master_firmware.py   # -> prebuilt/ (factory.bin + ota.bin)
+python tools/ota_keys.py init           # einmalig: OTA-Signaturschluessel
+python tools/build_master_firmware.py   # -> prebuilt/ (factory.bin + signierte .kota)
 ```
 
 **Erst-Flash (USB):** Browser-Flasher **<https://tenofnine.github.io/SmartKroneSplitFlap/>**
 (`prebuilt/index.html`, per GitHub Actions veröffentlicht — lädt immer den zuletzt
 committeten Stand), esptool-js oder `esptool.py`. Datei: `prebuilt/krone-master-esp32c3.factory.bin`.
 
-**Spätere Updates (OTA):** In der Web-UI unter *Einstellungen › System ›
-Firmware aktualisieren* das App-Image `prebuilt/krone-master-esp32c3.ota.bin`
-hochladen (nicht die `.factory.bin`). Kein Toolchain, jeder Browser; bei Fehler
-bleibt die alte Firmware aktiv, die Einstellungen (NVS) bleiben erhalten. Der
-Weg lässt sich in den *Schnittstellen* abschalten (Schalter „OTA-Update über die
-Web-UI"). Ein Netzwerk-OTA à la ArduinoOTA/espota gibt es bewusst nicht — das
-hieße ein offener OTA-Port ohne Passwort.
+**Spätere Updates (OTA):** In der Web-UI unter *Einstellungen › Firmware
+aktualisieren* den **signierten Container** `prebuilt/krone-master-esp32c3.kota`
+hochladen (nicht die `.factory.bin`). Das Modul prüft ECDSA-P-256-Signatur und
+SHA-256, schreibt dann in die zweite App-Partition und startet neu; fremde oder
+beschädigte Dateien werden abgelehnt, die laufende Firmware bleibt aktiv. Kein
+Toolchain, jeder Browser. In den *Schnittstellen* abschaltbar; ein Netzwerk-OTA
+à la ArduinoOTA/espota gibt es bewusst nicht (offener Port ohne Passwort).
+Schlüsselverwaltung: `docs/firmware-signing.md`.
 
 Pin-/UART-Belegung steht in `platformio.ini` (`build_flags`), damit `main.cpp`
 portabel bleibt; die Vorgaben in `main.cpp` sind dieselben Werte. RS-485 auf
@@ -69,8 +71,8 @@ Eine vom ESP32-C3 ausgelieferte Seite (System-Schriften, kein CDN, ~14 KB),
 Dark-Theme, Ansichten **Übersicht** (Split-Flap-Statusstreifen, Kacheln,
 Schnellaktionen), **Module** (Tabelle), **Log**, **Einstellungen** (WLAN wechseln,
 feste IP, NTP-Server + Zeitzone als Städteliste mit Sommerzeit-Schalter + Uhr
-manuell, MQTT, Anzeige, Schnittstellen-Schalter, System). Der Quelltext ist
-`INDEX_HTML` in `src/main.cpp`.
+manuell, MQTT, Anzeige, Schnittstellen-Schalter, Zugriffsschutz, System,
+Firmware aktualisieren). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
 
 ## REST
 
@@ -80,7 +82,7 @@ manuell, MQTT, Anzeige, Schnittstellen-Schalter, System). Der Quelltext ist
 | GET | `/api/system` | Uptime, Heap (frei/gesamt/min), **CPU-Last, Chiptemperatur**, Sketch/OTA-Platz, Hostname, WLAN, Uhr, MQTT/OTA/mDNS, Bus-CRC/Timeouts, FW-Build |
 | GET | `/api/log` | `?sev=info\|warn\|err` — Ereignis-Ringpuffer |
 | GET/POST | `/api/backup` | Vollsicherung **inkl. WLAN-Zugangsdaten** (Download / Restore). POST übernimmt und startet neu. |
-| POST | `/api/update` | OTA aus dem Browser: App-`.bin` als multipart hochladen → `Update`-Bibliothek → Neustart |
+| POST | `/api/update` | Signiertes OTA: Container `.kota` als multipart (Feld `firmware`) → Signatur-/Hash-Prüfung → `Update`-Bibliothek → Neustart |
 | POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
 | POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
@@ -93,10 +95,24 @@ manuell, MQTT, Anzeige, Schnittstellen-Schalter, System). Der Quelltext ist
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall nach ~25 s) |
 | POST | `/api/wifi/portal` | Konfigurationsportal öffnen |
 | POST | `/api/reboot` | Neustart |
-| GET/POST | `/api/config` | Hostname, MQTT, NTP-Server, TZ, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, Schalter MQTT/REST-Schreib-API/OTA/mDNS |
+| GET/POST | `/api/config` | Hostname, MQTT, NTP-Server, TZ, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, `net_scope`, `admin_user`/`admin_pass` (nur schreibend), Schalter MQTT/REST-Schreib-API/OTA/mDNS |
 
 Die schreibenden Steuer-Endpunkte lassen sich über den Schalter
 **REST-Schreib-API** sperren (`403`). Die Web-Oberfläche selbst nicht.
+
+## Zugriffsschutz
+
+Ein Wrapper prüft vor **jedem** Endpunkt (`web_begin()` → `guard()`):
+
+- **Herkunft** — `cfg.net_scope`: `0` alle · `1` private Netze (RFC 1918) +
+  eigenes Subnetz *(Vorgabe)* · `2` nur eigenes Subnetz. Sonst `403`. Weil ein
+  Router-Port-Forward die echte öffentliche Absender-IP durchreicht, greift ein
+  Internetzugriff bei `1`/`2` nicht. SoftAP-Portal + `127.0.0.1` immer erlaubt.
+- **Anmeldung** — ist `cfg.admin_pass` gesetzt: HTTP-Basic-Auth auf allen
+  Endpunkten (`401` sonst), Benutzer `cfg.admin_user`. Leer = keine Anmeldung.
+
+Beides unter *Einstellungen › Zugriffsschutz*. `admin_pass` wird nie ausgeliefert
+(`/api/config` GET zeigt nur `admin_set`), steht aber in der `/api/backup`-Sicherung.
 
 ## MQTT / Home Assistant
 
@@ -122,7 +138,7 @@ Details und die Topic-Tabelle: `docs/spezifikation.md` 7.6.
 
 ## Persistenz
 
-Alle Einstellungen (inkl. WLAN- und MQTT-Zugangsdaten) liegen im NVS und
+Alle Einstellungen (inkl. WLAN-, MQTT- und Admin-Zugangsdaten) liegen im NVS und
 **überstehen OTA-Updates**. Nur ein USB-Flash mit „Erase" löscht sie — dann in
 den Einstellungen unter *System* die zuvor gesicherte `krone-backup.json` wieder
 einspielen. Deshalb setzt das Flasher-Manifest `new_install_prompt_erase: false`.

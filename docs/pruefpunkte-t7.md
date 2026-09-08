@@ -66,7 +66,7 @@ unbeschalteten Reserve-Pin, symmetrisch zur bisherigen Behandlung von PB0.
 
 | Ergebnis | Bestätigt von | Datum |
 |---|---|---|
-| USART0 Standardposition: RO→PB3 (Pin 8), DE→PB0 (Pin 11), PB1 Reserve — **freigegeben** | Betreiber (phi.hoffmann@hotmail.de), im Chat | 28.08.2026 |
+| USART0 Standardposition: RO→PB3 (Pin 8), DE→PB0 (Pin 11), PB1 Reserve — **freigegeben** | Betreiber, im Chat | 28.08.2026 |
 
 Umgesetzt am 28.08.2026: `gen_daughtercard_sch.py` (Netze RO/DE, NO_CONNECT_PINS),
 Schaltplan neu erzeugt (ERC 0/0), `schaltplan-daughtercard.md` v0.3,

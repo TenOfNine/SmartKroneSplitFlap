@@ -42,6 +42,7 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Master-Firmware T12 | `firmware/master/` auf ESP32-C3 portiert: `env:esp32c3` (`board = esp32-c3-devkitm-1`), RS-485 auf UART1, GPIO-Konstanten via `build_flags`, Status-LED an GPIO6. `pio test -e native` 40/40 (mit `test_eventlog`). | `3f03c57` |
 | Master-Web-UI (T13) | Weboberfläche neu (Dark-Theme, Ansichten Übersicht/Module/Log/Einstellungen, eine `PROGMEM`-Seite ohne CDN). REST erweitert (`/api/system`, `/api/log`, `/api/module`, `/api/enumerate`, `/api/time`, `/api/wifi/*`, `/api/reboot`, `/api/backup`, `/api/update`); `/api/config` deckt Hostname, NTP-Server, TZ, feste IP und die Schalter MQTT / REST-Schreib-API / OTA / mDNS ab. System-Ansicht: Hostname editierbar, CPU-Last / RAM / Chiptemperatur, Voll-Backup inkl. WLAN, **OTA-Update aus dem Browser** (`ota.bin`; ArduinoOTA entfernt). Neues `lib/eventlog` (host-getestet). Busmaster zählt CRC-Fehler + Timeouts. `pio run -e esp32c3`: ~999 KB Flash. Spez. v0.13. Design per Mockup mit dem Betreiber abgestimmt. | `0d163bc`, `680152f`, PR #6 |
 | Master-MQTT (T14) | HA-Anbindung vervollständigt: Last-Will-Topic `<base>/status` + `availability_topic` in jeder Discovery-Payload (Entities werden bei Ausfall „nicht verfügbar"), Zustands-Topics retained inkl. neu `text/state` / `mode/state`, `module/<n>/char` = dargestelltes Zeichen (`charmap_char()`, host-getestet), Discovery-Cleanup entfallener Module, MQTT-Puffer 1 KB. `pio test -e native` 43/43. Spez. v0.14. | `ef5bbe5`, `18de034` |
+| Master-Sicherheit (T15) | Signiertes Browser-OTA (`.kota`-Container, ECDSA P-256 über SHA-256, Public Key einkompiliert, `lib/otaverify` host-getestet, `src/ota_sign.cpp` mbedTLS, `tools/ota_keys.py`, `docs/firmware-signing.md`). Zugriffsschutz: `guard()`-Wrapper mit Herkunftsfilter `net_scope` (Vorgabe RFC1918) + optionaler HTTP-Basic-Auth. Repo-Hygiene: E-Mail aus Doku, Messfotos ohne EXIF + verkleinert, `.gitignore`. `pio test -e native` 50/50, Flash ~1010 KB. Spez. v0.16. Am Gerät ungetestet. | PR (master-security) |
 | Master-UI Zeitzone | Zeitzone jetzt Städte-Auswahlliste (18 Einträge) + eigener Sommerzeit-Schalter statt freiem POSIX-String; die UI baut den TZ-String, „Andere" behält die Direkteingabe. `/api/config`/Backup unverändert. `pio run -e esp32c3` ~1002 KB. Spez. v0.15. | direkt auf main |
 
 Nächste sinnvolle Schritte:
@@ -81,12 +82,16 @@ Nächste sinnvolle Schritte:
 
 ## Offene organisatorische Punkte
 
-- Git-Identität ist nur lokal gesetzt (`user.name = TenOfNine`,
-  `user.email = phi.hoffmann@hotmail.de`). Bei Bedarf anpassen.
+- Git-Identität ist nur lokal gesetzt (`user.name`, `user.email`). Für ein
+  öffentliches Repo eine GitHub-noreply-Adresse erwägen; die Commit-History
+  trägt die bisherige Adresse (Rewrite nur vor einer Veröffentlichung sinnvoll).
 - **GitHub Pages** muss der Betreiber einmalig aktivieren (Settings → Pages →
   Source „GitHub Actions"), damit der Web-Flasher unter
   `tenofnine.github.io/SmartKroneSplitFlap` erreichbar wird.
-- `docs/spezifikation.md` steht auf Version 0.13: vor jeder Änderung die
+- **OTA-Signaturschlüssel** (`docs/firmware-signing.md`): privater Schlüssel
+  liegt nur lokal unter `~/.config/krone/ota-signing.pem` — sichern und als
+  GitHub-Secret `OTA_SIGNING_KEY` hinterlegen, falls in CI signiert werden soll.
+- `docs/spezifikation.md` steht auf Version 0.16: vor jeder Änderung die
   Änderungshistorie im Anhang D fortschreiben.
 - **J1-M** (`docs/pruefpunkte-j1-buchsenleiste.md`, Issue #1): mechanische
   Kodierung der J1-Drehlage festlegen.
