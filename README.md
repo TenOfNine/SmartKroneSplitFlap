@@ -116,12 +116,32 @@ Das committete Image liegt unter `firmware/module/prebuilt/`; neu bauen mit
 
 ## Ausblick
 
-- **Modul-Firmware über den Bus verteilen** — die Master-Steuerung flasht die
-  Daughter Cards aus ihrer Web-UI, ohne PC und Adapter. Das bräuchte entweder
-  eine UPDI-Ader im Flachbandkabel oder einen Bootloader im ATtiny; beides ist
-  eine Frage für eine spätere Layout-Revision und aktuell **nicht geplant**. Der
-  Browser-UPDI-Flasher (Tab „Daughter Card") ist ein erster Schritt in diese
-  Richtung und vorerst experimentell.
+**Modul-Firmware über den Bus verteilen** — die Master-Steuerung flasht die
+Daughter Cards aus ihrer Web-UI, ohne PC und Adapter. Der Browser-UPDI-Flasher
+(Tab „Daughter Card") ist ein erster Schritt; die eigentliche Lösung ist
+**aktuell nicht geplant**, aber grob durchdacht:
+
+- **Bootloader im ATtiny (bevorzugt, keine Hardware-Änderung).**
+  Ein kleiner residenter Bootloader (~512 B–1,5 KB) liegt im per Fuse `BOOTEND`
+  abgetrennten Boot-Bereich des Flash. Bei jedem Reset läuft er zuerst, liest
+  seine Busadresse aus dem EEPROM und wartet ein kurzes Fenster auf einen an
+  ihn gerichteten Update-Frame vom Master (`CMD_FW_BEGIN`/`_DATA`/`_END` über
+  die vorhandene RS-485-Rahmenschicht). Kommt keiner, springt er in die
+  Anwendung. Kommt einer, empfängt er das Image über **denselben Bus** und
+  schreibt es seitenweise in den App-Bereich (`≥ 0x8200`).
+  Vorteile: keine neue Ader, **einzeln adressierbar** („Modul 3 aktualisieren"),
+  **ausfallsicher** (ein abgebrochenes Update lässt den Bootloader intakt →
+  über den Bus wiederholbar, kein USB-Rettungsflash). Kosten: der Bootloader
+  muss einmalig per UPDI/J6 eingespielt werden (wie der Erstflash ohnehin),
+  Protokoll-Kommandos + Master-UI, ~512 B Flash (App belegt 5,4 von 16 KB).
+  `BOOTEND` sperrt den Baustein **nicht** — UPDI behält vollen Zugriff und kann
+  den Fuse jederzeit zurücksetzen. Referenz: `optiboot_x` (megaTinyCore).
+- **UPDI-Ader im Flachbandkabel (Bastelweg).** Ader 9 des Busbands ist
+  durchverbunden und frei (solange O-2 keine 15-V-Schiene braucht). Eine
+  Drahtbrücke je Karte von `J6.2` auf `J2.9` und ein GPIO am Master brächten
+  UPDI auf den Bus — dann aber **allen zehn Karten gemeinsam** (kein
+  Einzeladressieren, Signalintegrität über zehn Karten Kabel ungetestet).
+  Nur für „alle Karten auf einmal neu bespielen" brauchbar.
 
 ## Hinweis zu den Originalunterlagen
 
