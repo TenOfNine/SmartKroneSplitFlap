@@ -136,6 +136,15 @@ static void test_off_mode_sends_nothing(void)
     TEST_ASSERT_EQUAL_size_t(0, g_txlen);
 }
 
+static void test_zero_field_width_sends_nothing(void)
+{
+    /* keine Module erkannt -> kein SET_ALL(0)/GO ins Leere */
+    app.module_count = 0;
+    masterapp_set_text(&app, "HALLO", 0);
+    masterapp_tick(&app, 0);
+    TEST_ASSERT_EQUAL_size_t(0, g_txlen);
+}
+
 /* --- Status-JSON gegen simulierten Bus ---------------------- */
 
 static void test_status_json_reflects_module_state(void)
@@ -181,6 +190,7 @@ int main(void)
     RUN_TEST(test_clock_without_time_is_blank);
     RUN_TEST(test_hms_auto_falls_back_to_hm);
     RUN_TEST(test_off_mode_sends_nothing);
+    RUN_TEST(test_zero_field_width_sends_nothing);
     RUN_TEST(test_status_json_reflects_module_state);
     return UNITY_END();
 }
