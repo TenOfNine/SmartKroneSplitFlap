@@ -49,14 +49,20 @@
   const NVMCTRL_BASE = 0x1000;
   const NVMCTRL_CTRLA = NVMCTRL_BASE + 0x00;
   const NVMCTRL_STATUS = NVMCTRL_BASE + 0x02;
+  const NVMCTRL_DATAL = NVMCTRL_BASE + 0x06;
+  const NVMCTRL_ADDRL = NVMCTRL_BASE + 0x08;
   const NVM_CMD_WP = 0x01;   // write page
   const NVM_CMD_ERWP = 0x03; // erase+write page
   const NVM_CMD_PBC = 0x04;  // page buffer clear
   const NVM_CMD_CHER = 0x05; // chip erase
+  const NVM_CMD_WFU = 0x07;  // write fuse
   const NVM_STATUS_BUSY = 0x03; // FBUSY | EEBUSY
   const NVM_STATUS_WRERROR = 0x04;
 
   const SIGROW_DEVICEID = 0x1100;
+  const FUSE_BASE = 0x1280;
+  const FUSE_BOOTEND = FUSE_BASE + 0x08;   // Fuse 8
+  const BOOTEND_VALUE = 0x0c;              // 0x0C * 256 = App ab 0x0C00
   const FLASH_BASE = 0x8000;
   const FLASH_PAGE = 64;
   const FLASH_SIZE = 0x4000; // 16 KiB
@@ -382,6 +388,21 @@
       }
     }
 
+    /* Eine Fuse schreiben (NVM v0: ADDR + DATA + WFU).  addr = volle Fuse-Adresse
+     * im Datenraum, z. B. 0x1288 fuer BOOTEND. */
+    async writeFuse(addr, value) {
+      await this._waitNvmReady();
+      await this.u.sts8(NVMCTRL_ADDRL, addr & 0xff);
+      await this.u.sts8(NVMCTRL_ADDRL + 1, (addr >> 8) & 0xff);
+      await this.u.sts8(NVMCTRL_DATAL, value & 0xff);
+      await this.u.sts8(NVMCTRL_CTRLA, NVM_CMD_WFU);
+      await sleep(2);
+      await this._waitNvmReady();
+    }
+    async readFuse(addr) {
+      return this.u.lds8(addr);
+    }
+
     async done() {
       // Reset -> Anwendung startet
       await this.u.stcs(CS_ASI_RESET_REQ, RESET_REQ);
@@ -426,14 +447,38 @@
     return out;
   }
 
+  /* Zwei geparste Images ueberlagern: b (Anwendung) hat Vorrang, wo != 0xFF. */
+  function mergeImages(a, b) {
+    const n = Math.max(a.length, b.length);
+    const out = new Uint8Array(n).fill(0xff);
+    for (let i = 0; i < n; i++) {
+      const bv = i < b.length ? b[i] : 0xff;
+      out[i] = bv !== 0xff ? bv : (i < a.length ? a[i] : 0xff);
+    }
+    return out;
+  }
+
   // ---- Orchestrierung -------------------------------------------
-  async function flashDaughterCard(port, hexText, opts) {
+  /*
+   * opts.mode:
+   *   "app"     -> nur die Anwendung schreiben (opts.hex, App @ 0x0000)
+   *   "factory" -> Bootloader (opts.bootloaderHex) + Anwendung (opts.appHex,
+   *                @ 0x0C00) schreiben und die Fuse BOOTEND = 0x0C setzen
+   */
+  async function flashDaughterCard(port, opts) {
     opts = opts || {};
     const log = opts.onLog || (() => {});
     const progress = opts.onProgress || (() => {});
+    const factory = opts.mode === "factory";
 
-    const image = parseIntelHex(hexText);
-    log(`Firmware: ${image.length} B, ${Math.ceil(image.length / FLASH_PAGE)} Seiten`);
+    let image;
+    if (factory) {
+      image = mergeImages(parseIntelHex(opts.bootloaderHex), parseIntelHex(opts.appHex));
+      log(`Werksflash: Bootloader + App, ${image.length} B`);
+    } else {
+      image = parseIntelHex(opts.hex);
+      log(`Anwendung: ${image.length} B`);
+    }
 
     const t = new Transport(port);
     const u = new Updi(t);
@@ -453,6 +498,14 @@
         throw new Error(
           `kein ATtiny1616 (erwartet ${ATTINY1616_ID.map(hex2).join(" ")}). Abbruch.`
         );
+      }
+
+      if (factory) {
+        const cur = await nvm.readFuse(FUSE_BOOTEND);
+        log(`BOOTEND ist 0x${hex2(cur)} -> setze 0x${hex2(BOOTEND_VALUE)} …`);
+        await nvm.writeFuse(FUSE_BOOTEND, BOOTEND_VALUE);
+        const chk = await nvm.readFuse(FUSE_BOOTEND);
+        if (chk !== BOOTEND_VALUE) throw new Error(`BOOTEND-Fuse nicht gesetzt (0x${hex2(chk)}).`);
       }
 
       log("Schreibe Flash …");

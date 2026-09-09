@@ -400,14 +400,16 @@
     </div>
 
     <div class="card card--flash">
-      <button class="flash-btn" id="mod-go">Adapter verbinden &amp; schreiben</button>
-      <p class="flash-meta" id="mod-meta">Ziel: <b>ATtiny1616</b> &middot; Image wird geladen&hellip;</p>
+      <button class="flash-btn" id="mod-go">Adapter verbinden &amp; Werksflash</button>
+      <p class="flash-meta" id="mod-meta">Ziel: <b>ATtiny1616</b> &middot; Images werden geladen&hellip;</p>
       <div class="bar" id="mod-bar" hidden><i id="mod-fill"></i></div>
       <div class="log" id="mod-log"></div>
       <p class="note">
-        Der Baustein wird <b>komplett gelöscht</b> (auch die im EEPROM abgelegte
-        Busadresse — die wird beim nächsten Start neu vergeben). Vor dem Schreiben
-        prüft der Flasher die Geräte-ID.
+        Schreibt <b>Bootloader + Anwendung</b> und setzt die Fuse
+        <code>BOOTEND&nbsp;=&nbsp;0x0C</code>. Der Baustein wird komplett gelöscht
+        (auch die im EEPROM abgelegte Busadresse — die wird beim nächsten Start neu
+        vergeben). Vor dem Schreiben prüft der Flasher die Geräte-ID. Danach lässt
+        sich die Karte über den Bus aus der Master-Web-UI aktualisieren.
       </p>
     </div>
 
@@ -501,27 +503,28 @@
   for (const [t] of tabs) document.getElementById(t).addEventListener("click", () => selectTab(t));
   if (location.hash === "#daughtercard") selectTab("tab-module");
 
-  // ---- Daughter-Card-Flasher ------------------------------------
-  const MOD_HEX = "./krone-daughtercard-attiny1616.hex";
+  // ---- Daughter-Card-Werksflasher ------------------------------
+  // Schreibt Bootloader + Anwendung (@ 0x0C00) und setzt BOOTEND = 0x0C.
   const log = document.getElementById("mod-log");
   const bar = document.getElementById("mod-bar");
   const fill = document.getElementById("mod-fill");
   const goBtn = document.getElementById("mod-go");
+  const _hex = {};
 
-  fetch(MOD_HEX, { cache: "no-cache" })
-    .then((r) => (r.ok ? r.text() : Promise.reject()))
-    .then((txt) => {
-      try {
-        const img = window.KroneUpdi.parseIntelHex(txt);
-        document.getElementById("mod-meta").innerHTML =
-          "Ziel: <b>ATtiny1616</b> &middot; <b>" + img.length + " B</b>";
-        goBtn._hex = txt;
-      } catch (e) {
-        document.getElementById("mod-meta").textContent = "Image ungültig: " + e.message;
-      }
+  Promise.all([
+    fetch("./krone-daughtercard-bootloader.hex", { cache: "no-cache" }).then((r) => r.text()),
+    fetch("./krone-daughtercard-attiny1616-boot.hex", { cache: "no-cache" }).then((r) => r.text()),
+  ])
+    .then(([bl, app]) => {
+      _hex.bl = bl;
+      _hex.app = app;
+      const b = window.KroneUpdi.parseIntelHex(bl).length;
+      const a = window.KroneUpdi.parseIntelHex(app).length;
+      document.getElementById("mod-meta").innerHTML =
+        "Ziel: <b>ATtiny1616</b> &middot; Bootloader <b>" + b + " B</b> + App <b>" + a + " B</b>";
     })
     .catch(() => {
-      document.getElementById("mod-meta").textContent = "Image nicht gefunden.";
+      document.getElementById("mod-meta").textContent = "Images nicht gefunden.";
     });
 
   function line(msg, cls) {
@@ -537,8 +540,8 @@
       line("Dieser Browser kann kein Web Serial — Chrome oder Edge auf dem Desktop nutzen.", "err");
       return;
     }
-    if (!goBtn._hex) {
-      line("Kein Firmware-Image geladen.", "err");
+    if (!_hex.bl || !_hex.app) {
+      line("Firmware-Images nicht geladen.", "err");
       return;
     }
     let port;
@@ -552,7 +555,10 @@
     bar.hidden = false;
     fill.style.width = "0";
     try {
-      await window.KroneUpdi.flashDaughterCard(port, goBtn._hex, {
+      await window.KroneUpdi.flashDaughterCard(port, {
+        mode: "factory",
+        bootloaderHex: _hex.bl,
+        appHex: _hex.app,
         onLog: (m) => line(m),
         onProgress: (f) => {
           fill.style.width = Math.round(f * 100) + "%";

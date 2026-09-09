@@ -119,8 +119,9 @@ def cmd_pubkey(_args: argparse.Namespace) -> int:
 def cmd_sign(args: argparse.Namespace) -> int:
     key = _load_private()
     image = Path(args.infile).read_bytes()
-    if image[:1] != b"\xe9":
-        sys.exit("Eingabe ist kein ESP32-App-Image (Magic 0xE9 fehlt).")
+    if not args.raw and image[:1] != b"\xe9":
+        sys.exit("Eingabe ist kein ESP32-App-Image (Magic 0xE9 fehlt). "
+                 "Fuer ein Rohbinaer (z. B. ATtiny) --raw angeben.")
     digest = hashlib.sha256(image).digest()
     header = bytearray(HEADER_LEN)
     header[0:4] = MAGIC
@@ -180,9 +181,11 @@ def main() -> int:
     p.add_argument("--force", action="store_true")
     p.set_defaults(fn=cmd_init)
     sub.add_parser("pubkey", help="Header aus vorhandenem Key neu schreiben").set_defaults(fn=cmd_pubkey)
-    p = sub.add_parser("sign", help="App-Image signieren -> .kota")
+    p = sub.add_parser("sign", help="App-Image signieren -> .kota / .mota")
     p.add_argument("infile")
     p.add_argument("outfile")
+    p.add_argument("--raw", action="store_true",
+                   help="Rohbinaer ohne ESP-Magic (z. B. ATtiny-App fuer .mota)")
     p.set_defaults(fn=cmd_sign)
     p = sub.add_parser("verify", help="Container gegen ota_pubkey.h pruefen")
     p.add_argument("infile")
