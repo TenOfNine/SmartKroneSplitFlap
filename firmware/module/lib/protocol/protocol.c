@@ -23,6 +23,11 @@ static const proto_cmd_info_t k_cmd_table[] = {
     { CMD_ENUM_ASSIGN, "ENUM_ASSIGN", ADDRESSING_BROADCAST, 1,  true  },
     { CMD_ENUM_DONE,   "ENUM_DONE",   ADDRESSING_BROADCAST, 0,  false },
     { CMD_GET_UID,     "GET_UID",     ADDRESSING_UNICAST,   0,  true  },
+    { CMD_GET_VERSION,      "GET_VERSION",      ADDRESSING_UNICAST,   0,  true  },
+    { CMD_ENTER_BOOTLOADER, "ENTER_BOOTLOADER", ADDRESSING_BOTH,      0,  false },
+    { CMD_FW_BEGIN,         "FW_BEGIN",         ADDRESSING_UNICAST,   4,  true  },
+    { CMD_FW_DATA,          "FW_DATA",          ADDRESSING_UNICAST,   -1, true  },
+    { CMD_FW_END,           "FW_END",           ADDRESSING_UNICAST,   0,  true  },
     { CMD_PING,        "PING",        ADDRESSING_UNICAST,   0,  true  },
 };
 
