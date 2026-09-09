@@ -6,6 +6,10 @@ reference/
 __pycache__/
 *.pyc
 
+# Node (nur fuer tools/check_webui.mjs -- jsdom, nicht versioniert)
+node_modules/
+package-lock.json
+
 # PlatformIO
 .pio/
 

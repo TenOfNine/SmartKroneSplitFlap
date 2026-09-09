@@ -32,6 +32,10 @@ jobs:
         run: pio test -e native -d firmware/master
       - name: busctl
         run: python tools/test_busctl.py
+      - name: Web-UI (Syntax + jsdom-Smoke)
+        run: |
+          npm install --no-save --no-audit --no-fund jsdom@24
+          node tools/check_webui.mjs
 
   firmware:
     name: Firmware-Builds
