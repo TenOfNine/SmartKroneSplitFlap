@@ -100,10 +100,14 @@ void masterapp_tick(masterapp_t *app, uint32_t now_ms)
         app->mode = APP_MODE_CLOCK_HM;
     }
 
+    const size_t w = app->module_count;
+    if (w == 0u) {
+        return;   /* keine Module -> nichts anzuzeigen, kein SET_ALL(0)/GO */
+    }
+
     uint8_t want[BUSMASTER_MAX_MODULES];
     masterapp_current_blaetter(app, want);
 
-    const size_t w = app->module_count;
     bool changed = !app->have_shown;
     for (size_t i = 0; i < w && !changed; ++i) {
         if (want[i] != app->shown[i]) {
