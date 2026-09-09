@@ -33,6 +33,13 @@ Fälle ab: Kollisionserkennung, Rückfall EEPROM-Adresse, Rückfall Serviceadres
 ```bash
 pio run  -e attiny1616               # ~5,3 KB Flash (Grenze 8 KB)
 pio run  -e attiny1616 -t upload     # SerialUPDI, FTDI-Adapter mit 4,7 kΩ TX–RX
+python tools/build_module_firmware.py   # -> prebuilt/ (Hex für den Browser-Flasher)
 ```
 
 Voraussetzung am Baustein: OSCCFG-Fuse auf 20 MHz (PlatformIO-Board-Vorgabe).
+
+**Browser-Flasher (experimentell).** `firmware/module/prebuilt/krone-daughtercard-attiny1616.hex`
+lässt sich über <https://tenofnine.github.io/SmartKroneSplitFlap/> (Tab *Daughter
+Card*) schreiben — ein Browser-Port von SerialUPDI (`firmware/master/prebuilt/updi.js`,
+Web Serial API). Am Gerät noch nicht verifiziert; `-t upload` bleibt der
+abgesicherte Weg. Verkabelung und Ausblick siehe Projekt-README.

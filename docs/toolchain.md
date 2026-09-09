@@ -88,6 +88,7 @@ pio run  -e esp32c3    -d firmware/master   # ESP32-C3 Super Mini kompilieren
 pio test -e native     -d firmware/module   # Protokolltests auf dem Host
 python tools/ota_keys.py init               # einmalig: OTA-Signaturschluessel (docs/firmware-signing.md)
 python tools/build_master_firmware.py       # factory.bin (USB) + signierte .kota -> firmware/master/prebuilt/
+python tools/build_module_firmware.py       # ATtiny-Hex -> firmware/module/prebuilt/ (Browser-UPDI-Flasher)
 ```
 
 ## 4. PlatformIO-Ziele
