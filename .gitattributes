@@ -13,3 +13,7 @@
 *.kicad_pcb  text eol=lf
 *.kicad_pro  text eol=lf
 *.net        text eol=lf
+
+# signierte Firmware-Container sind binaer
+*.kota binary
+*.mota binary
