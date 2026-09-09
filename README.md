@@ -90,11 +90,38 @@ Einrichtung siehe [`docs/firmware-signing.md`](docs/firmware-signing.md). Der
 Zugriff auf Web-UI/REST ist ab Werk auf private Netze beschränkt und lässt sich
 mit einem Passwort schützen (*Einstellungen › Zugriffsschutz*).
 
-**Daughter Card (ATtiny1616).** Über die UPDI-Stiftleiste J6. Nötig: ein
-USB-Seriell-Adapter (FTDI o. ä.) mit einem 4,7-kΩ-Widerstand zwischen dessen TX
-und RX; TX/RX gemeinsam an J6 Pin 2 (UPDI), GND an Pin 1, +5 V an Pin 3. Dann
-`pio run -e attiny1616 -t upload -d firmware/module` (Upload-Protokoll
-`serialupdi`; Adapter-Port ggf. per `--upload-port`).
+**Daughter Card (ATtiny1616).** Über die UPDI-Stiftleiste J6 mit einem
+USB-Seriell-Adapter (FTDI/CP2102/CH340, **auf 5 V**) und einem 4,7-kΩ-Widerstand
+zwischen TXD und RXD:
+
+```
+  USB-Seriell-Adapter                       Daughter Card J6 (1×3)
+  ┌───────────────┐
+  │           GND ●──────────────────────────────● 1  GND
+  │           TXD ●────[ 4,7 kΩ ]───┬────────────● 2  UPDI   (→ ATtiny PA0)
+  │           RXD ●─────────────────┘
+  │        5V/VCC ●──────────────────────────────● 3  +5V
+  └───────────────┘        └─ nur wenn die Karte sonst keine 5 V hat
+```
+
+An UPDI kein Kondensator (Schaltplan 4.4). Dann:
+
+- **Browser (experimentell):** <https://tenofnine.github.io/SmartKroneSplitFlap/>,
+  Tab *Daughter Card*. Am Gerät noch nicht verifiziert.
+- **Sicher:** `pio run -e attiny1616 -t upload -d firmware/module` (Protokoll
+  `serialupdi`, Port ggf. per `--upload-port`).
+
+Das committete Image liegt unter `firmware/module/prebuilt/`; neu bauen mit
+`python tools/build_module_firmware.py`.
+
+## Ausblick
+
+- **Modul-Firmware über den Bus verteilen** — die Master-Steuerung flasht die
+  Daughter Cards aus ihrer Web-UI, ohne PC und Adapter. Das bräuchte entweder
+  eine UPDI-Ader im Flachbandkabel oder einen Bootloader im ATtiny; beides ist
+  eine Frage für eine spätere Layout-Revision und aktuell **nicht geplant**. Der
+  Browser-UPDI-Flasher (Tab „Daughter Card") ist ein erster Schritt in diese
+  Richtung und vorerst experimentell.
 
 ## Hinweis zu den Originalunterlagen
 

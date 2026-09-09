@@ -38,7 +38,8 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 |---|---|
 | `check_flash.py` | Flash-Verbrauch einer ELF gegen eine Obergrenze prüfen (CI, ATtiny < 8 KB). |
 | `build_master_firmware.py` | `pio run -e esp32c3` + `esptool merge_bin` → `firmware/master/prebuilt/` (`factory.bin` für USB + signierte `.kota` fürs Browser-OTA + Manifest). |
-| `ota_keys.py` | OTA-Signaturschlüssel: `init` (ECDSA-P-256-Paar + `lib/otaverify/ota_pubkey.h`), `pubkey`, `sign IN.bin OUT.kota`. Privater Schlüssel nie im Repo. Siehe `docs/firmware-signing.md`. |
+| `build_module_firmware.py` | `pio run -e attiny1616` → `firmware/module/prebuilt/` (Intel-HEX + SHA für den Browser-UPDI-Flasher). |
+| `ota_keys.py` | OTA-Signaturschlüssel: `init` (ECDSA-P-256-Paar + `lib/otaverify/ota_pubkey.h`), `pubkey`, `sign IN.bin OUT.kota`, `verify`. Privater Schlüssel nie im Repo. Siehe `docs/firmware-signing.md`. |
 
 ## Bus
 
