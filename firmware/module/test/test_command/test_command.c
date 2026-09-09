@@ -64,6 +64,34 @@ static void test_address_range(void)
     TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_GET_STATUS, PROTO_ADDR_MAX + 1, 0));
 }
 
+static void test_firmware_update_commands(void)
+{
+    /* GET_VERSION: Unicast, kein Payload, Antwort */
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_GET_VERSION, 3, 0));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_GET_VERSION, PROTO_ADDR_BROADCAST, 0));
+    TEST_ASSERT_TRUE(proto_cmd_lookup(CMD_GET_VERSION)->has_response);
+
+    /* ENTER_BOOTLOADER: Unicast oder Broadcast, keine Antwort */
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_ENTER_BOOTLOADER, 3, 0));
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_ENTER_BOOTLOADER, PROTO_ADDR_BROADCAST, 0));
+    TEST_ASSERT_FALSE(proto_cmd_lookup(CMD_ENTER_BOOTLOADER)->has_response);
+
+    /* FW_BEGIN: exakt 4 Byte */
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_FW_BEGIN, 3, 4));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_FW_BEGIN, 3, 3));
+
+    /* FW_DATA: variabel, 3..32 (2 Byte Offset + 1..30 Daten) */
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_FW_DATA, 3, 2 + PROTO_FW_CHUNK));
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_FW_DATA, 3, 3));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_FW_DATA, 3, PROTO_MAX_PAYLOAD + 1));
+
+    /* FW_END: kein Payload */
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_FW_END, 3, 0));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_FW_END, PROTO_ADDR_BROADCAST, 0));
+
+    TEST_ASSERT_EQUAL_UINT(30u, PROTO_FW_CHUNK);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -74,5 +102,6 @@ int main(void)
     RUN_TEST(test_both_addressing);
     RUN_TEST(test_enum_assign_shape);
     RUN_TEST(test_address_range);
+    RUN_TEST(test_firmware_update_commands);
     return UNITY_END();
 }

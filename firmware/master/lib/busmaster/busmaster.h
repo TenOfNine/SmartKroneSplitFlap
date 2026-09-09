@@ -35,6 +35,10 @@ typedef struct {
     uint16_t korrektur;
     uint8_t  fw_version;
     uint8_t  miss_count;
+    /* aus CMD_GET_VERSION (Firmware-Verteilung ueber den Bus) */
+    uint16_t app_ver;      /* (major<<8)|minor, 0 = unbekannt   */
+    uint8_t  ver_flags;    /* PROTO_VER_FLAG_*                    */
+    bool     ver_known;
 } bm_module_t;
 
 typedef enum {
@@ -82,6 +86,9 @@ void busmaster_show(busmaster_t *bm, const uint8_t *blaetter, uint8_t count);
 
 /* GET_STATUS an ein Modul; die Antwort aktualisiert mod[addr-1]. */
 void busmaster_poll_status(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
+
+/* CMD_GET_VERSION an ein Modul; die Antwort fuellt mod[addr-1].app_ver/ver_flags. */
+void busmaster_poll_version(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
 
 /* HOME / STOP; addr 0 = Broadcast. */
 void busmaster_home(busmaster_t *bm, uint8_t addr);

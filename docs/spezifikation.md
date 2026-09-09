@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.17 |
+| Version | 0.18 |
 | Datum | 09.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -377,7 +377,16 @@ CRC16/MODBUS wurde gewählt, damit Standardwerkzeuge und Logic-Analyzer-Dekoder 
 | 0x51 | ENUM_ASSIGN | Broadcast | 1 B neue Adresse | ACK nur von der Karte mit aktivem CHAIN_IN |
 | 0x52 | ENUM_DONE | Broadcast | — | keine |
 | 0x53 | GET_UID | einzeln | — | 10 B Seriennummer aus SIGROW |
+| 0x54 | GET_VERSION | einzeln | — | 5 B: Proto, App-Major, App-Minor, Flags (Bit 0 Bootloader, Bit 1 App gültig), Bootloader-Version |
+| 0x55 | ENTER_BOOTLOADER | beides | — | keine (Modul startet in den Bootloader neu) |
+| 0x56 | FW_BEGIN | einzeln | `len16 · crc16` | `[0x01]` ok / `[0x00]` nak |
+| 0x57 | FW_DATA | einzeln | `off16` + bis 30 B | `[0x01]` / `[0x00]` |
+| 0x58 | FW_END | einzeln | — | `[0x01]` ok / `[Fehlercode]` |
 | 0xF0 | PING | einzeln | — | ACK + Firmware-Version |
+
+0x54–0x58 gehören zur Firmware-Verteilung über den Bus (5.7). Ohne residenten
+Bootloader beantwortet die App nur `GET_VERSION` (Flag Bit 0 = 0) und
+`ENTER_BOOTLOADER` (= einfacher Neustart).
 
 **Das zentrale Muster für Display-Updates** ist `SET_ALL` gefolgt von `GO`. Der Broadcast enthält die Zielwerte aller Module in einem Rahmen, jedes Modul entnimmt das Byte an der Stelle seiner eigenen Adresse und puffert es. Erst `GO` löst die Bewegung aus, sodass alle Module synchron starten.
 
@@ -405,6 +414,30 @@ Bei 10 Modulen umfasst `SET_ALL` 18 Byte, `GO` 8 Byte. Ein komplettes Update bel
 | Guard-Zeit nach DE-Abschaltung | 100 µs |
 | Status-Polling | rundlaufend, ein Modul je 100 ms |
 | Wiederholungen bei Timeout | 2, danach Modul als offline markiert |
+
+### 5.7 Firmware-Verteilung über den Bus (experimentell)
+
+Optional trägt jede Daughter Card einen **residenten Bootloader** im per Fuse
+`BOOTEND = 0x0C` abgetrennten Flash-Bereich (0x0000–0x0BFF); die Anwendung liegt
+ab 0x0C00. Bei jedem Reset läuft der Bootloader zuerst und startet die App, sofern
+kein Update angefordert ist und die App gültig ist.
+
+Die Zentralsteuerung spielt den Karten die Firmware über den Bus ein
+(`ENTER_BOOTLOADER` → `FW_BEGIN`/`FW_DATA`/`FW_END`, Kommandos 0x55–0x58). Der
+Master trägt die signierte Modul-App als Blob in seiner eigenen Firmware
+(dieselbe ECDSA-P-256-Kette wie das Master-OTA, `docs/firmware-signing.md`) und
+ist der Vertrauensanker; der Bootloader prüft nur die CRC16 des Images. Ein
+abgebrochener Transfer lässt die App als ungültig markiert — der Bootloader
+bleibt im Update-Modus, der Master wiederholt. Der Bootloader kann von App-Code
+nicht überschrieben werden.
+
+Der Bootloader schaltet den Triac-Treiberpin nie aktiv → der Motor kann während
+eines Updates nicht bestromt werden; er hat einen eigenen Watchdog.
+
+**Status: am Gerät noch nicht verifiziert.** Der Erstflash (Bootloader + App +
+Fuse) läuft über UPDI/J6 — Browser-Werksflasher oder `pymcuprog`. `pio run -e
+attiny1616 -t upload` (App @ 0x0000, ohne Bootloader) bleibt der abgesicherte
+Weg. Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 
 ---
 
@@ -531,6 +564,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | Schnittstellen | MQTT, REST-Schreib-API, OTA und mDNS einzeln abschaltbar (Einstellungen). Die Web-Oberfläche selbst nicht. |
 | Zugriffsschutz | *Einstellungen › Zugriffsschutz*: Herkunft der Anfragen (alle / private Netze / eigenes Subnetz) und optionales Admin-Passwort (HTTP-Basic-Auth). Vorgabe: private Netze, kein Passwort. |
 | Firmware-Update | *Einstellungen › Firmware aktualisieren*: signierten `.kota`-Container hochladen; das Modul prüft Herkunft und Prüfsumme, sonst nur USB. Details `docs/firmware-signing.md`. |
+| Modul-Firmware | *Einstellungen › Modul-Firmware* (experimentell): installierte vs. gebündelte Version je Modul, „Alle aktualisieren" / „Veraltete aktualisieren" — verteilt die Firmware über den Bus, setzt einen residenten Bootloader voraus (5.7, `docs/module-bootloader.md`). |
 
 ### 7.4 Zeichenabbildung
 
@@ -692,7 +726,7 @@ Die Sekundärwicklung des 42-V~-Trafos bleibt **potenzialfrei**. Sie darf an kei
 | NF-3 | Ausfall des WLAN oder des MQTT-Brokers beeinträchtigt die Anzeige nicht; der zuletzt gesetzte Inhalt bleibt stehen |
 | NF-4 | Ausfall einer einzelnen Daughter Card legt die übrigen Module nicht lahm |
 | NF-5 | Alle 42-V~-führenden Teile berührsicher; Trafo als Sicherheitstransformator nach EN 61558 |
-| NF-6 | Firmware-Update der Zentralsteuerung über signiertes Browser-OTA (ECDSA P-256), der Modulsteuerungen über UPDI. Ein nicht mit dem Projektschlüssel signierter Container wird abgelehnt. |
+| NF-6 | Firmware-Update der Zentralsteuerung über signiertes Browser-OTA (ECDSA P-256), der Modulsteuerungen über UPDI oder — mit residentem Bootloader — über den Bus. Ein nicht mit dem Projektschlüssel signierter Container wird abgelehnt. Der Modul-Bootloader lässt sich von App-Code nicht überschreiben und schaltet den Motor nie aktiv. |
 | NF-7 | Kein Modul darf durch einen Firmwarefehler dauerhaft bestromt bleiben, siehe 6.4 |
 | NF-8 | Konfiguration überlebt Stromausfall |
 | NF-9 | Die Zentralsteuerung verarbeitet HTTP-Anfragen im Auslieferungszustand nur aus privaten Netzen (RFC 1918); Herkunftsbereich und ein optionales Admin-Passwort sind konfigurierbar |
@@ -812,6 +846,7 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
 | 0.13 | 01.09.2026 | Kapitel 7.2/7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. **ArduinoOTA entfernt** — der passwortlose espota-UDP-Port entfällt; der `ota_enabled`-Schalter gated jetzt `/api/update`. |
 | 0.15 | 02.09.2026 | Kapitel 7.3/7.5: Zeitzone in der Web-UI als Auswahlliste mit Städtenamen (Berlin, London, New York … 18 Einträge) statt freiem POSIX-String, dazu ein eigener **Sommerzeit-Schalter**. Die Oberfläche baut daraus den POSIX-TZ-String für `configTzTime` und stellt den Schalter bei Zonen ohne Sommerzeit ab. „Andere" behält die Direkteingabe. `/api/config` und das Backup speichern unverändert den fertigen TZ-String. Keine Firmware-Schnittstellen- oder Hardware-Änderung. |
+| 0.18 | 09.09.2026 | Kapitel 5.4/5.7, 7.3, 9: **Firmware-Verteilung über den Bus** (experimentell). Neuer residenter Modul-Bootloader (`firmware/bootloader`, Fuse `BOOTEND = 0x0C`, App ab 0x0C00 = env `attiny1616_boot`), Kommandos `GET_VERSION`/`ENTER_BOOTLOADER`/`FW_BEGIN`/`FW_DATA`/`FW_END` (0x54–0x58). Host-getestet: `lib/fwupdate` (Seiten-Sammler), `lib/moduleupdate` (Master-Warteschlange). Der Master trägt die signierte Modul-App eingebettet (Option A, `module_fw.h`), prüft die Signatur beim Start und verteilt sie über den Bus; neue REST-Endpunkte `/api/module/firmware` + `/api/module/update` + `.../status` und *Einstellungen › Modul-Firmware* mit „Alle aktualisieren". Der Browser-Werksflasher schreibt jetzt Bootloader + App und setzt die Fuse. `docs/module-bootloader.md`. **Am Gerät nicht verifiziert** — `pio -t upload` bleibt abgesichert. Keine Hardware-Änderung. |
 | 0.17 | 09.09.2026 | Werkzeuge/Doku: **Browser-UPDI-Flasher** für die Modul-Firmware (`firmware/master/prebuilt/updi.js`, Port von SerialUPDI auf die Web Serial API) als zweiter Tab neben dem Master-Flasher der GitHub Page; `tools/build_module_firmware.py` legt das Intel-HEX nach `firmware/module/prebuilt/`. Geräte-ID-Prüfung (ATtiny1616 = `1E 94 21`), Chip-Erase, Page-Programmierung, Verify. **Experimentell, am Gerät noch nicht verifiziert** — `pio -t upload` bleibt der abgesicherte Weg. README-Ausblick: Modul-Firmware über den Bus verteilen (Bootloader oder UPDI-Ader im Kabel, spätere Layout-Revision). Keine Firmware- oder Hardware-Änderung. |
 | 0.16 | 08.09.2026 | Kapitel 7.2/7.3/7.5, 9: Sicherheitspaket der Zentralsteuerung. (1) **Signiertes Browser-OTA** — `/api/update` nimmt nur den Container `krone-master-esp32c3.kota` an (Magic, SHA-256, ECDSA-P-256-Signatur über einen einkompilierten Public Key, Prüfung per mbedTLS); neuer host-getesteter Parser `lib/otaverify`, Signaturwerkzeug `tools/ota_keys.py`, `docs/firmware-signing.md`. (2) **Zugriffsschutz** — Herkunftsfilter `net_scope` (Vorgabe: private Netze RFC 1918) + optionale HTTP-Basic-Auth, als Wrapper auf allen Endpunkten; NF-9. (3) Doku: private E-Mail aus den Prüfpunkt-/Symbolprüfungs-Tabellen entfernt, Messfotos ohne EXIF und verkleinert. Keine Hardware-Änderung. |
 | 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |

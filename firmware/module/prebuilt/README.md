@@ -1,22 +1,20 @@
 # Vorgebaute Modul-Firmware (ATtiny1616)
 
-Erzeugt von `tools/build_module_firmware.py` aus `firmware/module/` (zuletzt gebaut nahe Commit `41c3fb5`, 2026-09-09). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_module_firmware.py` (zuletzt nahe Commit `1a600af`, 2026-09-09). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|
-| `krone-daughtercard-attiny1616.hex` | Intel-HEX der Modul-Firmware. Wird vom Browser-UPDI-Flasher (Tab **Daughter Card** auf der GitHub Page) geschrieben. |
+| `krone-daughtercard-attiny1616.hex` | App @ 0x0000, **ohne** Bootloader. `pio run -e attiny1616 -t upload` bzw. `pymcuprog`. Der abgesicherte Weg. |
+| `krone-daughtercard-bootloader.hex` | residenter Bootloader @ 0x0000 (Werksflash). |
+| `krone-daughtercard-attiny1616-boot.hex` | App @ 0x0C00, laeuft hinter dem Bootloader (Werksflash). |
+| `krone-daughtercard-attiny1616.mota` | signierter Container der `-boot`-App fuer die Firmware-Verteilung ueber den Bus (der Master bettet sie ein). |
 
-SHA-256: `362ef32d50c8ede7ef8548297dfc4e6871d616de9cbe584539cc134fbc840dff`
+SHA-256 (`krone-daughtercard-attiny1616.hex`): `10abb0395472e6e4aa5bf8522754c4b6831ef765d0b1153a0090d154fd8d70c3`
 
 ## Flashen
 
-- **Browser (experimentell):** <https://tenofnine.github.io/SmartKroneSplitFlap/> , Tab *Daughter Card*. USB-Seriell-Adapter (5 V) mit 4,7-kOhm-Bruecke zwischen TX und RX an J6: TX/RX -> Pin 2 (UPDI), GND -> Pin 1, +5 V -> Pin 3 (nur wenn die Karte sonst keine 5 V hat). Chrome/Edge Desktop.
-- **Kommandozeile:**
+- **Toolchain (sicher):** `pio run -e attiny1616 -t upload -d firmware/module`.
+- **Browser-Werksflash (experimentell):** <https://tenofnine.github.io/SmartKroneSplitFlap/>, Tab *Daughter Card*. Schreibt Bootloader + `-boot`-App und setzt die Fuse `BOOTEND = 0x0C`. USB-Seriell-Adapter (5 V) mit 4,7-kOhm-Bruecke TX--RX an J6 (TX/RX -> Pin 2 UPDI, GND -> Pin 1, +5 V -> Pin 3).
+- **Ueber den Bus:** ist ein Bootloader geflasht, aktualisiert der Master die Karten aus seiner Web-UI (*Einstellungen > Modul-Firmware*). Siehe `docs/module-bootloader.md`.
 
-  ```
-  pio run -e attiny1616 -t upload -d firmware/module
-  ```
-
-  bzw. direkt `pymcuprog write -d attiny1616 -t uart -u <port> -f krone-daughtercard-attiny1616.hex --erase --verify`.
-
-Der Flasher prueft vor dem Schreiben die Geraete-ID (ATtiny1616 = `1E 94 21`) und bricht bei Abweichung ab. Fuses (OSCCFG 20 MHz) werden nicht angefasst.
+Der Flasher prueft die Geraete-ID (ATtiny1616 = `1E 94 21`). `krone-daughtercard-attiny1616.mota` vorhanden.

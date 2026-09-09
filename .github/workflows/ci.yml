@@ -52,12 +52,19 @@ jobs:
         run: pio run -e attiny1616 -d firmware/module
       - name: Flash-Verbrauch < 8 KB
         run: python tools/check_flash.py firmware/module/.pio/build/attiny1616/firmware.elf 8192
+      - name: Modul-Firmware hinter Bootloader (attiny1616_boot)
+        run: pio run -e attiny1616_boot -d firmware/module
+      - name: Modul-Bootloader (< 3 KiB Boot-Sektion)
+        run: |
+          pio run -e bootloader -d firmware/bootloader
+          python tools/check_flash.py firmware/bootloader/.pio/build/bootloader/firmware.elf 3072
       - name: Master-Firmware (ESP32-C3)
         run: pio run -e esp32c3 -d firmware/master
-      - name: Prebuilt-OTA-Container gegen den einkompilierten Public Key pruefen
+      - name: Prebuilt-Container gegen den einkompilierten Public Key pruefen
         run: |
           pip install cryptography
           python tools/ota_keys.py verify firmware/master/prebuilt/krone-master-esp32c3.kota
+          python tools/ota_keys.py verify firmware/module/prebuilt/krone-daughtercard-attiny1616.mota
 
   hardware:
     name: Schaltplan-ERC

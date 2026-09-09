@@ -81,10 +81,44 @@ def _boot_app0() -> Path:
     return p
 
 
+def _embed_module_fw() -> None:
+    """firmware/module/prebuilt/*.mota -> firmware/master/src/module_fw.h.
+
+    Der Master traegt die signierte Modul-App als PROGMEM-Blob (Option A der
+    Firmware-Verteilung ueber den Bus). Fehlt die .mota, wird ein leerer Blob
+    geschrieben -- der Master meldet dann "keine gebundelte Modul-Firmware".
+    """
+    import re
+    mota = REPO / "firmware" / "module" / "prebuilt" / "krone-daughtercard-attiny1616.mota"
+    board = (REPO / "firmware" / "module" / "src" / "board.h").read_text()
+    maj = int(re.search(r"APP_VERSION_MAJOR\s+(\d+)", board).group(1))
+    minr = int(re.search(r"APP_VERSION_MINOR\s+(\d+)", board).group(1))
+    hdr = FW / "src" / "module_fw.h"
+    data = mota.read_bytes() if mota.is_file() else b""
+    body = ",\n    ".join(
+        ", ".join(f"0x{b:02x}" for b in data[i:i + 16]) for i in range(0, len(data), 16)
+    ) or "0x00"
+    hdr.write_text(
+        "/* Erzeugt von tools/build_master_firmware.py -- nicht von Hand bearbeiten.\n"
+        " * Signierter .mota-Container der Modul-App (firmware/module, env attiny1616_boot)\n"
+        " * fuer die Firmware-Verteilung ueber den Bus. Leer = keine gebundelte Firmware. */\n"
+        "#ifndef KRONE_MODULE_FW_H\n#define KRONE_MODULE_FW_H\n\n"
+        "#include <stdint.h>\n\n"
+        f"#define MODULE_FW_LEN {len(data)}u\n"
+        f"#define MODULE_FW_VER 0x{maj:02x}{minr:02x}u   /* APP_VERSION_MAJOR.MINOR */\n\n"
+        "static const uint8_t MODULE_FW_MOTA[] = {\n    " + body + "\n};\n\n"
+        "#endif\n",
+        encoding="utf-8",
+    )
+    print(f"eingebettet: {hdr.relative_to(REPO)} ({len(data)} B .mota, v{maj}.{minr})")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--no-build", action="store_true", help="pio run ueberspringen")
     args = ap.parse_args()
+
+    _embed_module_fw()
 
     if not args.no_build:
         r = subprocess.run([_pio(), "run", "-e", "esp32c3"], cwd=FW)
