@@ -223,7 +223,7 @@ reichen.
 
 - `firmware/master/prebuilt/updi.js` — SerialUPDI auf der Web Serial API (Port von
   `pymcuprog` / megaTinyCore): BREAK per Baud-Umschaltung, Link-Init 8E2,
-  `NVMErase`/`NVMProg`-Key, Geräte-ID-Prüfung (`1E 94 22`), 64-Byte-Page-
+  `NVMErase`/`NVMProg`-Key, Geräte-ID-Prüfung (`1E 94 21`), 64-Byte-Page-
   Programmierung, Verify. Keine Abhängigkeiten.
 - Zweiter Tab „Daughter Card" in `firmware/master/prebuilt/index.html`, mit
   Schaltbild der Adapter-Verkabelung (Inline-SVG). Nur das mitgelieferte Hex,

@@ -11,7 +11,7 @@ Erzeugt:
     README.md                           Kurzanleitung + SHA-256
 
 Der Flasher (firmware/master/prebuilt/updi.js) prueft vor dem Schreiben die
-Geraete-ID (ATtiny1616 = 1E 94 22). Bei jeder Firmware-Aenderung neu ausfuehren.
+Geraete-ID (ATtiny1616 = 1E 94 21). Bei jeder Firmware-Aenderung neu ausfuehren.
 """
 from __future__ import annotations
 
@@ -80,7 +80,7 @@ def main() -> int:
         "  bzw. direkt `pymcuprog write -d attiny1616 -t uart -u <port> -f "
         f"{HEX_NAME} --erase --verify`.\n\n"
         "Der Flasher prueft vor dem Schreiben die Geraete-ID (ATtiny1616 = "
-        "`1E 94 22`) und bricht bei Abweichung ab. Fuses (OSCCFG 20 MHz) werden "
+        "`1E 94 21`) und bricht bei Abweichung ab. Fuses (OSCCFG 20 MHz) werden "
         "nicht angefasst.\n",
         encoding="utf-8",
     )

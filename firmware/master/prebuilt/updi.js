@@ -61,7 +61,7 @@
   const FLASH_PAGE = 64;
   const FLASH_SIZE = 0x4000; // 16 KiB
 
-  const ATTINY1616_ID = [0x1e, 0x94, 0x22];
+  const ATTINY1616_ID = [0x1e, 0x94, 0x21]; // laut pymcuprog DFP + avrdude.conf
 
   // Ziel-Baudrate.  Falls die Init scheitert, ist das der erste Knopf zum Drehen.
   const BAUD = 115200;
