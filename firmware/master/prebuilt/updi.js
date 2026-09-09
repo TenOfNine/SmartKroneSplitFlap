@@ -31,6 +31,10 @@
 
   const CTRLB_CCDETDIS = 1 << 3; // 0x08 -- Kollisionserkennung aus (1-Draht)
   const CTRLA_IBDLY = 1 << 7;    // 0x80 -- Inter-Byte-Delay
+  // CTRLA-Werte fuer den Blockschreibvorgang: GTVAL = 6 (Guard-Zeit 2 Takte)
+  // plus/ohne RSD (Response Signature Disable, Bit 3). Wie SerialUPDI.
+  const RSD_ON = 0x0e;
+  const RSD_OFF = 0x06;
 
   const KEY_STATUS_CHIPERASE = 1 << 3;
   const KEY_STATUS_NVMPROG = 1 << 4;
@@ -247,22 +251,28 @@
       return out;
     }
 
-    /* ST *ptr++ (byte) fuer einen ganzen Block; jede ST liefert ein ACK */
+    /* Einen ganzen Seitenpuffer (data.length gerade) am Stueck schreiben.
+     *
+     * ST liefert im Normalbetrieb nach JEDEM Byte ein ACK -- das kollidiert auf
+     * der Ein-Draht-Leitung mit den folgenden Datenbytes. Deshalb wie SerialUPDI
+     * (megaTinyCore): CTRLA.RSD = 1 (Response Signature Disable), dann
+     * REPEAT + ST-Wort + alle Datenwoerter + STCS(CTRLA, RSD=0) in einem Zug,
+     * anschliessend nur das Echo lesen (keine ACKs). */
     async stPtrIncBlock(data) {
-      const n = data.length;
-      if (n > 1) await this._cmd([SYNCH, 0xa0 | 0, n - 1], 0); // REPEAT n-1
+      const words = data.length >> 1;
+      await this.stcs(CS_CTRLA, RSD_ON);                      // RSD an
+      await this._cmd([SYNCH, 0xa0 | 0, words - 1], 0);       // REPEAT words-1
       this.t.flush();
-      // ST-Opcode + alle Datenbytes zusammen senden
-      const frame = new Uint8Array(2 + n);
+      const frame = new Uint8Array(2 + data.length + 3);
       frame[0] = SYNCH;
-      frame[1] = 0x60 | (1 << 2) | 0; // ST *ptr++ byte
+      frame[1] = 0x60 | (1 << 2) | 1;                         // ST *ptr++ (Wort)
       frame.set(data, 2);
+      const tail = 2 + data.length;
+      frame[tail] = SYNCH;
+      frame[tail + 1] = 0xc0 | CS_CTRLA;                      // STCS CTRLA
+      frame[tail + 2] = RSD_OFF;                              // RSD aus
       await this.t.write(frame);
-      await this.t.read(frame.length, 3000); // Echo
-      const acks = await this.t.read(n, 3000);
-      for (let i = 0; i < n; i++) {
-        if (acks[i] !== ACK) throw new Error(`ST-Block NACK @${i} 0x${hex2(acks[i])}`);
-      }
+      await this.t.read(frame.length, 3000);                  // nur Echo, keine ACKs
     }
 
     /* 64-bit-Schluessel senden */
