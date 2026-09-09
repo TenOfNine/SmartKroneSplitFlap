@@ -39,9 +39,11 @@ extern "C" {
 #include "eventlog.h"
 #include "hadiscovery.h"
 #include "masterapp.h"
+#include "moduleupdate.h"
 #include "otaverify.h"
 #include "protocol.h"
 }
+#include "module_fw.h"   /* generiert von tools/build_master_firmware.py */
 #include "ota_sign.h"
 
 /* --- Hardware --------------------------------------------------------- */
@@ -196,11 +198,65 @@ static void bus_begin()
     }
 }
 
+/* ================================================================== */
+/* Firmware-Verteilung an die Module ueber den Bus (experimentell)     */
+/* ================================================================== */
+
+static moduleupdate_t g_mu;
+static proto_parser_t g_mu_parser;
+static bool     g_module_fw_ok   = false;   /* eingebettete .mota gueltig     */
+static const uint8_t *g_module_img = nullptr;
+static uint32_t g_module_img_len  = 0;
+static uint16_t g_module_img_crc  = 0;
+static uint32_t g_mu_last_tick    = 0;
+
+static void module_fw_verify()
+{
+    if (MODULE_FW_LEN < OTA_HEADER_LEN) {
+        return;                                     /* ohne Signaturschluessel gebaut */
+    }
+    ota_header_t h;
+    if (otaverify_parse_header(MODULE_FW_MOTA, MODULE_FW_LEN, 0x4000u, &h) != OTA_HDR_OK) {
+        evlog_push(&g_log, 0, EVLOG_WARN, "modfw", "Container ungueltig");
+        return;
+    }
+    if (!ota_sign_verify_header(MODULE_FW_MOTA, OTA_SIGNED_LEN, h.sig)) {
+        evlog_push(&g_log, 0, EVLOG_WARN, "modfw", "Signatur ungueltig");
+        return;
+    }
+    g_module_img     = MODULE_FW_MOTA + OTA_HEADER_LEN;
+    g_module_img_len = h.img_len;
+    g_module_img_crc = proto_crc16(g_module_img, g_module_img_len);
+    g_module_fw_ok   = true;
+    moduleupdate_init(&g_mu, bus_tx, nullptr, g_module_img, g_module_img_len,
+                      g_module_img_crc, MODULE_FW_VER);
+    evlog_push(&g_log, 0, EVLOG_INFO, "modfw", "Modul-Firmware v%u.%u gebundelt (%u B)",
+               (unsigned)(MODULE_FW_VER >> 8), (unsigned)(MODULE_FW_VER & 0xFF),
+               (unsigned)g_module_img_len);
+}
+
+static uint32_t module_online_mask()
+{
+    uint32_t m = 0;
+    const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+    for (uint8_t a = 1; a <= count && a <= MU_MAX_ADDR; ++a) {
+        if (g_bus.mod[a - 1].online) m |= (1u << (a - 1u));
+    }
+    return m;
+}
+
 static void bus_pump(uint32_t now)
 {
     uint8_t b;
     while (uart_read_bytes(RS485_UART, &b, 1, 0) == 1) {
-        busmaster_on_rx_byte(&g_bus, b, now);
+        if (moduleupdate_busy(&g_mu)) {
+            if (proto_parser_feed(&g_mu_parser, b) == PARSE_FRAME_OK) {
+                const proto_frame_t *f = &g_mu_parser.frame;
+                moduleupdate_on_frame(&g_mu, f->cmd, f->addr, f->payload, f->payload_len, now);
+            }
+        } else {
+            busmaster_on_rx_byte(&g_bus, b, now);
+        }
     }
     /* CHAIN ist high-aktiv; der 74LVC1G17 hebt 3,3 V -> 5 V nicht invertierend. */
     digitalWrite(CHAIN_PIN, g_bus.chain_active ? HIGH : LOW);
@@ -596,6 +652,16 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class="row mt"><button class="btn primary" id=fwgo disabled>Update starten</button>
 <span id=fwoff class="hint warn" style=margin:0;display:none>In den Schnittstellen deaktiviert</span></div>
 </div>
+
+<div class=sect><h3>Modul-Firmware <span class="pill warn" style=font-size:10px>experimentell</span></h3>
+<p class=hint>Verteilt die mitgelieferte Daughter-Card-Firmware über den Bus. Setzt einen residenten Bootloader auf den Modulen voraus (Werksflash über den <a href="https://tenofnine.github.io/SmartKroneSplitFlap/" target=_blank>Web-Flasher</a>, Tab „Daughter Card"). <b>Am Gerät noch nicht verifiziert.</b></p>
+<dl class=kv id=modfwmeta style=margin-top:6px></dl>
+<table class=mtab style=margin-top:10px><thead><tr><th>Adr</th><th>installiert</th><th>Status</th></tr></thead><tbody id=modfwrows></tbody></table>
+<div class="row mt"><button class=btn id=modfwall>Alle aktualisieren</button>
+<button class="btn primary" id=modfwsel disabled>Veraltete aktualisieren</button></div>
+<div id=modfwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden"><div id=modfwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
+<p class=hint id=modfwlog style=margin-top:8px></p>
+</div>
 </div></section>
 </div></div>
 <div id=toast></div>
@@ -747,7 +813,7 @@ $("#timehint").innerHTML=`Aktuell: <b style="font-family:var(--mono);color:var(-
 $("#wdot").className="dot "+(sys.ssid?"ok":"err");
 $("#wkv").innerHTML=`<dt>Verbunden mit</dt><dd>${sys.ssid||"—"}</dd><dt>IP</dt><dd>${sys.ip||"—"}</dd><dt>Signal</dt><dd>${sys.rssi??"—"} dBm</dd>`;
 $("#mqdot").className="dot "+(sys.mqtt_connected?"ok":sys.mqtt_enabled?"warn":"");
-otaUiState();renderSys()}
+otaUiState();renderSys();loadModFw()}
 function otaUiState(){const on=!!cfg.ota_enabled;
 $("#fwoff").style.display=on?"none":"inline";$("#fwgo").disabled=!on||!_fw;
 $("#fw").disabled=!on}
@@ -833,6 +899,37 @@ $("#syskv").innerHTML=`
 <dt>Zeitzone</dt><dd>${tzName(sys.tz)}</dd>`}
 function tzName(tz){if(!tz)return"—";const z=TZ.find(z=>z[1]===tz||z[2]===tz);
 return z?z[0]+(z[2]===tz?" · Sommerzeit":z[2]?" · Normalzeit":""):tz;}
+
+// ── Modul-Firmware (experimentell) ──
+let _modfw={modules:[]},_modfwBusy=false;
+const MSTAT={current:["aktuell","ok"],outdated:["Update verfügbar","warn"],
+  unknown:["Version unbekannt","mute"],offline:["offline","err"]};
+function verStr(v){return v?("v"+(v>>8)+"."+(v&255)):"–"}
+async function loadModFw(){
+try{_modfw=await J("/api/module/firmware")}catch(e){return}
+$("#modfwmeta").innerHTML=`<dt>Mitgeliefert</dt><dd>${_modfw.ok?verStr(_modfw.ver)+" · "+_modfw.len+" B":"<span class='pill err'>keine (unsigniert gebaut)</span>"}</dd>`;
+const rows=(_modfw.modules||[]).map(m=>{const s=MSTAT[m.status]||["?","mute"];
+return `<tr><td class=mono>${m.addr}</td><td class=mono>${verStr(m.ver)}</td><td><span class="pill ${s[1]}">${s[0]}</span>${m.has_bl?"":" <span class='pill mute'>kein BL</span>"}</td></tr>`}).join("");
+$("#modfwrows").innerHTML=rows||`<tr><td colspan=3 class=hint>keine Module</td></tr>`;
+const nOld=(_modfw.modules||[]).filter(m=>m.status==="outdated").length;
+$("#modfwsel").disabled=!_modfw.ok||nOld===0;
+$("#modfwsel").textContent=nOld?`Veraltete aktualisieren (${nOld})`:"Veraltete aktualisieren";
+$("#modfwall").disabled=!_modfw.ok||_modfwBusy;
+}
+$("#modfwall").onclick=()=>startModFw({all:true},"alle erreichbaren Module");
+$("#modfwsel").onclick=()=>startModFw({addr:_modfw.modules.filter(m=>m.status==="outdated").map(m=>m.addr)},"veraltete Module");
+async function startModFw(body,what){
+if(!confirm(`Firmware auf ${what} über den Bus einspielen? Die betroffenen Module sind je einige Sekunden eingefroren.`))return;
+try{await P("/api/module/update",body)}catch(e){return toast("Start fehlgeschlagen")}
+_modfwBusy=true;$("#modfwbar").style.display="block";pollModFw();
+}
+async function pollModFw(){
+let s;try{s=await J("/api/module/update/status")}catch(e){return}
+$("#modfwfill").style.width=(s.busy?s.progress:100)+"%";
+$("#modfwlog").textContent=(s.busy?`läuft: Modul ${s.cur} · ${s.progress}% · Phase ${s.phase}`:`fertig — ${s.ok} ok, ${s.failed} Fehler`)
+ +"  "+(s.results||[]).map(r=>`${r.addr}:${r.res}`).join(" ");
+if(s.busy){setTimeout(pollModFw,700)}else{_modfwBusy=false;setTimeout(()=>{$("#modfwbar").style.display="none";loadModFw()},1500)}
+}
 
 // ── Poll-Schleifen ──
 async function refresh(){
@@ -1088,6 +1185,95 @@ static void handle_enumerate()
     busmaster_start_enumeration(&g_bus, millis());
     evlog_push(&g_log, millis(), EVLOG_INFO, "bus", "Enumeration (Web) gestartet");
     ok_json();
+}
+
+/* --- Firmware-Verteilung an die Module (experimentell) --------------- */
+
+static const char *mu_res_name(mu_result_t r)
+{
+    switch (r) {
+    case MU_RES_QUEUED:  return "queued";
+    case MU_RES_RUNNING: return "running";
+    case MU_RES_OK:      return "ok";
+    case MU_RES_FAILED:  return "failed";
+    case MU_RES_SKIPPED: return "offline";
+    default:             return "";
+    }
+}
+
+static void handle_module_firmware()
+{
+    JsonDocument d;
+    d["ok"]       = g_module_fw_ok;
+    d["ver"]      = MODULE_FW_VER;
+    d["len"]      = g_module_img_len;
+    d["busy"]     = moduleupdate_busy(&g_mu);
+    JsonArray a = d["modules"].to<JsonArray>();
+    const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+    for (uint8_t i = 1; i <= count && i <= BUSMASTER_MAX_MODULES; ++i) {
+        const bm_module_t *m = &g_bus.mod[i - 1];
+        JsonObject o = a.add<JsonObject>();
+        o["addr"]    = i;
+        o["online"]  = m->online;
+        o["ver"]     = m->ver_known ? m->app_ver : 0;
+        o["has_bl"]  = (m->ver_flags & 0x01) != 0;    /* PROTO_VER_FLAG_BOOTLOADER */
+        const char *st = !m->online ? "offline"
+                       : !m->ver_known ? "unknown"
+                       : (m->app_ver == MODULE_FW_VER) ? "current"
+                       : "outdated";
+        o["status"]  = st;
+    }
+    char out[1024];
+    serializeJson(d, out, sizeof(out));
+    send_json(200, out);
+}
+
+static void handle_module_update()
+{
+    if (!write_allowed()) return;
+    if (!g_module_fw_ok) { send_json(409, "{\"error\":\"no_bundled_fw\"}"); return; }
+    if (moduleupdate_busy(&g_mu)) { send_json(409, "{\"error\":\"busy\"}"); return; }
+
+    JsonDocument doc;
+    if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
+
+    uint32_t mask = 0;
+    const uint32_t online = module_online_mask();
+    if (doc["all"].as<bool>()) {
+        mask = online;
+    } else if (doc["addr"].is<JsonArray>()) {
+        for (JsonVariant v : doc["addr"].as<JsonArray>()) {
+            const uint8_t a = v.as<uint8_t>();
+            if (a >= 1 && a <= MU_MAX_ADDR) mask |= (1u << (a - 1u));
+        }
+    }
+    if (mask == 0) { send_json(400, "{\"error\":\"no_targets\"}"); return; }
+
+    moduleupdate_enqueue(&g_mu, mask, online);
+    evlog_push(&g_log, millis(), EVLOG_WARN, "modfw",
+               "Update angestossen (Maske 0x%lx)", (unsigned long)mask);
+    ok_json();
+}
+
+static void handle_module_update_status()
+{
+    JsonDocument d;
+    d["busy"]     = moduleupdate_busy(&g_mu);
+    d["cur"]      = g_mu.cur;
+    d["phase"]    = (int)g_mu.phase;
+    d["progress"] = moduleupdate_progress(&g_mu);
+    d["ok"]       = g_mu.done_ok;
+    d["failed"]   = g_mu.done_fail;
+    JsonArray a = d["results"].to<JsonArray>();
+    for (uint8_t i = 1; i <= MU_MAX_ADDR; ++i) {
+        if (g_mu.result[i] == MU_RES_NONE) continue;
+        JsonObject o = a.add<JsonObject>();
+        o["addr"] = i;
+        o["res"]  = mu_res_name(g_mu.result[i]);
+    }
+    char out[768];
+    serializeJson(d, out, sizeof(out));
+    send_json(200, out);
 }
 
 static void handle_time()
@@ -1443,6 +1629,9 @@ static void web_begin()
     web.on("/api/selftest",  HTTP_POST, guard(handle_selftest));
     web.on("/api/module",    HTTP_POST, guard(handle_module));
     web.on("/api/enumerate", HTTP_POST, guard(handle_enumerate));
+    web.on("/api/module/firmware",      HTTP_GET,  guard(handle_module_firmware));
+    web.on("/api/module/update",        HTTP_POST, guard(handle_module_update));
+    web.on("/api/module/update/status", HTTP_GET,  guard(handle_module_update_status));
     web.on("/api/time",      HTTP_POST, guard(handle_time));
     web.on("/api/wifi/scan", HTTP_GET,  guard(handle_wifi_scan));
     web.on("/api/wifi",      HTTP_POST, guard(handle_wifi_connect));
@@ -1710,6 +1899,9 @@ void setup()
     g_app.align = align_from(cfg.align);
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
 
+    proto_parser_reset(&g_mu_parser);
+    module_fw_verify();
+
     web_begin();
 
     busmaster_start_enumeration(&g_bus, millis());
@@ -1725,7 +1917,15 @@ void loop()
     mqtt.loop();
 
     bus_pump(now);
-    busmaster_tick(&g_bus, now);
+    if (moduleupdate_busy(&g_mu)) {
+        /* Waehrend eines Modul-Updates ruht der Statusverkehr auf dem Bus. */
+        if (now - g_mu_last_tick >= 20) {
+            g_mu_last_tick = now;
+            moduleupdate_tick(&g_mu, now);
+        }
+    } else {
+        busmaster_tick(&g_bus, now);
+    }
     status_led_tick(now);
     cpu_load_tick(now);
     poll_events(now);
@@ -1740,12 +1940,22 @@ void loop()
     }
     masterapp_tick(&g_app, now);
 
-    if (!busmaster_enum_busy(&g_bus) && !g_bus.awaiting &&
+    if (!moduleupdate_busy(&g_mu) && !busmaster_enum_busy(&g_bus) && !g_bus.awaiting &&
         now - last_poll_ms >= 100) {
         last_poll_ms = now;
         const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
         if (count > 0) {
-            busmaster_poll_status(&g_bus, poll_addr, now);
+            /* Ein online-Modul ohne bekannte Firmware-Version einmalig abfragen,
+             * sonst die normale Statusabfrage. */
+            uint8_t vaddr = 0;
+            for (uint8_t a = 1; a <= count && a <= BUSMASTER_MAX_MODULES; ++a) {
+                if (g_bus.mod[a - 1].online && !g_bus.mod[a - 1].ver_known) { vaddr = a; break; }
+            }
+            if (vaddr && (poll_addr % 4u) == 0u) {
+                busmaster_poll_version(&g_bus, vaddr, now);
+            } else {
+                busmaster_poll_status(&g_bus, poll_addr, now);
+            }
             poll_addr = (poll_addr % count) + 1;
             if (poll_addr == 1 && mqtt.connected()) {
                 mqtt_publish_state();
