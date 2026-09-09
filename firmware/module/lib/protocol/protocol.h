@@ -64,8 +64,21 @@ typedef enum {
     CMD_ENUM_ASSIGN = 0x51,
     CMD_ENUM_DONE   = 0x52,
     CMD_GET_UID     = 0x53,
+    /* --- Firmware-Verteilung ueber den Bus (Abschnitt 5.7, experimentell) --- */
+    CMD_GET_VERSION      = 0x54,  /* Antwort: proto/app-Version, Flags, Bootloader-Version */
+    CMD_ENTER_BOOTLOADER = 0x55,  /* Modul setzt Marker und startet in den Bootloader neu */
+    CMD_FW_BEGIN         = 0x56,  /* [len16][crc16] -> Antwort [0x01 ok | 0x00 nak]           */
+    CMD_FW_DATA          = 0x57,  /* [off16][bis zu 30 Byte] -> Antwort [0x01 ok | 0x00 nak]  */
+    CMD_FW_END           = 0x58,  /* -> Antwort [0x01 ok | Fehlercode]                        */
     CMD_PING        = 0xF0,
 } proto_cmd_t;
+
+/* Payload-Grenze fuer CMD_FW_DATA-Nutzdaten (2 Byte Offset + Daten <= PROTO_MAX_PAYLOAD). */
+#define PROTO_FW_CHUNK 30u
+
+/* Flags in der CMD_GET_VERSION-Antwort (Byte 3). */
+#define PROTO_VER_FLAG_BOOTLOADER 0x01u  /* residenter Bootloader vorhanden */
+#define PROTO_VER_FLAG_APP_VALID  0x02u  /* App-gueltig-Marker gesetzt      */
 
 /* Adressierungsart eines Kommandos. */
 typedef enum {

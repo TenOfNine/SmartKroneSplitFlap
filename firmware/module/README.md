@@ -31,15 +31,23 @@ Fälle ab: Kollisionserkennung, Rückfall EEPROM-Adresse, Rückfall Serviceadres
 ## Firmware bauen und flashen
 
 ```bash
-pio run  -e attiny1616               # ~5,3 KB Flash (Grenze 8 KB)
+pio run  -e attiny1616               # App @ 0x0000, ~5,6 KB (Grenze 8 KB) -- der Referenzweg
 pio run  -e attiny1616 -t upload     # SerialUPDI, FTDI-Adapter mit 4,7 kΩ TX–RX
-python tools/build_module_firmware.py   # -> prebuilt/ (Hex für den Browser-Flasher)
+pio run  -e attiny1616_boot          # App @ 0x0C00, hinter dem Bootloader (experimentell)
+python tools/build_module_firmware.py   # alle Images + signierte .mota -> prebuilt/
 ```
 
 Voraussetzung am Baustein: OSCCFG-Fuse auf 20 MHz (PlatformIO-Board-Vorgabe).
 
-**Browser-Flasher (experimentell).** `firmware/module/prebuilt/krone-daughtercard-attiny1616.hex`
-lässt sich über <https://tenofnine.github.io/SmartKroneSplitFlap/> (Tab *Daughter
-Card*) schreiben — ein Browser-Port von SerialUPDI (`firmware/master/prebuilt/updi.js`,
-Web Serial API). Am Gerät noch nicht verifiziert; `-t upload` bleibt der
-abgesicherte Weg. Verkabelung und Ausblick siehe Projekt-README.
+**Browser-Werksflasher (experimentell).** <https://tenofnine.github.io/SmartKroneSplitFlap/>,
+Tab *Daughter Card*: schreibt **Bootloader + Anwendung** (`firmware/bootloader` +
+env `attiny1616_boot`) und setzt die Fuse `BOOTEND = 0x0C`. Ein Browser-Port von
+SerialUPDI (`firmware/master/prebuilt/updi.js`, Web Serial API). Danach lässt sich
+die Karte über den Bus aus der Master-Web-UI aktualisieren
+([`docs/module-bootloader.md`](../../docs/module-bootloader.md)).
+**Am Gerät noch nicht verifiziert**; `pio run -e attiny1616 -t upload` (ohne
+Bootloader) bleibt der abgesicherte Weg. Verkabelung siehe Projekt-README.
+
+`CMD_GET_VERSION` (0x54) und `CMD_ENTER_BOOTLOADER` (0x55) beantwortet die App
+in beiden Ausprägungen; die eigentliche Bus-Programmierung (0x56–0x58) macht der
+Bootloader. `lib/fwupdate` ist der host-getestete Seiten-Sammler.

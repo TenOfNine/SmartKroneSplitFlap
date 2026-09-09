@@ -240,6 +240,36 @@ Intel-HEX-Parser gegen die echte Datei gegengeprüft.
 
 ---
 
+## T17 — Firmware-Verteilung an die Module über den Bus (experimentell)
+
+Die Modul-Firmware ließ sich nur über die Toolchain oder den UPDI-Werksflasher
+aufspielen. Ziel: die Zentralsteuerung flasht die Karten aus ihrer Web-UI.
+
+- **Protokoll:** `GET_VERSION`/`ENTER_BOOTLOADER`/`FW_BEGIN`/`FW_DATA`/`FW_END`
+  (0x54–0x58), Kommandotabelle + Tests.
+- **`firmware/bootloader/`** — residenter Bootloader (~2,5 KiB, Boot-Sektion 3 KiB,
+  `BOOTEND = 0x0C`, App ab 0x0C00). Kein Interrupt, eigener WDT, PA7 nie Ausgang.
+- **`firmware/module` env `attiny1616_boot`** — App @ 0x0C00, `GET_VERSION`/
+  `ENTER_BOOTLOADER`-Handler, IVSEL-Absicherung. `env:attiny1616` unverändert.
+- Host-getestet: `lib/fwupdate` (Seiten-Sammler, 8 Fälle), `lib/moduleupdate`
+  (Master-Warteschlange + Zustandsautomat, 6 Fälle).
+- **Option A:** `tools/build_module_firmware.py` baut alle drei Images + signiert
+  die `.mota`; `tools/build_master_firmware.py` bettet sie als `module_fw.h` ein.
+  Der Master prüft die Signatur beim Start (`ota_sign_verify_header`).
+- **Master:** `busmaster_poll_version`, `/api/module/firmware` +
+  `/api/module/update` (`all` / `addr[]`) + `.../status`, *Einstellungen ›
+  Modul-Firmware* mit „Alle aktualisieren".
+- **`updi.js`:** Werksflash-Modus (Bootloader + `-boot`-App + Fuse `BOOTEND`).
+- `pages.yml` bündelt die drei Modul-Hex.
+
+**Fertig, wenn:** alle envs bauen, `pio test -e native` grün (Master 56, Modul 71),
+Sender-/Empfänger-Logik host-geprüft, signierte Artefakte verifizieren.
+**Erledigt 09.09.2026** — Spezifikation v0.18. **Am Gerät nicht verifiziert** —
+Bootloader/Bus-Update brauchen einen Bench-Test (Checkliste in
+`docs/module-bootloader.md`), bis dahin `pio -t upload` (ohne Bootloader).
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.

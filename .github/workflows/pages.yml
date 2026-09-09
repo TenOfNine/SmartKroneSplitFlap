@@ -4,7 +4,7 @@ name: Pages – ESP Web Flasher
 #   https://tenofnine.github.io/SmartKroneSplitFlap/
 # Der Publish-Ordner wird aus beiden prebuilt/-Verzeichnissen zusammengestellt:
 #   Master : index.html, updi.js, manifest.json, krone-master-esp32c3.factory.bin
-#   Modul  : krone-daughtercard-attiny1616.hex
+#   Modul  : krone-daughtercard-{attiny1616,attiny1616-boot,bootloader}.hex
 # Die .kota bleibt aussen vor -- die laeuft ueber die Geraete-Web-UI, nicht ueber
 # diese Seite.
 #
@@ -47,7 +47,10 @@ jobs:
              firmware/master/prebuilt/manifest.json \
              firmware/master/prebuilt/krone-master-esp32c3.factory.bin \
              _site/
-          cp firmware/module/prebuilt/krone-daughtercard-attiny1616.hex _site/
+          cp firmware/module/prebuilt/krone-daughtercard-attiny1616.hex \
+             firmware/module/prebuilt/krone-daughtercard-attiny1616-boot.hex \
+             firmware/module/prebuilt/krone-daughtercard-bootloader.hex \
+             _site/
           jq --arg v "$d ($sha)" '.version = $v' _site/manifest.json > _site/manifest.tmp \
             && mv _site/manifest.tmp _site/manifest.json
           echo "manifest version -> $d ($sha)"
