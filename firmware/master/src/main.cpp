@@ -94,7 +94,7 @@ struct Settings {
     char     mqtt_pass[32]  = "";
     char     base_topic[48] = "krone/anzeige";
     char     node_id[32]    = "krone_anzeige";
-    uint8_t  module_count   = 10;
+    uint8_t  module_count   = 0;    /* 0 = automatisch (Enumeration), 1..32 = fester Override */
     uint32_t hms_timeout_s  = 600;
 
     char     ntp_server[48] = "pool.ntp.org";
@@ -124,6 +124,7 @@ struct Settings {
 static uint32_t last_poll_ms;
 static uint8_t  poll_addr = 1;
 static uint32_t last_time_ms;
+static uint32_t last_autoscan_ms;
 static uint32_t last_mqtt_try;
 
 /* --- grobe CPU-Last ueber den FreeRTOS-Idle-Hook -------------------- */
@@ -235,10 +236,21 @@ static void module_fw_verify()
                (unsigned)g_module_img_len);
 }
 
+/* Effektive Feldbreite: manueller Override (cfg.module_count) hat Vorrang,
+ * sonst die von der Enumeration erkannte Zahl, sonst 0 (keine Module). */
+static uint8_t effective_module_count()
+{
+    if (cfg.module_count > 0) {
+        return cfg.module_count > BUSMASTER_MAX_MODULES ? BUSMASTER_MAX_MODULES
+                                                        : cfg.module_count;
+    }
+    return g_bus.module_count;
+}
+
 static uint32_t module_online_mask()
 {
     uint32_t m = 0;
-    const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+    const uint8_t count = effective_module_count();
     for (uint8_t a = 1; a <= count && a <= MU_MAX_ADDR; ++a) {
         if (g_bus.mod[a - 1].online) m |= (1u << (a - 1u));
     }
@@ -269,7 +281,7 @@ static void status_led_tick(uint32_t now)
     if (STATUS_LED < 0) {
         return;
     }
-    const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+    const uint8_t count = effective_module_count();
     bool trouble = (WiFi.status() != WL_CONNECTED);
     for (uint8_t i = 0; i < count && !trouble; ++i) {
         if (!g_bus.mod[i].online || g_bus.mod[i].fehler != 0) {
@@ -601,8 +613,11 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=field><span class=lbl>Basis-Topic</span><input type=text id=cf_base_topic></div></div>
 <div class="row mt"><button class="btn primary" data-save=mqtt>Speichern</button></div></div></div>
 
-<div class=sect><h3>Anzeige</h3><div class="grid c3">
-<div class=field><span class=lbl>Module (Feldbreite)</span><input type=number id=cf_modules></div>
+<div class=sect><h3>Anzeige</h3>
+<div class=trow><label class=switch><input type=checkbox id=cf_auto_modules checked><span class=t></span></label>
+<div class=tx><b>Modulzahl automatisch erkennen</b><span id=modcnthint>Über die Enumeration.</span></div></div>
+<div class=field id=modcntf style="max-width:220px;margin-top:10px" hidden><span class=lbl>Feste Feldbreite</span><input type=number id=cf_modules min=1 max=32></div>
+<div class="grid c2" style=margin-top:12px>
 <div class=field><span class=lbl>Uhr-Trennzeichen</span><select id=cf_sep><option>.</option><option>:</option><option>-</option></select></div>
 <div class=field><span class=lbl>hh:mm:ss Auto-Rückfall (min)</span><input type=number id=cf_hms></div></div>
 <p class=hint>hh:mm:ss lässt ein Modul rund alle 10 s eine volle Umdrehung fahren (≈173 Tage bis zur MTBF) — daher der automatische Rückfall auf hh:mm.</p>
@@ -702,9 +717,11 @@ else if(q==="wifi")show("set")};
 function flapCls(m){if(!m.online)return"of";if(m.state===3)return"er";if(m.state===2)return"mv";if(m.state===1)return"hm";return""}
 function renderDash(){
 const mode=$("#modeseg .on").dataset.m;
-$("#flaps").innerHTML=(st.modules||[]).map(m=>{let c="flap "+flapCls(m),ch=blattChar(m.ist);
+const M=st.modules||[];
+$("#flaps").innerHTML=M.length?M.map(m=>{let c="flap "+flapCls(m),ch=blattChar(m.ist);
 if(!m.online)ch="–";else if(m.state===3)ch="!";if(mode==="blank"||mode==="off")ch="";
-return `<div class="${c}"><div class=cell><span class=ch>${ch||"&nbsp;"}</span></div><div class=tag><span>${m.addr}</span><i></i></div></div>`}).join("");
+return `<div class="${c}"><div class=cell><span class=ch>${ch||"&nbsp;"}</span></div><div class=tag><span>${m.addr}</span><i></i></div></div>`}).join("")
+:`<p class=hint style=padding:8px>${st.enum_busy?"Enumeration läuft …":"Keine Module erkannt. Karten anschließen — sie werden automatisch erkannt."}</p>`;
 const on=(st.modules||[]).filter(m=>m.online).length,tot=(st.modules||[]).length;
 const errs=(st.modules||[]).filter(m=>m.error).map(m=>m.addr);
 const off=(st.modules||[]).filter(m=>!m.online).map(m=>m.addr);
@@ -723,8 +740,8 @@ $("#tiles").innerHTML=t.map(x=>`<div class="card tile"><span class=lbl>${x[0]}</
 function renderMods(){
 const M=st.modules||[];
 const on=M.filter(m=>m.online).length,er=M.filter(m=>m.error||m.state===3).length;
-$("#modsum").innerHTML=`${st.detected||M.length} erkannt · <span class="pill ok"><i></i>${on} online</span> `+(er?`<span class="pill err"><i></i>${er} Fehler</span>`:"");
-$("#modtb").innerHTML=M.map(m=>{
+$("#modsum").innerHTML=`${st.detected??M.length} erkannt · <span class="pill ok"><i></i>${on} online</span> `+(er?`<span class="pill err"><i></i>${er} Fehler</span>`:"");
+$("#modtb").innerHTML=M.length?M.map(m=>{
 const p=!m.online?`<span class="pill mute"><i></i>offline</span>`:
 m.state===3?`<span class="pill err"><i></i>Fehler</span>`:
 m.state===2?`<span class="pill warn"><i></i>Moving</span>`:
@@ -733,7 +750,8 @@ const cell=n=>m.online?`${n} <span class=cm>${blattChar(n)||"␣"}</span>`:"–"
 const ec=m.error?`0x0${m.error} · ${ERRTXT[m.error]||""}`:"–";
 return `<tr><td class=mono>${m.addr}</td><td>${p}</td><td class=mono>${cell(m.ist)}</td><td class=mono>${cell(m.ziel)}</td>
 <td>${ec}</td><td class=mono>${m.corr}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.fw?"v"+m.fw:"–"}</td><td class=mono>${m.miss}</td>
-<td><div class=ra><button class="btn sm" data-h=${m.addr}>Homing</button><button class="btn sm" data-i=${m.addr}>Identify</button></div></td></tr>`}).join("");
+<td><div class=ra><button class="btn sm" data-h=${m.addr}>Homing</button><button class="btn sm" data-i=${m.addr}>Identify</button></div></td></tr>`}).join("")
+:`<tr><td colspan=10 class=hint style=padding:14px>Keine Module. ${st.enum_busy?"Enumeration läuft …":"Karten anschließen oder unten „Enumeration neu starten"."}</td></tr>`;
 }
 $("#modtb").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 if(b.dataset.h){P("/api/module",{addr:+b.dataset.h,action:"home"});toast("HOME Adr "+b.dataset.h)}
@@ -794,7 +812,11 @@ else{s.value=String(i);$("#cf_dst").checked=dst;}
 tzUi();}
 async function loadCfg(){try{cfg=await J("/api/config")}catch(e){return}
 $("#cf_hms").value=Math.round((cfg.hms_timeout_s||600)/60);
-$("#cf_modules").value=cfg.module_count;
+const autoM=(cfg.module_count||0)===0;
+$("#cf_auto_modules").checked=autoM;
+$("#cf_modules").value=cfg.module_count||10;
+$("#modcntf").hidden=autoM;
+modCntHint();
 $("#cf_mqtt_port").value=cfg.mqtt_port;
 ["mqtt_host","mqtt_user","mqtt_pass","base_topic","node_id","ntp_server","tz","ip","mask","gw","dns"].forEach(k=>{const el=$("#cf_"+k);if(el)el.value=cfg[k]??""});
 $("#cf_sep").value=cfg.sep||".";
@@ -820,11 +842,17 @@ $("#fw").disabled=!on}
 $("#cf_use_static").onchange=e=>$("#ipf").hidden=!e.target.checked;
 $("#cf_mqtt_enabled").onchange=e=>$("#mqf").style.opacity=e.target.checked?1:.4;
 $("#cf_ota_enabled").onchange=e=>{cfg.ota_enabled=e.target.checked;otaUiState()};
+$("#cf_auto_modules").onchange=e=>{$("#modcntf").hidden=e.target.checked;modCntHint()};
+function modCntHint(){const a=$("#cf_auto_modules").checked,n=sys.detected??0,eb=sys.enum_busy;
+$("#modcnthint").textContent=a
+?(eb?"Enumeration läuft …":n>0?`Erkannt: ${n} Modul${n===1?"":"e"}.`:"Noch keine Module erkannt — es wird weiter gescannt.")
+:`Feste Feldbreite, unabhängig von der Erkennung (aktuell ${n} erkannt).`;}
 
 function collectCfg(){const o={
 mqtt_host:$("#cf_mqtt_host").value,mqtt_port:+$("#cf_mqtt_port").value,mqtt_user:$("#cf_mqtt_user").value,
 mqtt_pass:$("#cf_mqtt_pass").value,base_topic:$("#cf_base_topic").value,node_id:$("#cf_node_id")?.value||cfg.node_id,
-module_count:+$("#cf_modules").value,hms_timeout_s:(+$("#cf_hms").value||10)*60,
+module_count:$("#cf_auto_modules").checked?0:Math.max(1,Math.min(32,+$("#cf_modules").value||1)),
+hms_timeout_s:(+$("#cf_hms").value||10)*60,
 ntp_server:$("#cf_ntp_server").value,tz:tzString(),ntp_enabled:$("#cf_ntp_enabled").checked,
 sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
@@ -881,6 +909,7 @@ x.send(fd)};
 
 function kb(b){return Math.round((b||0)/1024)}
 function renderSys(){
+if($("#cf_auto_modules"))modCntHint();
 const hn=sys.hostname||sys.node_id||"—";
 const ht=sys.heap_total||0,hf=sys.heap_free||0;
 const hpct=ht?Math.round(100*(1-hf/ht)):0;
@@ -1084,6 +1113,10 @@ static void handle_system()
     d["auth_on"]        = auth_required();
     d["net_scope"]      = cfg.net_scope;
     d["ota_signed"]     = true;
+    d["detected"]       = g_bus.module_count;             /* Enumeration */
+    d["field_width"]    = effective_module_count();       /* effektiv genutzt */
+    d["auto_modules"]   = (cfg.module_count == 0);
+    d["enum_busy"]      = busmaster_enum_busy(&g_bus);
     d["crc_err"]        = g_bus.crc_errors;
     d["timeouts"]       = g_bus.timeouts;
     d["hostname"]       = cfg.node_id;
@@ -1093,7 +1126,7 @@ static void handle_system()
     d["sketch_used"]    = ESP.getSketchSize();
     d["sketch_free"]    = ESP.getFreeSketchSpace();
 
-    char out[832];
+    char out[928];
     serializeJson(d, out, sizeof(out));
     send_json(200, out);
 }
@@ -1209,7 +1242,7 @@ static void handle_module_firmware()
     d["len"]      = g_module_img_len;
     d["busy"]     = moduleupdate_busy(&g_mu);
     JsonArray a = d["modules"].to<JsonArray>();
-    const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+    const uint8_t count = effective_module_count();
     for (uint8_t i = 1; i <= count && i <= BUSMASTER_MAX_MODULES; ++i) {
         const bm_module_t *m = &g_bus.mod[i - 1];
         JsonObject o = a.add<JsonObject>();
@@ -1374,7 +1407,10 @@ static void apply_config_doc(JsonDocument &doc)
     if (doc["net_scope"].is<unsigned>() && (unsigned)doc["net_scope"] <= 2)
         cfg.net_scope = doc["net_scope"];
     if (doc["mqtt_port"].is<unsigned>())     cfg.mqtt_port = doc["mqtt_port"];
-    if (doc["module_count"].is<unsigned>())  cfg.module_count = doc["module_count"];
+    if (doc["module_count"].is<unsigned>()) {          /* 0 = automatisch */
+        const unsigned v = doc["module_count"];
+        cfg.module_count = v > BUSMASTER_MAX_MODULES ? BUSMASTER_MAX_MODULES : (uint8_t)v;
+    }
     if (doc["hms_timeout_s"].is<unsigned>()) cfg.hms_timeout_s = doc["hms_timeout_s"];
     if (doc["sep"].is<const char *>()) { const char *s = doc["sep"]; if (s[0]) cfg.sep = s[0]; }
     if (doc["align"].is<unsigned>())          cfg.align = doc["align"];
@@ -1387,8 +1423,7 @@ static void apply_config_doc(JsonDocument &doc)
 
     settings_save();
 
-    g_app.module_count = cfg.module_count > BUSMASTER_MAX_MODULES
-                             ? BUSMASTER_MAX_MODULES : cfg.module_count;
+    g_app.module_count = effective_module_count();
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
     g_app.sep = cfg.sep;
     g_app.align = align_from(cfg.align);
@@ -1666,7 +1701,8 @@ static void mqtt_publish_discovery()
             mqtt.publish(t, p, true);
         }
     }
-    for (uint8_t n = 1; n <= cfg.module_count; ++n) {
+    const uint8_t mcount = effective_module_count();
+    for (uint8_t n = 1; n <= mcount; ++n) {
         for (ha_entity_t e : { HA_ENT_MODULE_CHAR, HA_ENT_MODULE_ONLINE }) {
             if (hadiscovery_entity(t, sizeof(t), p, sizeof(p), "homeassistant",
                                    cfg.base_topic, cfg.node_id, e, n) == 0) {
@@ -1677,7 +1713,7 @@ static void mqtt_publish_discovery()
     /* Discovery-Configs frueher konfigurierter, jetzt entfallener Module
      * loeschen (leere retained Payload), sonst bleiben Geister-Entities in
      * Home Assistant stehen. */
-    for (uint8_t n = cfg.module_count + 1; n <= BUSMASTER_MAX_MODULES; ++n) {
+    for (uint8_t n = mcount + 1; n <= BUSMASTER_MAX_MODULES; ++n) {
         for (ha_entity_t e : { HA_ENT_MODULE_CHAR, HA_ENT_MODULE_ONLINE }) {
             if (hadiscovery_entity(t, sizeof(t), p, sizeof(p), "homeassistant",
                                    cfg.base_topic, cfg.node_id, e, n) == 0) {
@@ -1739,7 +1775,8 @@ static void mqtt_ensure()
 static void mqtt_publish_state()
 {
     bool any_error = false;
-    for (uint8_t i = 0; i < cfg.module_count; ++i) {
+    const uint8_t mcount = effective_module_count();
+    for (uint8_t i = 0; i < mcount; ++i) {
         const bm_module_t *m = &g_bus.mod[i];
         const char ch[2] = { charmap_char(m->ist_blatt), 0 };
         mqtt.publish((String(cfg.base_topic) + "/module/" + (i + 1) + "/char").c_str(),
@@ -1894,7 +1931,7 @@ void setup()
 
     bus_begin();
     busmaster_init(&g_bus, bus_tx, nullptr);
-    masterapp_init(&g_app, &g_bus, cfg.module_count);
+    masterapp_init(&g_app, &g_bus, effective_module_count());
     g_app.sep = cfg.sep;
     g_app.align = align_from(cfg.align);
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
@@ -1938,12 +1975,35 @@ void loop()
         last_time_ms = now;
         feed_time();
     }
+
+    /* Feldbreite der effektiven Modulzahl nachfuehren (Enumeration / Override). */
+    {
+        const uint8_t eff = effective_module_count();
+        if (g_app.module_count != eff) {
+            g_app.module_count = eff;
+            g_app.have_shown = false;
+            if (mqtt.connected()) {
+                mqtt_publish_discovery();   /* Entity-Anzahl in HA angleichen */
+            }
+        }
+    }
+
+    /* Auto-Modus: solange nichts erkannt ist, alle ~10 s neu enumerieren, damit
+     * spaeter angesteckte Karten von selbst auftauchen. Sobald >= 1 erkannt,
+     * hoert das auf (kein Dauer-ENUM_RESET auf laufende Module). */
+    if (cfg.module_count == 0 && g_bus.module_count == 0 &&
+        !busmaster_enum_busy(&g_bus) && !moduleupdate_busy(&g_mu) &&
+        now - last_autoscan_ms >= 10000) {
+        last_autoscan_ms = now;
+        busmaster_start_enumeration(&g_bus, now);
+    }
+
     masterapp_tick(&g_app, now);
 
     if (!moduleupdate_busy(&g_mu) && !busmaster_enum_busy(&g_bus) && !g_bus.awaiting &&
         now - last_poll_ms >= 100) {
         last_poll_ms = now;
-        const uint8_t count = g_bus.module_count ? g_bus.module_count : cfg.module_count;
+        const uint8_t count = effective_module_count();
         if (count > 0) {
             /* Ein online-Modul ohne bekannte Firmware-Version einmalig abfragen,
              * sonst die normale Statusabfrage. */
