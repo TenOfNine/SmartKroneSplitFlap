@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>KRONE REW Zentralsteuerung — Firmware flashen</title>
-<meta name="description" content="Web-Flasher für die Master-Firmware der KRONE-REW-Fallblattanzeige (ESP32-C3 Super Mini).">
+<title>KRONE REW Fallblattanzeige — Firmware flashen</title>
+<meta name="description" content="Web-Flasher für die KRONE-REW-Fallblattanzeige: Master (ESP32-C3) und Daughter Card (ATtiny1616, experimentell).">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -92,7 +92,6 @@
     max-width: 34rem;
   }
 
-  /* split-flap seam */
   .seam {
     position: relative;
     height: 1px;
@@ -110,6 +109,35 @@
     background: var(--bg);
     border: 1px solid var(--seam);
   }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: .3rem;
+    margin-bottom: 1.6rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab {
+    appearance: none;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    color: var(--ink-dim);
+    font: 600 .96rem/1 "IBM Plex Sans", sans-serif;
+    padding: .8rem 1rem;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab .exp {
+    font: 500 10px/1 "IBM Plex Mono", monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-left: .4rem;
+  }
+  .panel[hidden] { display: none; }
 
   .card {
     background: var(--surface);
@@ -136,6 +164,7 @@
   .flash-btn:hover { background: var(--accent-strong); transform: translateY(-1px); }
   .flash-btn:active { transform: translateY(0); }
   .flash-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .flash-btn[disabled] { opacity: .5; cursor: default; transform: none; }
 
   .flash-meta {
     margin-top: 1.1rem;
@@ -151,6 +180,27 @@
     color: var(--ink-dim);
   }
   .note--warn { color: var(--bad); }
+
+  .banner {
+    display: flex;
+    gap: .7rem;
+    align-items: flex-start;
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+    border-radius: 10px;
+    padding: .85rem 1rem;
+    font-size: .92rem;
+    margin-bottom: 1.4rem;
+  }
+  .banner b { color: var(--ink); }
+  .banner .mk {
+    flex: none;
+    font: 600 11px/1.5 "IBM Plex Mono", monospace;
+    letter-spacing: .06em;
+    color: var(--accent);
+    text-transform: uppercase;
+    padding-top: .1rem;
+  }
 
   h2 {
     font: 600 1.18rem/1.3 "IBM Plex Sans", sans-serif;
@@ -190,6 +240,43 @@
   }
   pre code { background: none; border: 0; padding: 0; }
 
+  .wiring {
+    width: 100%;
+    height: auto;
+    margin: .4rem 0 .2rem;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .wiring text { font: 500 13px "IBM Plex Mono", monospace; fill: var(--ink); }
+  .wiring .cap { fill: var(--ink-dim); font-weight: 600; }
+  .wiring .opt { fill: var(--ink-dim); }
+  .wiring .wire { stroke: var(--ink); stroke-width: 2; fill: none; }
+  .wiring .wire-opt { stroke: var(--ink-dim); stroke-width: 2; fill: none; stroke-dasharray: 5 4; }
+  .wiring .box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+  .wiring .pin { fill: var(--accent); }
+
+  .bar {
+    height: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 1.1rem;
+  }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .15s; }
+  .log {
+    margin-top: 1rem;
+    text-align: left;
+    max-height: 12rem;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .log:empty { display: none; }
+  .log .err { color: var(--bad); }
+  .log .ok { color: var(--good); }
+
   .led {
     display: inline-block;
     width: .62em; height: .62em;
@@ -226,70 +313,156 @@
 </head>
 <body>
 <main class="wrap">
-  <p class="eyebrow fade">KRONE REW &middot; Zentralsteuerung</p>
+  <p class="eyebrow fade">KRONE REW &middot; Fallblattanzeige</p>
   <h1 class="fade">Firmware flashen</h1>
   <p class="lede fade">
-    Master-Firmware der KRONE-REW-Fallblattanzeige auf ein
-    <b>ESP32-C3 Super Mini</b> spielen &mdash; direkt aus dem Browser, über die
-    USB-C-Buchse des Moduls.
+    Firmware direkt aus dem Browser aufspielen — die <b>Master-Steuerung</b> über
+    die USB-C-Buchse des ESP32-C3, die <b>Daughter Card</b> über einen
+    USB-Seriell-Adapter (experimentell).
   </p>
 
   <div class="seam"></div>
 
-  <div class="card card--flash">
-    <esp-web-install-button manifest="./manifest.json">
-      <button class="flash-btn" slot="activate">Modul verbinden &amp; flashen</button>
-      <span slot="unsupported" class="note note--warn">
-        Dieser Browser kann kein Web Serial. Nutze <b>Chrome</b> oder <b>Edge</b>
-        auf dem Desktop.
-      </span>
-      <span slot="not-allowed" class="note note--warn">
-        Web Serial ist hier blockiert (funktioniert nur über HTTPS).
-      </span>
-    </esp-web-install-button>
-
-    <p class="flash-meta" id="meta">
-      Ziel: <b>ESP32-C3</b> &middot; Image wird geladen&hellip;
-    </p>
-    <p class="note">
-      Beim Flashen wird der Chip <b>komplett gelöscht</b> (auch die
-      WLAN-Zugangsdaten). Kein BOOT-Taster nötig &mdash; der C3 geht über USB
-      selbst in den Download-Modus.
-    </p>
+  <div class="tabs" role="tablist">
+    <button class="tab" id="tab-master" role="tab" aria-selected="true" aria-controls="panel-master">Master</button>
+    <button class="tab" id="tab-module" role="tab" aria-selected="false" aria-controls="panel-module">
+      Daughter Card <span class="exp">exp.</span>
+    </button>
   </div>
 
-  <h2>Voraussetzungen</h2>
-  <ul class="steps">
-    <li>Chrome oder Edge auf dem <b>Desktop</b> (Web Serial API).</li>
-    <li>USB-C-Kabel <b>mit Datenadern</b> direkt an die Buchse des Moduls.</li>
-    <li>Das Modul muss <b>nicht</b> auf dem Trägerboard stecken.</li>
-  </ul>
+  <!-- ============ MASTER ============ -->
+  <section class="panel" id="panel-master" role="tabpanel" aria-labelledby="tab-master">
+    <div class="card card--flash">
+      <esp-web-install-button manifest="./manifest.json">
+        <button class="flash-btn" slot="activate">Modul verbinden &amp; flashen</button>
+        <span slot="unsupported" class="note note--warn">
+          Dieser Browser kann kein Web Serial. Nutze <b>Chrome</b> oder <b>Edge</b>
+          auf dem Desktop.
+        </span>
+        <span slot="not-allowed" class="note note--warn">
+          Web Serial ist hier blockiert (funktioniert nur über HTTPS).
+        </span>
+      </esp-web-install-button>
 
-  <h2>Nach dem Flashen</h2>
-  <ul class="steps">
-    <li>
-      <span class="led led--warn"></span>
-      Status-LED (GPIO6) blinkt schnell &mdash; noch kein WLAN.
-    </li>
-    <li>
-      Das Modul öffnet den Access-Point <code>krone_anzeige</code>. Dort im
-      Captive-Portal die WLAN-Zugangsdaten eingeben.
-    </li>
-    <li>
-      <span class="led led--good"></span>
-      LED-Dauerlicht = verbunden und alle Module erreichbar. Langsames Blinken =
-      ein Modul offline oder im Fehler.
-    </li>
-    <li>
-      MQTT-Broker und Modulzahl danach unter <code>/api/config</code> oder in der
-      Web-UI des Moduls.
-    </li>
-    <li>Serielle Konsole auf USB-C, 115200&nbsp;Bd.</li>
-  </ul>
+      <p class="flash-meta" id="meta">
+        Ziel: <b>ESP32-C3</b> &middot; Image wird geladen&hellip;
+      </p>
+      <p class="note">
+        Beim Flashen wird der Chip <b>komplett gelöscht</b> (auch die
+        WLAN-Zugangsdaten). Kein BOOT-Taster nötig &mdash; der C3 geht über USB
+        selbst in den Download-Modus.
+      </p>
+    </div>
 
-  <h2>Ohne Browser</h2>
-  <pre><code>esptool.py --chip esp32c3 -p /dev/ttyACM0 \
+    <h2>Voraussetzungen</h2>
+    <ul class="steps">
+      <li>Chrome oder Edge auf dem <b>Desktop</b> (Web Serial API).</li>
+      <li>USB-C-Kabel <b>mit Datenadern</b> direkt an die Buchse des Moduls.</li>
+      <li>Das Modul muss <b>nicht</b> auf dem Trägerboard stecken.</li>
+    </ul>
+
+    <h2>Nach dem Flashen</h2>
+    <ul class="steps">
+      <li>
+        <span class="led led--warn"></span>
+        Status-LED (GPIO6) blinkt schnell &mdash; noch kein WLAN.
+      </li>
+      <li>
+        Das Modul öffnet den Access-Point <code>krone_anzeige</code>. Dort im
+        Captive-Portal die WLAN-Zugangsdaten eingeben.
+      </li>
+      <li>
+        <span class="led led--good"></span>
+        LED-Dauerlicht = verbunden und alle Module erreichbar. Langsames Blinken =
+        ein Modul offline oder im Fehler.
+      </li>
+      <li>
+        Spätere Updates laufen über die Web-UI des Moduls (<em>Einstellungen ›
+        Firmware aktualisieren</em>, signierter <code>.kota</code>-Container).
+      </li>
+      <li>Serielle Konsole auf USB-C, 115200&nbsp;Bd.</li>
+    </ul>
+
+    <h2>Ohne Browser</h2>
+    <pre><code>esptool.py --chip esp32c3 -p /dev/ttyACM0 \
   write_flash 0x0 krone-master-esp32c3.factory.bin</code></pre>
+  </section>
+
+  <!-- ============ DAUGHTER CARD ============ -->
+  <section class="panel" id="panel-module" role="tabpanel" aria-labelledby="tab-module" hidden>
+    <div class="banner">
+      <span class="mk">Experimentell</span>
+      <span>
+        Der UPDI-Flasher ist <b>am Gerät noch nicht verifiziert</b>. Klappt es
+        nicht, bleibt <code>pio run -e attiny1616 -t upload</code> der sichere
+        Weg. Rückmeldungen willkommen.
+      </span>
+    </div>
+
+    <div class="card card--flash">
+      <button class="flash-btn" id="mod-go">Adapter verbinden &amp; schreiben</button>
+      <p class="flash-meta" id="mod-meta">Ziel: <b>ATtiny1616</b> &middot; Image wird geladen&hellip;</p>
+      <div class="bar" id="mod-bar" hidden><i id="mod-fill"></i></div>
+      <div class="log" id="mod-log"></div>
+      <p class="note">
+        Der Baustein wird <b>komplett gelöscht</b> (auch die im EEPROM abgelegte
+        Busadresse — die wird beim nächsten Start neu vergeben). Vor dem Schreiben
+        prüft der Flasher die Geräte-ID.
+      </p>
+    </div>
+
+    <h2>Verkabelung</h2>
+    <p class="note" style="margin-top:0">
+      USB-Seriell-Adapter (FTDI / CP2102 / CH340), <b>auf 5&nbsp;V gestellt</b>, mit
+      einem 4,7-kΩ-Widerstand zwischen TXD und RXD an die UPDI-Stiftleiste
+      <code>J6</code> (1×3):
+    </p>
+    <svg class="wiring" viewBox="0 0 520 250" role="img" aria-label="TXD über 4,7 kΩ und RXD gemeinsam an J6 Pin 2 (UPDI), GND an Pin 1, 5 V an Pin 3">
+      <rect class="box" x="14" y="34" width="150" height="188" rx="8"/>
+      <text class="cap" x="89" y="24" text-anchor="middle">USB-Seriell-Adapter</text>
+      <text x="156" y="74" text-anchor="end">GND</text>
+      <text x="156" y="118" text-anchor="end">TXD</text>
+      <text x="156" y="150" text-anchor="end">RXD</text>
+      <text x="156" y="200" text-anchor="end">5V</text>
+      <circle class="pin" cx="164" cy="69" r="4"/>
+      <circle class="pin" cx="164" cy="113" r="4"/>
+      <circle class="pin" cx="164" cy="145" r="4"/>
+      <circle class="pin" cx="164" cy="195" r="4"/>
+
+      <rect class="box" x="410" y="34" width="96" height="188" rx="8"/>
+      <text class="cap" x="458" y="24" text-anchor="middle">J6</text>
+      <text x="418" y="74">1  GND</text>
+      <text x="418" y="134">2  UPDI</text>
+      <text x="418" y="200">3  +5V</text>
+      <circle class="pin" cx="410" cy="69" r="4"/>
+      <circle class="pin" cx="410" cy="129" r="4"/>
+      <circle class="pin" cx="410" cy="195" r="4"/>
+
+      <!-- GND -->
+      <path class="wire" d="M164 69 H410"/>
+      <!-- TXD -> Widerstand -> Knoten -> UPDI -->
+      <path class="wire" d="M164 113 H236"/>
+      <path class="wire" d="M236 113 l8 -7 l10 14 l10 -14 l10 14 l10 -14 l8 7 H316"/>
+      <text class="opt" x="276" y="98" text-anchor="middle">4,7 kΩ</text>
+      <path class="wire" d="M316 113 H356 V129 H410"/>
+      <!-- RXD -> Knoten -->
+      <path class="wire" d="M164 145 H356 V129"/>
+      <circle class="pin" cx="356" cy="129" r="3.5"/>
+      <!-- 5V optional -->
+      <path class="wire-opt" d="M164 195 H410"/>
+      <text class="opt" x="288" y="214" text-anchor="middle">nur falls die Karte sonst keine 5 V hat</text>
+    </svg>
+    <ul class="steps">
+      <li>An UPDI <b>kein Kondensator</b> (Schaltplan 4.4).</li>
+      <li>GND immer verbinden. <code>5V</code> weglassen, wenn die Karte schon vom
+        Netzteil / Bus versorgt wird (sonst Rückspeisung).</li>
+      <li>Beim Klick auf „Adapter verbinden" im Port-Dialog den USB-Seriell-Adapter
+        wählen.</li>
+    </ul>
+
+    <h2>Ohne Browser</h2>
+    <pre><code>pio run -e attiny1616 -t upload -d firmware/module</code></pre>
+  </section>
 
   <footer>
     <span id="version">firmware/master/prebuilt/</span>
@@ -298,8 +471,9 @@
 </main>
 
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
+<script src="./updi.js"></script>
 <script>
-  // Version + Dateiname aus dem Manifest anzeigen, das ESP Web Tools ohnehin lädt.
+  // ---- Manifest-Version / Master-Dateiname -------------------------
   fetch("./manifest.json", { cache: "no-cache" })
     .then((r) => r.json())
     .then((m) => {
@@ -307,11 +481,92 @@
       const chip = (m.builds && m.builds[0] && m.builds[0].chipFamily) || "ESP32-C3";
       document.getElementById("meta").innerHTML =
         "Ziel: <b>" + chip + "</b> &middot; <b>" + (part.path || "?") + "</b>";
-      if (m.version) {
-        document.getElementById("version").textContent = "Version " + m.version;
-      }
+      if (m.version) document.getElementById("version").textContent = "Version " + m.version;
     })
     .catch(() => {});
+
+  // ---- Tabs -------------------------------------------------------
+  const tabs = [
+    ["tab-master", "panel-master"],
+    ["tab-module", "panel-module"],
+  ];
+  function selectTab(id) {
+    for (const [t, p] of tabs) {
+      const sel = t === id;
+      document.getElementById(t).setAttribute("aria-selected", sel ? "true" : "false");
+      document.getElementById(p).hidden = !sel;
+    }
+    history.replaceState(null, "", id === "tab-module" ? "#daughtercard" : "#master");
+  }
+  for (const [t] of tabs) document.getElementById(t).addEventListener("click", () => selectTab(t));
+  if (location.hash === "#daughtercard") selectTab("tab-module");
+
+  // ---- Daughter-Card-Flasher ------------------------------------
+  const MOD_HEX = "./krone-daughtercard-attiny1616.hex";
+  const log = document.getElementById("mod-log");
+  const bar = document.getElementById("mod-bar");
+  const fill = document.getElementById("mod-fill");
+  const goBtn = document.getElementById("mod-go");
+
+  fetch(MOD_HEX, { cache: "no-cache" })
+    .then((r) => (r.ok ? r.text() : Promise.reject()))
+    .then((txt) => {
+      try {
+        const img = window.KroneUpdi.parseIntelHex(txt);
+        document.getElementById("mod-meta").innerHTML =
+          "Ziel: <b>ATtiny1616</b> &middot; <b>" + img.length + " B</b>";
+        goBtn._hex = txt;
+      } catch (e) {
+        document.getElementById("mod-meta").textContent = "Image ungültig: " + e.message;
+      }
+    })
+    .catch(() => {
+      document.getElementById("mod-meta").textContent = "Image nicht gefunden.";
+    });
+
+  function line(msg, cls) {
+    const span = document.createElement("span");
+    if (cls) span.className = cls;
+    span.textContent = msg + "\n";
+    log.appendChild(span);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  goBtn.addEventListener("click", async () => {
+    if (!("serial" in navigator)) {
+      line("Dieser Browser kann kein Web Serial — Chrome oder Edge auf dem Desktop nutzen.", "err");
+      return;
+    }
+    if (!goBtn._hex) {
+      line("Kein Firmware-Image geladen.", "err");
+      return;
+    }
+    let port;
+    try {
+      port = await navigator.serial.requestPort();
+    } catch (_) {
+      return; // Dialog abgebrochen
+    }
+    goBtn.disabled = true;
+    log.textContent = "";
+    bar.hidden = false;
+    fill.style.width = "0";
+    try {
+      await window.KroneUpdi.flashDaughterCard(port, goBtn._hex, {
+        onLog: (m) => line(m),
+        onProgress: (f) => {
+          fill.style.width = Math.round(f * 100) + "%";
+        },
+      });
+      fill.style.width = "100%";
+      line("✓ geschrieben und verifiziert.", "ok");
+    } catch (e) {
+      line("✗ " + (e && e.message ? e.message : e), "err");
+      line("Der abgesicherte Weg: pio run -e attiny1616 -t upload -d firmware/module");
+    } finally {
+      goBtn.disabled = false;
+    }
+  });
 </script>
 </body>
 </html>

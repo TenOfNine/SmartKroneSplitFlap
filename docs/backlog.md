@@ -215,6 +215,31 @@ Spezifikation v0.16. mbedTLS-Verify am Gerät noch nicht getestet.
 
 ---
 
+## T16 — Browser-UPDI-Flasher für die Daughter Card (experimentell)
+
+Die Modul-Firmware ließ sich bisher nur über die Toolchain (`pio -t upload`)
+aufspielen. Analog zum Master-Web-Flasher soll ein USB-Seriell-Adapter am PC
+reichen.
+
+- `firmware/master/prebuilt/updi.js` — SerialUPDI auf der Web Serial API (Port von
+  `pymcuprog` / megaTinyCore): BREAK per Baud-Umschaltung, Link-Init 8E2,
+  `NVMErase`/`NVMProg`-Key, Geräte-ID-Prüfung (`1E 94 22`), 64-Byte-Page-
+  Programmierung, Verify. Keine Abhängigkeiten.
+- Zweiter Tab „Daughter Card" in `firmware/master/prebuilt/index.html`, mit
+  Schaltbild der Adapter-Verkabelung (Inline-SVG). Nur das mitgelieferte Hex,
+  kein Datei-Upload.
+- `tools/build_module_firmware.py` → `firmware/module/prebuilt/krone-daughtercard-attiny1616.hex`.
+- `pages.yml` stellt den Publish-Ordner aus beiden `prebuilt/`-Verzeichnissen
+  zusammen.
+
+**Fertig, wenn:** `pio run -e attiny1616` grün, `build_module_firmware.py` läuft,
+Intel-HEX-Parser gegen die echte Datei gegengeprüft.
+**Erledigt 09.09.2026** — Spezifikation v0.17. **Am Gerät nicht verifiziert**
+(kein Browser/keine Hardware in der Umgebung); als „experimentell" markiert,
+`pio -t upload` bleibt der abgesicherte Weg.
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.

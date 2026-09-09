@@ -1,9 +1,12 @@
 name: Pages – ESP Web Flasher
 
-# Veroeffentlicht firmware/master/prebuilt/ als GitHub Page:
+# Veroeffentlicht den Web-Flasher als GitHub Page:
 #   https://tenofnine.github.io/SmartKroneSplitFlap/
-# Der Flasher (index.html) laedt manifest.json + krone-master-esp32c3.factory.bin
-# aus demselben Verzeichnis -- also immer den zuletzt committeten Stand.
+# Der Publish-Ordner wird aus beiden prebuilt/-Verzeichnissen zusammengestellt:
+#   Master : index.html, updi.js, manifest.json, krone-master-esp32c3.factory.bin
+#   Modul  : krone-daughtercard-attiny1616.hex
+# Die .kota bleibt aussen vor -- die laeuft ueber die Geraete-Web-UI, nicht ueber
+# diese Seite.
 #
 # Einmalig im Repo aktivieren: Settings -> Pages -> Source: "GitHub Actions".
 
@@ -12,6 +15,7 @@ on:
     branches: [main]
     paths:
       - 'firmware/master/prebuilt/**'
+      - 'firmware/module/prebuilt/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -33,19 +37,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Manifest-Version = deployter Commit
+      - name: Publish-Verzeichnis zusammenstellen
         run: |
           sha=$(git rev-parse --short HEAD)
           d=$(git log -1 --format=%cd --date=short)
-          f=firmware/master/prebuilt/manifest.json
-          tmp=$(mktemp)
-          jq --arg v "$d ($sha)" '.version = $v' "$f" > "$tmp" && mv "$tmp" "$f"
+          mkdir _site
+          cp firmware/master/prebuilt/index.html \
+             firmware/master/prebuilt/updi.js \
+             firmware/master/prebuilt/manifest.json \
+             firmware/master/prebuilt/krone-master-esp32c3.factory.bin \
+             _site/
+          cp firmware/module/prebuilt/krone-daughtercard-attiny1616.hex _site/
+          jq --arg v "$d ($sha)" '.version = $v' _site/manifest.json > _site/manifest.tmp \
+            && mv _site/manifest.tmp _site/manifest.json
           echo "manifest version -> $d ($sha)"
+          ls -l _site
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: firmware/master/prebuilt
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4
