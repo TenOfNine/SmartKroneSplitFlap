@@ -380,6 +380,21 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
         send_frame(CMD_PING, own, &v, 1);
         break;
     }
+    case CMD_GET_VERSION: {
+        uint8_t flags = PROTO_VER_FLAG_APP_VALID;
+#ifdef HAS_BOOTLOADER
+        flags |= PROTO_VER_FLAG_BOOTLOADER;
+#endif
+        const uint8_t v[5] = { 1u, APP_VERSION_MAJOR, APP_VERSION_MINOR, flags, 0u };
+        send_frame(CMD_GET_VERSION, own, v, sizeof(v));
+        break;
+    }
+    case CMD_ENTER_BOOTLOADER:
+        /* Marker fuer den Bootloader setzen und per Software-Reset neu starten.
+         * Ohne residenten Bootloader ist das ein einfacher Neustart. */
+        GPIOR0 = 0xB7u;
+        _PROTECTED_WRITE(RSTCTRL.SWRR, RSTCTRL_SWRE_bm);
+        break;
     default:
         break;
     }
@@ -389,6 +404,11 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
 
 int main(void)
 {
+#ifdef HAS_BOOTLOADER
+    /* Interruptvektoren im App-Bereich (IVSEL = 0). Standard nach Reset; hier
+     * sicherheitshalber explizit, falls der Bootloader etwas anderes hinterliess. */
+    _PROTECTED_WRITE(CPUINT.CTRLA, 0);
+#endif
     clock_init();
     gpio_init();
     tick_init();
