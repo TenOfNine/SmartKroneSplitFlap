@@ -100,7 +100,12 @@ void busmaster_start_enumeration(busmaster_t *bm, uint32_t now_ms)
 {
     for (uint8_t i = 0; i < BUSMASTER_MAX_MODULES; ++i) {
         bm->mod[i].online = false;
+        bm->mod[i].fw_version = 0;
+        bm->mod[i].app_ver = 0;
+        bm->mod[i].ver_flags = 0;
+        bm->mod[i].ver_known = false;
     }
+    bm->module_count = 0;
     bm->chain_active = true;
     send(bm, CMD_ENUM_RESET, PROTO_ADDR_BROADCAST, NULL, 0);
     bm->enum_phase = BM_ENUM_RESET_SENT;
