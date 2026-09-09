@@ -121,3 +121,9 @@ REST: `GET /api/module/firmware`, `POST /api/module/update` (`{"all":true}` oder
 `firmware/master/prebuilt/updi.js`, Tab *Daughter Card*: Chip-Erase → Bootloader
 + `-boot`-App → `BOOTEND = 0x0C`. Geräte-ID-Prüfung (`1E 94 21`). Der Fuse-Write
 folgt der `pymcuprog`-v0-Sequenz (ADDR + DATA + `WFU`).
+
+Der Seitenpuffer wird wie in SerialUPDI (megaTinyCore) mit **`CTRLA.RSD = 1`**
+(Response Signature Disable) beschrieben: ohne RSD schickt das Modul nach jedem
+ST-Byte ein ACK, das auf der Ein-Draht-Leitung mit den folgenden Datenbytes
+kollidiert. Mit RSD gehen `REPEAT` + `ST` (Wort) + 64 Datenbytes +
+`STCS(CTRLA, RSD=0)` in einem Transfer raus, danach nur das Echo lesen.
