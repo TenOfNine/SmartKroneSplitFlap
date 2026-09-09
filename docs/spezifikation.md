@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.18 |
+| Version | 0.19 |
 | Datum | 09.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -553,7 +553,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | Funktion | Beschreibung |
 |---|---|
 | WLAN-Konfiguration | Access-Point mit Captive Portal beim Erststart, danach über die Web-UI änderbar |
-| Modulverwaltung | Anzahl per Enumeration automatisch, in der UI überschreib- und sperrbar |
+| Modulverwaltung | Anzahl per Enumeration automatisch erkannt (Vorgabe). Solange keine Karte antwortet, scannt der Master alle ~10 s neu; angesteckte Karten tauchen von selbst auf. Die Feldbreite folgt der Erkennung. *Einstellungen › Anzeige* erlaubt bei Bedarf eine **feste Feldbreite** (Override, z. B. Text über mehr Stellen als angeschlossen). `cfg.module_count = 0` = automatisch, `1…32` = fest. |
 | Freitext | Eingabe über Web-UI, REST und MQTT; Umlaute und Kleinbuchstaben werden gemappt, unbekannte Zeichen auf Leerbild |
 | Uhrzeit | NTP-gestützt (Server frei, Zeitzone als Städteliste + Sommerzeit-Schalter), Format `hh:mm` oder `hh:mm:ss`, Trennzeichen wählbar. Ohne erreichbaren NTP-Server auch manuell stellbar (freilaufend, keine gepufferte RTC). |
 | Selbsttest | jedes Modul fährt eine volle Umdrehung, prüft die Zahl der Blattimpulse zwischen zwei Leerbildimpulsen und meldet Timing-Abweichungen |
@@ -578,7 +578,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | Methode | Pfad | Funktion |
 |---|---|---|
 | GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten, erkannte Modulzahl, Enumerationsstatus) |
-| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Zugriffsschutz (`net_scope`, `auth_on`, `ota_signed`), Bus-CRC-Fehler und -Timeouts, Firmware-Build |
+| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Zugriffsschutz (`net_scope`, `auth_on`, `ota_signed`), Modulzahl (`detected`, `field_width`, `auto_modules`, `enum_busy`), Bus-CRC-Fehler und -Timeouts, Firmware-Build |
 | GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
 | GET/POST | `/api/backup` | Vollsicherung inkl. WLAN- und Admin-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
 | POST | `/api/update` | Signiertes OTA aus dem Browser: Container `krone-master-esp32c3.kota` hochladen (Feld `firmware`); das Modul prüft Signatur + SHA-256, flasht die zweite App-Partition und startet neu. Fehlerfall: `500` mit Grund, laufende Firmware bleibt aktiv |
@@ -594,7 +594,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall aufs alte Netz nach ~25 s) |
 | POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen |
 | POST | `/api/reboot` | Neustart |
-| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, `net_scope`, `admin_user`, `admin_pass` (nur schreibend), sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS. `admin_pass` wird nie ausgeliefert (`/api/config` GET meldet nur `admin_set`) |
+| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl (`0` = automatisch), hh:mm:ss-Timeout, `net_scope`, `admin_user`, `admin_pass` (nur schreibend), sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS. `admin_pass` wird nie ausgeliefert (`/api/config` GET meldet nur `admin_set`) |
 
 **Zugriffsschutz.** Ein Handler-Wrapper prüft vor *jedem* Endpunkt zwei Dinge:
 
@@ -846,6 +846,7 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.12 | 01.09.2026 | Kapitel 7.3/7.5: Hostname (mDNS/OTA/MQTT-Client-ID) in der Web-UI einstellbar. System-Ansicht zeigt CPU-Last (Idle-Hook), RAM-Auslastung, Chiptemperatur und Programmspeicher. Neuer Endpunkt `/api/backup` (Vollsicherung inkl. WLAN-Zugangsdaten als JSON) — die NVS-Konfiguration überdauert ohnehin OTA-Updates; der Web-Flasher löscht die NVS nicht mehr selbsttätig. |
 | 0.13 | 01.09.2026 | Kapitel 7.2/7.5: OTA-Update aus dem Browser (`POST /api/update`, `Update`-Bibliothek). *Einstellungen › System › Firmware aktualisieren* nimmt das App-Image (`krone-master-esp32c3.ota.bin`) entgegen; die USB-`.factory.bin` bleibt nur für den Erst-Flash. Bei Fehler bleibt die laufende Firmware aktiv. **ArduinoOTA entfernt** — der passwortlose espota-UDP-Port entfällt; der `ota_enabled`-Schalter gated jetzt `/api/update`. |
 | 0.15 | 02.09.2026 | Kapitel 7.3/7.5: Zeitzone in der Web-UI als Auswahlliste mit Städtenamen (Berlin, London, New York … 18 Einträge) statt freiem POSIX-String, dazu ein eigener **Sommerzeit-Schalter**. Die Oberfläche baut daraus den POSIX-TZ-String für `configTzTime` und stellt den Schalter bei Zonen ohne Sommerzeit ab. „Andere" behält die Direkteingabe. `/api/config` und das Backup speichern unverändert den fertigen TZ-String. Keine Firmware-Schnittstellen- oder Hardware-Änderung. |
+| 0.19 | 09.09.2026 | Kapitel 7.3: **Modulzahl standardmäßig automatisch.** `cfg.module_count = 0` (Vorgabe) = die Feldbreite folgt der Enumeration; `1…32` = fester Override. Solange nichts erkannt ist, enumeriert der Master alle ~10 s neu. `g_app.module_count` wird im Betrieb auf die effektive Zahl nachgeführt (`have_shown` zurückgesetzt, MQTT-Discovery neu). *Einstellungen › Anzeige*: Schalter „Modulzahl automatisch" + „Erkannt: N", Zahlenfeld nur bei manuell. Übersicht/Modul-Tabelle zeigen einen Leerzustand statt zehn leerer Zellen. `/api/system` neu: `detected`, `field_width`, `auto_modules`. `masterapp` sendet bei Feldbreite 0 kein `SET_ALL`/`GO`. |
 | 0.18 | 09.09.2026 | Kapitel 5.4/5.7, 7.3, 9: **Firmware-Verteilung über den Bus** (experimentell). Neuer residenter Modul-Bootloader (`firmware/bootloader`, Fuse `BOOTEND = 0x0C`, App ab 0x0C00 = env `attiny1616_boot`), Kommandos `GET_VERSION`/`ENTER_BOOTLOADER`/`FW_BEGIN`/`FW_DATA`/`FW_END` (0x54–0x58). Host-getestet: `lib/fwupdate` (Seiten-Sammler), `lib/moduleupdate` (Master-Warteschlange). Der Master trägt die signierte Modul-App eingebettet (Option A, `module_fw.h`), prüft die Signatur beim Start und verteilt sie über den Bus; neue REST-Endpunkte `/api/module/firmware` + `/api/module/update` + `.../status` und *Einstellungen › Modul-Firmware* mit „Alle aktualisieren". Der Browser-Werksflasher schreibt jetzt Bootloader + App und setzt die Fuse. `docs/module-bootloader.md`. **Am Gerät nicht verifiziert** — `pio -t upload` bleibt abgesichert. Keine Hardware-Änderung. |
 | 0.17 | 09.09.2026 | Werkzeuge/Doku: **Browser-UPDI-Flasher** für die Modul-Firmware (`firmware/master/prebuilt/updi.js`, Port von SerialUPDI auf die Web Serial API) als zweiter Tab neben dem Master-Flasher der GitHub Page; `tools/build_module_firmware.py` legt das Intel-HEX nach `firmware/module/prebuilt/`. Geräte-ID-Prüfung (ATtiny1616 = `1E 94 21`), Chip-Erase, Page-Programmierung, Verify. **Experimentell, am Gerät noch nicht verifiziert** — `pio -t upload` bleibt der abgesicherte Weg. README-Ausblick: Modul-Firmware über den Bus verteilen (Bootloader oder UPDI-Ader im Kabel, spätere Layout-Revision). Keine Firmware- oder Hardware-Änderung. |
 | 0.16 | 08.09.2026 | Kapitel 7.2/7.3/7.5, 9: Sicherheitspaket der Zentralsteuerung. (1) **Signiertes Browser-OTA** — `/api/update` nimmt nur den Container `krone-master-esp32c3.kota` an (Magic, SHA-256, ECDSA-P-256-Signatur über einen einkompilierten Public Key, Prüfung per mbedTLS); neuer host-getesteter Parser `lib/otaverify`, Signaturwerkzeug `tools/ota_keys.py`, `docs/firmware-signing.md`. (2) **Zugriffsschutz** — Herkunftsfilter `net_scope` (Vorgabe: private Netze RFC 1918) + optionale HTTP-Basic-Auth, als Wrapper auf allen Endpunkten; NF-9. (3) Doku: private E-Mail aus den Prüfpunkt-/Symbolprüfungs-Tabellen entfernt, Messfotos ohne EXIF und verkleinert. Keine Hardware-Änderung. |

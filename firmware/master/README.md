@@ -18,7 +18,7 @@ Arduino-ESP32). Zielhardware: `hardware/master`, Pinbelegung
 | `src/main.cpp` | ESP32-C3-Glue: UART1-RS485 (Halbduplex), WiFiManager, WebServer/REST, PubSubClient/MQTT, NTP, OTA, mDNS, Status-LED, Web-UI |
 
 `lib/protocol/` wird über `lib_extra_dirs = ../module/lib` mit der Modul-Firmware
-geteilt. Die fünf `lib/`-Bausteine sind hardwareunabhängig und auf dem Host getestet.
+geteilt. Die `lib/`-Bausteine sind hardwareunabhängig und auf dem Host getestet.
 
 ## Tests (Host)
 
@@ -28,7 +28,7 @@ pio test -e native
 ```
 
 `test_charmap`, `test_clocktext`, `test_busmaster`, `test_masterapp`,
-`test_hadiscovery`, `test_eventlog`, `test_otaverify`, `test_moduleupdate` (56 Fälle). `test_masterapp` und
+`test_hadiscovery`, `test_eventlog`, `test_otaverify`, `test_moduleupdate` (57 Fälle). `test_masterapp` und
 `test_busmaster` treiben die Logik gegen einen **simulierten Bus** (aufgezeichnete
 Sende-Frames, eingespeiste Antworten) — das deckt „REST-Endpunkte antworten gegen
 einen simulierten Bus" aus Backlog T8 ab.
@@ -63,8 +63,12 @@ Die Status-LED (GPIO6, D1): Dauerlicht = alles gut, langsames Blinken = ein Modu
 offline/Fehler, schnelles Blinken = kein WLAN.
 
 Beim Erststart öffnet die Karte einen Access-Point (`krone_anzeige`) mit Captive
-Portal für die WLAN-Zugangsdaten. MQTT-Broker und Modulzahl danach unter
-`/api/config` bzw. in der Web-UI.
+Portal für die WLAN-Zugangsdaten. MQTT-Broker danach unter `/api/config` bzw. in
+der Web-UI.
+
+Die **Modulzahl wird per Enumeration automatisch erkannt** (`cfg.module_count = 0`);
+solange keine Karte antwortet, scannt der Master alle ~10 s neu. *Einstellungen ›
+Anzeige* erlaubt bei Bedarf eine feste Feldbreite (`1…32`) als Override.
 
 ## Web-UI
 
@@ -80,7 +84,7 @@ Firmware aktualisieren). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
 | Methode | Pfad | Body / Zweck |
 |---|---|---|
 | GET | `/api/status` | Anzeige + Module (Ist/Ziel/Zustand/Fehler/Korr./Blattzahl/FW/verpasst) |
-| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), **CPU-Last, Chiptemperatur**, Sketch/OTA-Platz, Hostname, WLAN, Uhr, MQTT/OTA/mDNS, Bus-CRC/Timeouts, FW-Build |
+| GET | `/api/system` | Uptime, Heap (frei/gesamt/min), **CPU-Last, Chiptemperatur**, Sketch/OTA-Platz, Hostname, WLAN, Uhr, MQTT/OTA/mDNS, Bus-CRC/Timeouts, `detected`/`field_width`/`auto_modules`, FW-Build |
 | GET | `/api/log` | `?sev=info\|warn\|err` — Ereignis-Ringpuffer |
 | GET/POST | `/api/backup` | Vollsicherung **inkl. WLAN-Zugangsdaten** (Download / Restore). POST übernimmt und startet neu. |
 | POST | `/api/update` | Signiertes OTA: Container `.kota` als multipart (Feld `firmware`) → Signatur-/Hash-Prüfung → `Update`-Bibliothek → Neustart |
