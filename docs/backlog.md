@@ -270,6 +270,29 @@ Bootloader/Bus-Update brauchen einen Bench-Test (Checkliste in
 
 ---
 
+## T18 — Modulzahl automatisch erkennen
+
+Die Web-UI zeigte immer 10 Module (fest einkompilierter Default), auch ohne
+angeschlossene Karten.
+
+- `cfg.module_count`: `0` (neue Vorgabe) = die Feldbreite folgt der Enumeration,
+  `1…32` = fester Override „bei Bedarf".
+- `effective_module_count()` als zentraler Helfer; `g_app.module_count` wird im
+  `loop()` auf die effektive Zahl nachgeführt (`have_shown` zurück, MQTT-Discovery
+  neu).
+- Auto-Nachscannen alle ~10 s, solange 0 erkannt.
+- `masterapp_tick`: bei Feldbreite 0 kein `SET_ALL`/`GO` (Test).
+- `busmaster_start_enumeration` verwirft stale Versions-/FW-Daten.
+- `/api/system` neu: `detected`, `field_width`, `auto_modules`, `enum_busy`.
+- UI: *Anzeige* mit Schalter „Modulzahl automatisch" + „Erkannt: N";
+  Übersicht/Modul-Tabelle mit Leerzustand statt zehn leerer Zellen.
+
+**Fertig, wenn:** `pio run -e esp32c3` baut, `pio test -e native` grün
+(Master 57).
+**Erledigt 09.09.2026** — Spezifikation v0.19.
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.
