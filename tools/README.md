@@ -37,6 +37,7 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 | Werkzeug | Zweck |
 |---|---|
 | `check_flash.py` | Flash-Verbrauch einer ELF gegen eine Obergrenze prüfen (CI, ATtiny < 8 KB). |
+| `check_webui.mjs` | prüft `INDEX_HTML` in `firmware/master/src/main.cpp`: JS-Syntax jedes Inline-`<script>` + optionaler jsdom-Smoke (Seite laden, `/api/*` mocken, Navigation testen). `node tools/check_webui.mjs` (jsdom optional: `npm i jsdom@24`). |
 | `build_master_firmware.py` | `pio run -e esp32c3` + `esptool merge_bin` → `firmware/master/prebuilt/` (`factory.bin` für USB + signierte `.kota` fürs Browser-OTA + Manifest). |
 | `build_module_firmware.py` | baut `attiny1616` (App @ 0x0000), `attiny1616_boot` (App @ 0x0C00) und den Bootloader → `firmware/module/prebuilt/` (drei Hex + signierte `.mota` für die Bus-Verteilung). |
 | `ota_keys.py` | OTA-Signaturschlüssel: `init` (ECDSA-P-256-Paar + `lib/otaverify/ota_pubkey.h`), `pubkey`, `sign IN.bin OUT.kota`, `verify`. Privater Schlüssel nie im Repo. Siehe `docs/firmware-signing.md`. |

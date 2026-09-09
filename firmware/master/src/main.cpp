@@ -751,7 +751,7 @@ const ec=m.error?`0x0${m.error} · ${ERRTXT[m.error]||""}`:"–";
 return `<tr><td class=mono>${m.addr}</td><td>${p}</td><td class=mono>${cell(m.ist)}</td><td class=mono>${cell(m.ziel)}</td>
 <td>${ec}</td><td class=mono>${m.corr}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.fw?"v"+m.fw:"–"}</td><td class=mono>${m.miss}</td>
 <td><div class=ra><button class="btn sm" data-h=${m.addr}>Homing</button><button class="btn sm" data-i=${m.addr}>Identify</button></div></td></tr>`}).join("")
-:`<tr><td colspan=10 class=hint style=padding:14px>Keine Module. ${st.enum_busy?"Enumeration läuft …":"Karten anschließen oder unten „Enumeration neu starten"."}</td></tr>`;
+:`<tr><td colspan=10 class=hint style=padding:14px>Keine Module. ${st.enum_busy?"Enumeration läuft …":"Karten anschließen oder unten neu enumerieren."}</td></tr>`;
 }
 $("#modtb").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 if(b.dataset.h){P("/api/module",{addr:+b.dataset.h,action:"home"});toast("HOME Adr "+b.dataset.h)}
