@@ -117,31 +117,24 @@ Das committete Image liegt unter `firmware/module/prebuilt/`; neu bauen mit
 ## Ausblick
 
 **Modul-Firmware über den Bus verteilen** — die Master-Steuerung flasht die
-Daughter Cards aus ihrer Web-UI, ohne PC und Adapter. Der Browser-UPDI-Flasher
-(Tab „Daughter Card") ist ein erster Schritt; die eigentliche Lösung ist
-**aktuell nicht geplant**, aber grob durchdacht:
+Daughter Cards aus ihrer Web-UI, ohne PC und Adapter.
 
-- **Bootloader im ATtiny (bevorzugt, keine Hardware-Änderung).**
-  Ein kleiner residenter Bootloader (~512 B–1,5 KB) liegt im per Fuse `BOOTEND`
-  abgetrennten Boot-Bereich des Flash. Bei jedem Reset läuft er zuerst, liest
-  seine Busadresse aus dem EEPROM und wartet ein kurzes Fenster auf einen an
-  ihn gerichteten Update-Frame vom Master (`CMD_FW_BEGIN`/`_DATA`/`_END` über
-  die vorhandene RS-485-Rahmenschicht). Kommt keiner, springt er in die
-  Anwendung. Kommt einer, empfängt er das Image über **denselben Bus** und
-  schreibt es seitenweise in den App-Bereich (`≥ 0x8200`).
-  Vorteile: keine neue Ader, **einzeln adressierbar** („Modul 3 aktualisieren"),
-  **ausfallsicher** (ein abgebrochenes Update lässt den Bootloader intakt →
-  über den Bus wiederholbar, kein USB-Rettungsflash). Kosten: der Bootloader
-  muss einmalig per UPDI/J6 eingespielt werden (wie der Erstflash ohnehin),
-  Protokoll-Kommandos + Master-UI, ~512 B Flash (App belegt 5,4 von 16 KB).
-  `BOOTEND` sperrt den Baustein **nicht** — UPDI behält vollen Zugriff und kann
-  den Fuse jederzeit zurücksetzen. Referenz: `optiboot_x` (megaTinyCore).
-- **UPDI-Ader im Flachbandkabel (Bastelweg).** Ader 9 des Busbands ist
-  durchverbunden und frei (solange O-2 keine 15-V-Schiene braucht). Eine
-  Drahtbrücke je Karte von `J6.2` auf `J2.9` und ein GPIO am Master brächten
-  UPDI auf den Bus — dann aber **allen zehn Karten gemeinsam** (kein
-  Einzeladressieren, Signalintegrität über zehn Karten Kabel ungetestet).
-  Nur für „alle Karten auf einmal neu bespielen" brauchbar.
+- **Residenter Bootloader (umgesetzt, experimentell).** `firmware/bootloader/`
+  liegt im per Fuse `BOOTEND = 0x0C` abgetrennten Boot-Bereich (App ab 0x0C00,
+  env `attiny1616_boot`). Bei jedem Reset läuft er zuerst, startet die App oder
+  empfängt eine neue über den Bus (`ENTER_BOOTLOADER` → `FW_BEGIN`/`_DATA`/`_END`).
+  Einzeln adressierbar, ausfallsicher (abgebrochene Updates sind wiederholbar,
+  der Bootloader bleibt intakt). Der Master trägt die signierte Modul-Firmware
+  eingebettet und verteilt sie aus *Einstellungen › Modul-Firmware*
+  („Alle aktualisieren"). Erstflash von Bootloader + App + Fuse über den
+  Browser-Werksflasher (Tab „Daughter Card") oder UPDI. `BOOTEND` sperrt den
+  Baustein nicht. **Am Gerät noch nicht verifiziert** — Design und
+  Bench-Test-Checkliste in [`docs/module-bootloader.md`](docs/module-bootloader.md);
+  bis dahin `pio run -e attiny1616 -t upload` (ohne Bootloader).
+- **UPDI-Ader im Flachbandkabel (verworfener Bastelweg).** Ader 9 des Busbands
+  ist frei; eine Drahtbrücke je Karte von `J6.2` auf `J2.9` brächte UPDI auf den
+  Bus, aber allen zehn Karten gemeinsam (kein Einzeladressieren). Der
+  Bootloader-Weg ist die bessere Lösung.
 
 ## Hinweis zu den Originalunterlagen
 

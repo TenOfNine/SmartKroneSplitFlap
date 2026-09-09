@@ -14,6 +14,7 @@ Arduino-ESP32). Zielhardware: `hardware/master`, Pinbelegung
 | `lib/masterapp/` | Betriebsarten, Anzeige-Update bei Änderung, Auto-Rückfall der Sekundenanzeige, Status-JSON | Spez. 7.3, 7.5, 7.7 |
 | `lib/hadiscovery/` | Home-Assistant-MQTT-Auto-Discovery (Config-Topic + Payload je Entity) | Spez. 7.6 |
 | `lib/eventlog/` | Ereignis-Ringpuffer (32 Einträge) für den Log-Tab der Web-UI | — |
+| `lib/moduleupdate/` | Sende-Seite der Firmware-Verteilung über den Bus (Warteschlange + Zustandsautomat, host-getestet) | Spez. 5.7 |
 | `src/main.cpp` | ESP32-C3-Glue: UART1-RS485 (Halbduplex), WiFiManager, WebServer/REST, PubSubClient/MQTT, NTP, OTA, mDNS, Status-LED, Web-UI |
 
 `lib/protocol/` wird über `lib_extra_dirs = ../module/lib` mit der Modul-Firmware
@@ -27,7 +28,7 @@ pio test -e native
 ```
 
 `test_charmap`, `test_clocktext`, `test_busmaster`, `test_masterapp`,
-`test_hadiscovery`, `test_eventlog`, `test_otaverify` (50 Fälle). `test_masterapp` und
+`test_hadiscovery`, `test_eventlog`, `test_otaverify`, `test_moduleupdate` (56 Fälle). `test_masterapp` und
 `test_busmaster` treiben die Logik gegen einen **simulierten Bus** (aufgezeichnete
 Sende-Frames, eingespeiste Antworten) — das deckt „REST-Endpunkte antworten gegen
 einen simulierten Bus" aus Backlog T8 ab.
@@ -96,6 +97,9 @@ Firmware aktualisieren). Der Quelltext ist `INDEX_HTML` in `src/main.cpp`.
 | POST | `/api/wifi/portal` | Konfigurationsportal öffnen |
 | POST | `/api/reboot` | Neustart |
 | GET/POST | `/api/config` | Hostname, MQTT, NTP-Server, TZ, feste IP, Ausrichtung, Trennzeichen, Modulzahl, hh:mm:ss-Timeout, `net_scope`, `admin_user`/`admin_pass` (nur schreibend), Schalter MQTT/REST-Schreib-API/OTA/mDNS |
+| GET | `/api/module/firmware` | gebündelte Modul-Version + je Modul installierte Version/Status (experimentell, Spez. 5.7) |
+| POST | `/api/module/update` | `{"all":true}` oder `{"addr":[2,3]}` — Firmware über den Bus verteilen |
+| GET | `/api/module/update/status` | Fortschritt/Ergebnis der laufenden Verteilung |
 
 Die schreibenden Steuer-Endpunkte lassen sich über den Schalter
 **REST-Schreib-API** sperren (`403`). Die Web-Oberfläche selbst nicht.
