@@ -1,10 +1,12 @@
 # hardware/master
 
 KiCad-Projekt der Zentralsteuerung (RS-485-Master, eine je Anlage).
-**Stand:** Rev. 0.2, geroutet (2 Lagen, ERC 0/0, DRC 0/0), Symbolprüfung
-freigegeben, Fertigungspaket committet unter `manufacturing/`. Rev. 0.2 =
-Eingangsschutz (Verpol-P-FET Q1 + R8, RS-485-TVS D2) + Silk (+/- an J1,
-„ANT"-Text raus). Vor der Bestellung: GUI-Feinlayout durch den Betreiber.
+**Stand:** Rev. 0.2 **fertig** — geroutet + GUI-Feinlayout (2 Lagen, ERC 0/0,
+DRC 0/0/0), Symbolprüfung freigegeben, Fertigungspaket committet unter
+`manufacturing/`. **Bereit zur Bestellung.** Rev. 0.2 = Eingangsschutz
+(Verpol-P-FET Q1 + R8, RS-485-TVS D2) + Silk (+/- an J1, „ANT"-Text raus,
+Referenztexte U2/D2/R4 am Bauteil). Die `master.kicad_pcb` ist der finale
+Stand des Betreibers — nicht mehr per Skript regenerieren.
 
 ## Schnellcheck
 

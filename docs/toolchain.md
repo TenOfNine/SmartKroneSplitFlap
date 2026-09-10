@@ -174,9 +174,12 @@ Der Router-Lauf gehoert an den Schluss, wenn die Bauteilpositionen feststehen.
 
 **Master:** `tools/route_master.py` macht denselben Ablauf fuer
 `hardware/master/master.kicad_pcb` (Netzklassen aus `gen_master_pcb.py`: alle
-Signale 0,5 mm, Versorgung 0,8 mm, kein AC) und erzeugt am Ende `docs/pcb-master.png`.
-`gen_master_pcb.py --png` wuerde die Platine neu aufbauen und die Verdrahtung
-verwerfen -- es verweigert das, solange Bahnen vorhanden sind (`--force` erzwingt).
+Signale 0,5 mm, Versorgung 0,8 mm, kein AC). `gen_master_pcb.py --png` wuerde die
+Platine neu aufbauen -- es verweigert das, solange Bahnen vorhanden sind
+(`--force` erzwingt). Aus der **fertigen** Platine: `gen_master_pcb.py --preview`
+(2D `docs/pcb-master.png`) und `--render` (3D `docs/render-master-*.png`), beide
+ohne Neu-Aufbau. Der committete Stand von `master.kicad_pcb` ist die vom
+Betreiber im GUI feinjustierte Rev. 0.2 -- nicht mehr regenerieren.
 
 FreeRouting 2.3.0 haengt in dieser Umgebung reproduzierbar nach dem Routing
 (GUI-Thread haelt die JVM). `route_master.py` startet es darum mit

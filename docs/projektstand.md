@@ -48,17 +48,14 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Auto-Modulzahl (T18) | `cfg.module_count = 0` (Vorgabe) = Feldbreite folgt der Enumeration, `1…32` = Override. `effective_module_count()`, Nachführung im `loop()`, Auto-Rescan alle ~10 s bei 0 erkannt, `masterapp` sendet bei Breite 0 nichts (Test), Enum verwirft stale Daten. `/api/system` +`detected`/`field_width`/`auto_modules`. UI: *Anzeige*-Schalter + „Erkannt: N", Leerzustand in Übersicht/Modul-Tabelle. `pio test -e native` Master 57. Spez. v0.19. | PR (auto-module-count) |
 | Master-UI Zeitzone | Zeitzone jetzt Städte-Auswahlliste (18 Einträge) + eigener Sommerzeit-Schalter statt freiem POSIX-String; die UI baut den TZ-String, „Andere" behält die Direkteingabe. `/api/config`/Backup unverändert. `pio run -e esp32c3` ~1002 KB. Spez. v0.15. | direkt auf main |
 | Web-UI-Demo (GitHub Page) | `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `main.cpp` + `tools/webui_demo_shim.html` (fetch-Shim für `/api/*`, Beispieldaten) → `firmware/master/prebuilt/demo/index.html` (gitignored). `pages.yml` legt es unter `…/demo/` ab, `ci.yml` baut es und `check_webui.mjs` prüft das Bundle mit. Spez. v0.20. | PR #13, `195ab39` |
-| Master-Trägerboard Rev. 0.2 (T20) | Eingangsschutz vor der PCB-Bestellung: Verpolschutz-P-FET Q1 (AO3401A, C15127) + R8 (100 k, C149504) am 5-V-Eingang (High-Side, schützt die ganze Kette), RS-485-TVS D2 (SM712/PSM712, C32677) am Bus. Alle JLC-Basic. M-3 entschieden (U3 bestückt, R7 DNP-Reserve), keine U1-Aussparung (Modul entnehmbar), 5-V- und 42-V~-Kreis komplett getrennt. `build_krone_master_symbols`/`gen_master_*`/`gen_master_manufacturing` neu; PCB inkrementell mit neuem `tools/patch_master_pcb.py` geroutet (FreeRouting 2.3.0 hängt in der Dev-Umgebung → `route_master.py` mit `gui.enabled=false` + Watchdog gehärtet). `symbolpruefung-master.md` **freigegeben** (AO3401A + SM712, M-3/M-4 geschlossen). Silk: „ANT: keine Cu-Fläche" entfernt, + / − neben J1. ERC 0/0, DRC 0/0 (3 kosmetische Silk-Warnungen), Fertigungspaket regeneriert. Spez. v0.21. **PR #14 zur Prüfung, Bestellung nach GUI-Feinlayout.** | PR #14 (master-input-protection) |
+| Master-Trägerboard Rev. 0.2 (T20) | Eingangsschutz vor der PCB-Bestellung: Verpolschutz-P-FET Q1 (AO3401A, C15127) + R8 (100 k, C149504) am 5-V-Eingang (High-Side, schützt die ganze Kette), RS-485-TVS D2 (SM712/PSM712, C32677) am Bus. Alle JLC-Basic. M-3 entschieden (U3 bestückt, R7 DNP-Reserve), keine U1-Aussparung (Modul entnehmbar), 5-V- und 42-V~-Kreis komplett getrennt. `build_krone_master_symbols`/`gen_master_*`/`gen_master_manufacturing` neu; PCB inkrementell mit neuem `tools/patch_master_pcb.py` geroutet (FreeRouting 2.3.0 hängt in der Dev-Umgebung → `route_master.py` mit `gui.enabled=false` + Watchdog gehärtet). `symbolpruefung-master.md` **freigegeben** (AO3401A + SM712, M-3/M-4 geschlossen). Silk: „ANT: keine Cu-Fläche" entfernt, + / − neben J1, Referenztexte U2/D2/R4 am Bauteil. **GUI-Feinlayout vom Betreiber erledigt** — committete `master.kicad_pcb` ist final. ERC 0/0, DRC 0/0/0, Fertigungspaket regeneriert. Spez. v0.21. **PR #14, bereit zur Bestellung.** | PR #14 (master-input-protection) |
 
 Nächste sinnvolle Schritte:
 
-**Hardware Master (Rev. 0.2, T20 — PR offen)**
-- Betreiber gleicht `docs/render-master-top.png` mit einem echten ESP32-C3-Modul
-  ab (Pin-1 = 5V rechts oben) und prüft `master.kicad_pcb` in der KiCad-GUI.
-- `docs/symbolpruefung-master.md` (AO3401A + SM712, M-4) freigeben; ProTek-PSM712-
-  Belegung am LCSC-/ProTek-Datenblatt kurz gegenprüfen.
-- Kosmetische Silk-Warnungen (D2/C1/U2-Textüberlapp) im GUI bereinigen.
-- Danach Master-PCB bei JLCPCB bestellen (BOM/CPL in `hardware/master/manufacturing/`).
+**Hardware Master (Rev. 0.2, T20 — PR #14, GUI-Feinlayout erledigt)**
+- Symbolprüfung + PCB vom Betreiber freigegeben, DRC 0/0/0.
+- PR #14 mergen, dann **Master-PCB bei JLCPCB bestellen**
+  (Gerber/BOM/CPL in `hardware/master/manufacturing/`).
 - Ringkerntrafo 230 V → 2 × 18 V, 50–60 VA, EN 61558; primär träge Sicherung + NTC.
 
 **Firmware am Gerät**
