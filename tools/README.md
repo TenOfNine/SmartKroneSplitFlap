@@ -16,7 +16,7 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 |---|---|
 | `build_krone_symbols.py` | Symbolbibliothek `hardware/daughtercard/symbols/krone.kicad_sym`. `--check` für die CI. |
 | `gen_daughtercard_sch.py` | Schaltplan + PDF + PNG + PCB-Netzliste aus `docs/schaltplan-daughtercard.md` Kap. 6. `--check-only`, `--erc`, `--pdf`, `--png`, `--netlist`. |
-| `gen_daughtercard_pcb.py` | Erstplatzierung der `.kicad_pcb` (**System-Python**, `pcbnew`). `--png`, `--drc`, `--jlc`. Verweigert Neuaufbau nach dem Routing nicht — dann UUID-Remapping statt Neu-Erzeugen. |
+| `gen_daughtercard_pcb.py` | Erstplatzierung der `.kicad_pcb` (**System-Python**, `pcbnew`). `--png`, `--drc`, `--jlc`, `--render` (3D → `docs/render-daughtercard-*.png`, baut nicht neu). Verweigert Neuaufbau nach dem Routing nicht — dann UUID-Remapping statt Neu-Erzeugen. |
 | `route_daughtercard.py` | FreeRouting + `finish_routes.py` + Masseflächen (**System-Python**). `--dry-run`, `--no-zones`. |
 | `finish_routes.py` | A*-Rastersuch-Router für die 1–2 Verbindungen, die FreeRouting offen lässt. Von `route_*` importiert, braucht `python3-numpy`. |
 | `add_silk_marks.py` | Maker-Kennzeichnung + schwarz/weiß-Lagenaufbau (**System-Python**). `--board <pfad>` auch für den Master. |
@@ -30,7 +30,7 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 | `gen_master_sch.py` | Schaltplan aus `docs/schaltplan-master.md` Kap. 6. Flags wie beim Daughter-Card-Pendant. |
 | `gen_master_pcb.py` | Erstplatzierung `hardware/master/master.kicad_pcb` (**System-Python**). `PLACEMENT`-Dict (opt. 4. Element `"B"` = Rückseite). `--png`, `--drc`, `--jlc`, `--render` (3D), `--force`. |
 | `route_master.py` | wie `route_daughtercard.py` für die Master-Platine, ruft `add_silk_marks.py` selbst auf. FreeRouting mit `-Dfreerouting.gui.enabled=false` + Popen-Watchdog (JVM hängt sonst nach dem Routing), `--passes`-Default 6, bis zu 3 Anläufe. |
-| `patch_master_pcb.py` | **inkrementell**: setzt die in `gen_master_pcb.PLACEMENT` neuen Refs in die geroutete Platine (`git show <base>`) ein, kappt kurzschließende Bahnen, schließt Lücken mit `finish_routes.py`, baut Masseflächen neu. Für kleine Revisionen ohne Vollneuroute (Rev. 0.2: Q1/R8/D2). **System-Python.** |
+| `patch_master_pcb.py` | **inkrementell**: setzt die in `gen_master_pcb.PLACEMENT` neuen Refs in die geroutete Platine (`git show <base>`) ein, kappt kurzschließende Bahnen, schließt Lücken mit `finish_routes.py` (bis 4 Runden), setzt Referenztexte aus `REF_POS_MM`, baut Masseflächen neu, End-DRC. Für kleine Revisionen ohne Vollneuroute (Rev. 0.2: Q1/R8/D2). **System-Python.** |
 | `gen_master_manufacturing.py` | Fertigungspaket → `hardware/master/manufacturing/`. |
 
 ## Firmware

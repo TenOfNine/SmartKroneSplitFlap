@@ -10,7 +10,13 @@ KiCad-Projekt der Modulsteuerung (eine je Anzeigenmodul).
 
 ![PCB (geroutet, F.Cu + B.Cu)](../../docs/pcb-daughtercard.png)
 
-Vollauflösung: [`docs/daughtercard.pdf`](../../docs/daughtercard.pdf) ·
+3D-Vorschau (`tools/gen_daughtercard_pcb.py --render`):
+
+| Oberseite | Unterseite |
+|---|---|
+| ![3D oben](../../docs/render-daughtercard-top.png) | ![3D unten](../../docs/render-daughtercard-bottom.png) |
+
+Vollauflösung Schaltplan: [`docs/daughtercard.pdf`](../../docs/daughtercard.pdf) ·
 ERC: 0 Fehler / 0 Warnungen (`gen_daughtercard_sch.py --erc`, in der CI geprüft)
 
 ## Dateien
