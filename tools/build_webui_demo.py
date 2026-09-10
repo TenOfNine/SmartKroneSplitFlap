@@ -81,7 +81,11 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(page, encoding="utf-8")
-    print(f"{args.out.relative_to(REPO)} -- {len(page)} Bytes")
+    try:
+        shown = args.out.resolve().relative_to(REPO)
+    except ValueError:
+        shown = args.out  # Ziel ausserhalb des Repos (z. B. _site/ in der Pages-Action)
+    print(f"{shown} -- {len(page)} Bytes")
     return 0
 
 
