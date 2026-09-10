@@ -23,9 +23,10 @@ Erzeugt von `tools/gen_master_manufacturing.py` aus der committeten
 
 ## Bestueckung
 
-`BOM.csv` / `CPL.csv` enthalten **15 SMD-Bauteile** (alle Oberseite,
-0805 / SOIC-8 / SOT-23-5). Der Master ist ein Einzelstueck -- die komplette
-Handbestueckung ist zumutbar; JLCPCB-SMT ist optional.
+`BOM.csv` / `CPL.csv` enthalten **18 SMD-Bauteile** (alle Oberseite,
+0805 / SOIC-8 / SOT-23 / SOT-23-5), alle als LCSC-Basic-Teile. Der Master
+ist ein Einzelstueck -- die komplette Handbestueckung ist zumutbar;
+JLCPCB-SMT ist optional.
 
 **Immer von Hand** zu bestuecken (nicht im SMT-Auftrag):
 
@@ -40,7 +41,8 @@ Handbestueckung ist zumutbar; JLCPCB-SMT ist optional.
 
 > Die `CPL.csv`-Drehungen kommen unveraendert aus KiCad. JLCPCB rechnet
 > fuer SOT-23 / SOIC / LED eine eigene Referenzdrehung an -- im
-> JLC-Vorschaufenster **U2, U3 und D1 einzeln auf Pin 1 / Polaritaet pruefen**.
+> JLC-Vorschaufenster **U2, U3, Q1, D1 und D2 einzeln auf Pin 1 /
+> Polaritaet pruefen** (D2 = SM712: Pin 3 = GND).
 
 ## Bauteil-Hinweise
 

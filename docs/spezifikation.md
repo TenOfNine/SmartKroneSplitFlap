@@ -7,7 +7,7 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.20 |
+| Version | 0.21 |
 | Datum | 10.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
@@ -318,6 +318,7 @@ Platinenformat: 74 mm × 60 mm. Die Breite entspricht der Modulbreite ((1 × 75)
 | Treiber Modul | TP8485E-SR, betrieben mit 5 V |
 | Treiber Master | TP8485E-SR, betrieben mit 3,3 V |
 | Empfänger | dauerhaft aktiv, /RE fest auf GND |
+| Transientenschutz | RS-485-TVS-Array (SM712-Profil, 7 V / 12 V) am Master zwischen A/B und GND |
 
 Auf beiden Seiten kommt derselbe Baustein zum Einsatz. Der TP8485E arbeitet von 3 bis 5,5 V, wodurch sich Master und Modul denselben Bauteiltyp teilen, obwohl sie mit unterschiedlicher Logikspannung laufen. Der Mischbetrieb ist zulässig, die Differenzpegel sind kompatibel. Der Empfänger ist Full-Fail-Safe ausgelegt und liefert auch bei offenem, kurzgeschlossenem oder terminiertem aber unbetriebenem Bus einen definierten High-Pegel.
 
@@ -513,8 +514,9 @@ Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung.
 | Modul | **ESP32-C3 Super Mini** (Aftermarket-Modul), steckbar in Buchsenleisten auf einem Trägerboard |
 | Bustreiber | TP8485E-SR, betrieben mit 3,3 V (vom 3V3-Pin des Moduls), /RE fest auf GND |
 | Busabschluss | 120 Ω fest, Fail-Safe-Bias 2 × 680 Ω (A→+3V3, B→GND) |
-| CHAIN-Ausgang | GPIO über Pegelwandler 3,3 V → 5 V (74LVC1G17); bei Bedarf 0-Ω-Brücke |
-| Versorgung | 5 V aus der Netzteilbaugruppe (Abschnitt 8.2); ESP32-C3 über Onboard-LDO |
+| CHAIN-Ausgang | GPIO über Pegelwandler 3,3 V → 5 V (74LVC1G17, feste Bestückung); R7 (0 Ω) als DNP-Reserveplatz |
+| Bus-Transientenschutz | RS-485-TVS D2 (SM712-Profil) zwischen A/B und GND |
+| Versorgung | 5 V aus dem eigenen 5-V-Netzteil (Abschnitt 8.2), Verpolschutz (P-FET); ESP32-C3 über Onboard-LDO |
 | Triac-Treiberspannung (Ader 9) | Lötbrücke offen / +5 V / +15 V; Aufwärtswandler als unbestückter Steckplatz, siehe O-2 |
 
 Das Trägerboard erzeugt alle Logikspannungen und Bussignale außer der 42 V~. Die
@@ -709,7 +711,9 @@ Die Nennspannung gilt bei Volllast. Bei der vorgesehenen Teillast und einem Ring
 | ESP32-C3 mit WLAN, Spitze | 350 mA |
 | **Summe mit Reserve** | **2 A** |
 
-Gewählt: Schaltnetzteil 5 V / 2 A. Verteilung über zwei Adern des Busbandkabels. Bei zehn Modulen und kurzer Kettenlänge sind keine lokalen Regler erforderlich.
+Gewählt: **eigenes** Schaltnetzteil 5 V / 2 A, galvanisch unabhängig vom 42-V~-Kreis. Verteilung über zwei Adern des Busbandkabels. Bei zehn Modulen und kurzer Kettenlänge sind keine lokalen Regler erforderlich.
+
+Die 5 V werden **nicht** aus den 42 V~ abgeleitet: das würde einen isolierten Wandler erzwingen, weil die Trafo-Sekundärseite potenzialfrei bleiben muss (8.4), und koppelt Schaltstörungen der Triac-Lasten in die Logik. Ein Katalog-5-V-Netzteil ist billiger, störärmer und erlaubt Inbetriebnahme/Diagnose ohne Motorversorgung. Am Master-Trägerboard sitzt hinter der 5-V-Klemme ein **Verpolschutz** (P-Kanal-MOSFET als High-Side-Schalter), der bei vertauschter Klemme die gesamte Kette schützt.
 
 ### 8.3 Treiberspannung für den Triac-Eingang
 
@@ -858,3 +862,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.16 | 08.09.2026 | Kapitel 7.2/7.3/7.5, 9: Sicherheitspaket der Zentralsteuerung. (1) **Signiertes Browser-OTA** — `/api/update` nimmt nur den Container `krone-master-esp32c3.kota` an (Magic, SHA-256, ECDSA-P-256-Signatur über einen einkompilierten Public Key, Prüfung per mbedTLS); neuer host-getesteter Parser `lib/otaverify`, Signaturwerkzeug `tools/ota_keys.py`, `docs/firmware-signing.md`. (2) **Zugriffsschutz** — Herkunftsfilter `net_scope` (Vorgabe: private Netze RFC 1918) + optionale HTTP-Basic-Auth, als Wrapper auf allen Endpunkten; NF-9. (3) Doku: private E-Mail aus den Prüfpunkt-/Symbolprüfungs-Tabellen entfernt, Messfotos ohne EXIF und verkleinert. Keine Hardware-Änderung. |
 | 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |
 | 0.20 | 10.09.2026 | Kapitel 7.5: **statische Web-UI-Demo auf der GitHub Page** (`https://tenofnine.github.io/SmartKroneSplitFlap/demo/`). `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `firmware/master/src/main.cpp` und setzt `tools/webui_demo_shim.html` davor — überlagert `window.fetch` für `/api/*` mit Beispieldaten (10 Module, ein Fehler 0x05), Demo-Banner. Reines Bauartefakt (`.gitignore`), von `pages.yml` und `ci.yml` erzeugt; `check_webui.mjs` prüft das Bundle mit. Keine Firmware-, Schnittstellen- oder Hardware-Änderung. |
+| 0.21 | 10.09.2026 | Kapitel 5.1/8.2: **Master-Trägerboard Rev. 0.2** — Eingangsschutz. (1) Verpolschutz am 5-V-Eingang: P-Kanal-MOSFET Q1 (AO3401A) als High-Side-Schalter + R8 (100 kΩ V_GS); schützt bei vertauschter Klemme die gesamte Kette. (2) RS-485-TVS D2 (SM712/PSM712, 7 V/12 V asymmetrisch) am Master zwischen A/B und GND. Beide LCSC-Basic-Teile (C15127, C32677, C149504). 5-V- und 42-V~-Kreis bleiben vollständig galvanisch getrennt (kein gemeinsamer Trafo, 5 V nicht aus den 42 V~). CHAIN-Pegelwandler U3 als feste Bestückung bestätigt (M-3), R7 bleibt DNP-Reserve. Für U1 keine Edge.Cuts-Aussparung (Modul entnehmbar). `docs/schaltplan-master.md` Rev. 0.2, `symbolpruefung-master.md` (AO3401A + SM712, M-4), ERC 0/0, DRC 0/0. Keine Firmware-Änderung. |

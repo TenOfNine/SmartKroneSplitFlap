@@ -17,9 +17,10 @@ Danach:
   --check-only   nur Netzliste pruefen
 
 Offene Punkte (docs/schaltplan-master.md / GitHub-Issues):
-  M-1  ESP32-C3-SuperMini Symbol/Footprint <-> Board-Silk (docs/symbolpruefung-master.md)
+  M-1  ESP32-C3-SuperMini Symbol/Footprint <-> Board-Silk (docs/symbolpruefung-master.md) -- geschlossen
   M-2  Step-up-Modul (J4) bleibt DNP bis O-2 gemessen
-  M-3  CHAIN-Level-Shifter U3 noetig oder 3,3 V direkt (R7 als 0-Ohm-Bruecke)
+  M-3  CHAIN-Level-Shifter U3 -- entschieden: U3 wird bestueckt, R7 bleibt DNP-Reserve
+  M-4  RS-485-TVS D2 (SM712/PSM712) -- Pinbelegung gegen Bourns-Datenblatt geprueft
 """
 
 from __future__ import annotations
@@ -47,6 +48,9 @@ COMPONENTS: dict[str, tuple[str, str, bool]] = {
     "U1": ("krone_master:ESP32-C3-SuperMini", "ESP32-C3 SuperMini", False),
     "U2": ("krone_master:TP8485E-SR", "TP8485E-SR", False),
     "U3": ("krone_master:74LVC1G17", "74LVC1G17", False),   # CHAIN 3,3 V -> 5 V (M-3)
+    "Q1": ("krone_master:AO3401A", "AO3401A", False),       # Verpolschutz 5-V-Eingang (High-Side)
+    "D2": ("krone_master:SM712_SOT23", "SM712", False),     # RS-485-TVS am Bus (7 V / 12 V, M-4)
+    "R8": ("krone_master:R", "100k", False),                # V_GS-Widerstand fuer Q1
     "FB1": ("krone_master:FerriteBead_Small", "60R@100MHz", False),  # nur der Logikzweig
     "C1": ("krone_master:C", "100n", False),   # Abblockung U2
     "C2": ("krone_master:C", "100n", False),   # Abblockung U3
@@ -86,6 +90,9 @@ FOOTPRINTS: dict[str, str] = {
     "U1": "modules:ESP32-C3-SuperMini",
     "U2": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
     "U3": "Package_TO_SOT_SMD:SOT-23-5",
+    "Q1": "Package_TO_SOT_SMD:SOT-23",
+    "D2": "Package_TO_SOT_SMD:SOT-23",
+    "R8": _FP_R0805,
     "FB1": "Inductor_SMD:L_0805_2012Metric",
     "C1": _FP_C0805, "C2": _FP_C0805, "C4": _FP_C0805, "C5": _FP_C0805,
     "C3": "Capacitor_SMD:C_1206_3216Metric",
@@ -118,6 +125,9 @@ LCSC: dict[str, str] = {
     "R5": "C17408",   # 100R 0805 Basic
     "R6": "C17513",   # 1k   0805 Basic
     "R7": "",         # 0R 0805 (DNP) - im Cart waehlen
+    "R8": "C149504",  # 100k 0805 Basic (V_GS fuer Q1; wie Daughter Card R8/R12)
+    "Q1": "C15127",   # AO3401A P-MOSFET -30V/-4A SOT-23 Basic
+    "D2": "C32677",   # PSM712-LF-T7 RS-485-TVS-Array SOT-23 Basic (SM712-kompatibel)
     "C1": "C49678", "C2": "C49678", "C4": "C49678",   # 100n 0805 Basic
     "C5": "C15850",   # 10u 0805 Basic
     "C3": "C76659",   # 47u 25V 1206 (Extended)
@@ -132,11 +142,17 @@ LCSC: dict[str, str] = {
 # ---------------------------------------------------------------------------
 NETS: dict[str, list[tuple[str, str]]] = {
     # --- Versorgung ---
-    # +5V_IN = ungefilterte 5-V-Schiene vom Netzteil, geht direkt an den Bus,
-    # den Ader-9-Jumper und den Boost-Eingang. FB1 filtert nur den lokalen
+    # +5V_RAW = 5-V-Schiene direkt an der Klemme J1, VOR dem Verpolschutz.
+    # Q1 (AO3401A, P-Kanal, High-Side): Source an +5V_RAW, Drain an +5V_IN,
+    # Gate an GND. Bei richtiger Polung zieht V_GS = -5 V den FET voll durch;
+    # bei Verpolung sperrt er und schuetzt die gesamte Kette (auch J2/Bus).
+    # R8 (100k) haelt V_GS definiert.
+    "+5V_RAW": [("J1", "1"), ("Q1", "2"), ("R8", "2")],
+    # +5V_IN = geschuetzte 5-V-Schiene (hinter Q1). Ungefiltert an den Bus, den
+    # Ader-9-Jumper und den Boost-Eingang. FB1 filtert nur den lokalen
     # Logikzweig (ESP32-C3 + U3), damit der Ferrit nicht den Busstrom fuehrt.
     "+5V_IN": [
-        ("J1", "1"), ("C3", "1"), ("FB1", "1"),
+        ("Q1", "3"), ("C3", "1"), ("FB1", "1"),
         ("J2", "1"), ("JP1", "1"), ("J4", "1"),
     ],
     "+5V": [("FB1", "2"), ("U1", "1"), ("C4", "1"), ("C2", "1"), ("U3", "5")],
@@ -147,14 +163,14 @@ NETS: dict[str, list[tuple[str, str]]] = {
     "GND": [
         ("J1", "2"), ("U1", "2"), ("U2", "2"), ("U2", "5"), ("U3", "3"),
         ("C1", "2"), ("C2", "2"), ("C3", "2"), ("C4", "2"), ("C5", "2"),
-        ("R3", "2"), ("R4", "2"), ("D1", "1"),
+        ("R3", "2"), ("R4", "2"), ("R8", "1"), ("Q1", "1"), ("D2", "3"), ("D1", "1"),
         ("J2", "2"), ("J2", "4"), ("J2", "6"), ("J2", "8"), ("J2", "10"),
         ("J3", "4"), ("J4", "2"), ("J4", "4"), ("TP6", "1"),
     ],
     "+15V": [("J4", "3"), ("JP1", "3"), ("TP5", "1")],
     # --- RS-485 ---
-    "RS485_A": [("U2", "6"), ("R1", "1"), ("R2", "2"), ("J2", "3"), ("TP1", "1")],
-    "RS485_B": [("U2", "7"), ("R1", "2"), ("R3", "1"), ("J2", "5"), ("TP2", "1")],
+    "RS485_A": [("U2", "6"), ("R1", "1"), ("R2", "2"), ("D2", "1"), ("J2", "3"), ("TP1", "1")],
+    "RS485_B": [("U2", "7"), ("R1", "2"), ("R3", "1"), ("D2", "2"), ("J2", "5"), ("TP2", "1")],
     "RO": [("U2", "1"), ("U1", "4")],          # -> GPIO4
     "DI": [("U2", "4"), ("U1", "5")],          # -> GPIO3
     "DE": [("U2", "3"), ("U1", "14"), ("R4", "1")],   # -> GPIO10
@@ -176,14 +192,15 @@ NETS: dict[str, list[tuple[str, str]]] = {
 # Netze mit externer Einspeisung -> PWR_FLAG, damit ERC sie als getrieben sieht.
 # +3V3 wird vom 3V3-Pin des Moduls (power_out) getrieben -> kein Flag.
 # +15V wird vom Step-up-Modul (J4.3) getrieben -> Flag (J4-Pin ist passive).
-POWER_FLAG_NETS = ["+5V_IN", "+5V", "GND", "+15V"]
+# +5V_RAW = Klemme J1, +5V_IN = hinter dem Verpolschutz-FET Q1 (beide passive).
+POWER_FLAG_NETS = ["+5V_RAW", "+5V_IN", "+5V", "GND", "+15V"]
 
 # Blockweise Platzierung fuer den optischen Schnellcheck.
 # (Titel, x, y, Spalten, Zellbreite, Zellhoehe, [refs])
 BLOCKS: list[tuple[str, float, float, int, float, float, list[str]]] = [
     ("ESP32-C3 Super Mini", 25, 45, 1, 40, 60, ["U1"]),
-    ("Versorgung 5V", 95, 45, 3, 34, 30, ["J1", "FB1", "C3", "C4", "C5"]),
-    ("RS-485-Transceiver", 210, 45, 3, 34, 40, ["U2", "C1", "R1", "R2", "R3", "R4"]),
+    ("Versorgung 5V + Verpolschutz", 95, 45, 4, 30, 30, ["J1", "Q1", "R8", "FB1", "C3", "C4", "C5"]),
+    ("RS-485-Transceiver", 210, 45, 4, 30, 40, ["U2", "C1", "R1", "R2", "R3", "R4", "D2"]),
     ("CHAIN Pegelwandler", 210, 150, 3, 34, 40, ["U3", "C2", "R5", "R7"]),
     ("Status-LED", 95, 150, 2, 30, 40, ["R6", "D1"]),
     ("Ader 9 / Step-up", 360, 45, 2, 34, 40, ["JP1", "J4"]),
@@ -271,13 +288,13 @@ def build_schematic():
     sch.set_paper_size("A2")
     sch.set_title_block(
         title="KRONE REW Zentralsteuerung (Master) - ESP32-C3 Super Mini",
-        rev="0.1",
-        date="2026-09-01",
+        rev="0.2",
+        date="2026-09-10",
         company="TenOfNine",
         comments={
             1: "Generiert aus docs/schaltplan-master.md Kap. 6 via tools/gen_master_sch.py",
             2: "Verbindung ueber gleichnamige Pin-Labels. Nicht handverlegt (Backlog T11).",
-            3: "Offene Punkte: M-1 (ESP32-Pinbelegung), M-2 (Step-up DNP), M-3 (CHAIN-Pegel)",
+            3: "Rev 0.2: Verpolschutz Q1/R8 am 5-V-Eingang, RS-485-TVS D2 am Bus.",
         },
     )
 

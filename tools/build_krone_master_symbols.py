@@ -47,6 +47,8 @@ VERBATIM = [
     ("Connector_Generic.kicad_sym", "Conn_01x04"),
     ("Jumper.kicad_sym", "SolderJumper_3_Open"),
     ("74xGxx.kicad_sym", "74LVC1G17"),
+    ("Transistor_FET.kicad_sym", "AO3401A"),   # Verpolschutz-P-FET (Basis TP0610T)
+    ("Diode.kicad_sym", "SM712_SOT23"),        # RS-485-TVS-Array am Bus (7 V / 12 V)
     ("power.kicad_sym", "PWR_FLAG"),
 ]
 
