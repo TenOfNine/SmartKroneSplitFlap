@@ -1,10 +1,10 @@
 # hardware/master
 
 KiCad-Projekt der Zentralsteuerung (RS-485-Master, eine je Anlage).
-**Stand:** Rev. 0.2, geroutet (2 Lagen, ERC 0/0, DRC 0 Fehler), Fertigungspaket
-committet unter `manufacturing/`. Rev. 0.2 = Eingangsschutz (Verpol-P-FET Q1 +
-R8, RS-485-TVS D2). Bestellung nach Freigabe von `docs/symbolpruefung-master.md`
-(AO3401A + SM712, M-4).
+**Stand:** Rev. 0.2, geroutet (2 Lagen, ERC 0/0, DRC 0/0), Symbolprüfung
+freigegeben, Fertigungspaket committet unter `manufacturing/`. Rev. 0.2 =
+Eingangsschutz (Verpol-P-FET Q1 + R8, RS-485-TVS D2) + Silk (+/- an J1,
+„ANT"-Text raus). Vor der Bestellung: GUI-Feinlayout durch den Betreiber.
 
 ## Schnellcheck
 
@@ -12,12 +12,16 @@ R8, RS-485-TVS D2). Bestellung nach Freigabe von `docs/symbolpruefung-master.md`
 
 ![PCB (geroutet, F.Cu + B.Cu)](../../docs/pcb-master.png)
 
-Vollauflösung: [`docs/master.pdf`](../../docs/master.pdf) ·
-3D: [`docs/render-master-top.png`](../../docs/render-master-top.png) ·
-[`docs/render-master-bottom.png`](../../docs/render-master-bottom.png) ·
+3D-Vorschau (`tools/gen_master_pcb.py --render`):
+
+| Oberseite | Unterseite |
+|---|---|
+| ![3D oben](../../docs/render-master-top.png) | ![3D unten](../../docs/render-master-bottom.png) |
+
+Vollauflösung Schaltplan: [`docs/master.pdf`](../../docs/master.pdf) ·
 ERC: 0 Fehler / 0 Warnungen (`gen_master_sch.py --erc`, in der CI geprüft) ·
-DRC: 0 Fehler / 0 unverdrahtet (3 kosmetische Silk-Warnungen: Referenztext
-D2/U2/R4 — im GUI zu bereinigen, siehe `docs/layout-master.md`)
+DRC: 0 Fehler / 0 Warnungen / 0 unverdrahtet (Rev. 0.2). Feinlayout im GUI
+(Bahnführung, Bestückungsdruck) ist Sache des Betreibers.
 
 ## Dateien
 

@@ -5,7 +5,7 @@
 | Bezug | `docs/schaltplan-master.md` Kapitel 8, Netzliste `hardware/master/master.net` |
 | Platine | 68 × 54 mm, 2 Lagen, 1,6 mm, 35 µm Cu, HASL bleifrei |
 | Befestigung | 4 × Bohrung 3,2 mm, je 4 mm von den Ecken |
-| Status | **Geroutet, Rev. 0.2** (`tools/patch_master_pcb.py`, siehe unten). **DRC 0 Fehler, 0 unverdrahtet**, 2 Lagen, GND-Fläche F.Cu + B.Cu mit Stitching. Es bleiben **3 kosmetische Silk-Warnungen** (Referenztext von D2, U2, R4 vom Lötstopp beschnitten) — im GUI beim Feinlayout zu bereinigen. Symbolprüfung `docs/symbolpruefung-master.md` **freigegeben** (10.09.2026). |
+| Status | **Geroutet, Rev. 0.2** (`tools/patch_master_pcb.py`, siehe unten). **DRC 0 Fehler, 0 Warnungen, 0 unverdrahtet**, 2 Lagen, GND-Fläche F.Cu + B.Cu mit Stitching. Referenztexte U2 / D2 / R4 vom Skript unter das Bauteil gesetzt. Symbolprüfung `docs/symbolpruefung-master.md` **freigegeben** (10.09.2026). GUI-Feinlayout (Bahnführung) bleibt dem Betreiber. |
 | Datum | 10.09.2026 |
 
 **Rev. 0.2:** neu Q1 + R8 (Verpolschutz) links unten bei J1, D2 (RS-485-TVS) im
@@ -89,7 +89,7 @@ Kein AC-Netz. Massefläche durchgehend, ausgespart nur im Antennenbereich unter 
 - [ ] J2 Pin 1 im Silk markiert, Aderbelegung gegen Daughter-Card-J2/J3 geprüft
 - [ ] JP1 „ADER9 / 5V / 15V" beschriftet, Auslieferung offen
 - [x] J1 mit + / − beschriftet (links = +5V, rechts = GND)
-- [ ] Referenztexte D2 / U2 / R4 im GUI aus dem Lötstoppbereich schieben
+- [x] Referenztexte U2 / D2 / R4 unter das Bauteil gesetzt (`patch_master_pcb.py`)
 - [ ] Antennen-Keepout: keine Massefläche, keine Vias unter der Modul-Unterkante
 - [ ] 4 Befestigungsbohrungen frei von Bahnen
 - [ ] Modulbezeichnung / Revision auf dem Silk

@@ -29,6 +29,7 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from shutil import which as _which
 
 try:
     import pcbnew
@@ -49,6 +50,15 @@ import finish_routes                   # noqa: E402
 # Refs, die in dieser Revision neu dazugekommen sind, und ihre Pad->Netz-Zuordnung
 # (Netznamen ohne fuehrenden "/"). Quelle: gen_master_sch.NETS.
 NEW_REFS = ["Q1", "R8", "D2"]
+
+# Feste Referenztext-Positionen (Absolutkoordinaten, mm), damit der auto-
+# platzierte Text nicht in den Loetstoppbereich der Nachbarpads faellt.
+# Betreiber-Wunsch 10.09.2026: U2/D2 unter das Bauteil, R4 knapp links darunter.
+REF_POS_MM = {                    # (x, y, textsize_mm)
+    "U2": (38.5, 31.8, 0.9),      # unter dem IC, linke Haelfte
+    "D2": (45.6, 37.6, 0.9),      # unter dem Bauteil
+    "R4": (42.9, 33.2, 0.9),      # knapp links unter dem Bauteil
+}
 
 
 def _pad_nets() -> dict:
@@ -164,6 +174,18 @@ def main() -> int:
                 killed += 1
         print(f"  {ref}.{pin} -> {new_net_name}: {killed} Bahnstueck(e) gekappt")
 
+    # Referenztexte, die sonst vom Loetstopp beschnitten werden, fest setzen.
+    for ref, (rx, ry, rsz) in REF_POS_MM.items():
+        fp = next((f for f in board.GetFootprints() if f.GetReference() == ref), None)
+        if fp is None:
+            continue
+        rt = fp.Reference()
+        rt.SetPosition(pcbnew.VECTOR2I(mm(rx), mm(ry)))
+        rt.SetTextAngle(pcbnew.EDA_ANGLE(0, pcbnew.DEGREES_T))
+        rt.SetTextSize(pcbnew.VECTOR2I(mm(rsz), mm(rsz)))
+        rt.SetTextThickness(mm(rsz * 0.15))
+        print(f"  Referenztext {ref} -> ({rx}, {ry}) {rsz} mm")
+
     board.BuildConnectivity()
     pcbnew.SaveBoard(str(PCB), board)
 
@@ -199,6 +221,18 @@ def main() -> int:
     gpcb.patch_project_netclasses()
     print(f"  geschrieben: {PCB.relative_to(REPO)}  "
           f"({len(list(board.GetTracks()))} Segmente/Vias)")
+
+    # Endkontrolle: DRC (nur Fehler). finish_routes ist nicht deterministisch --
+    # bei Rest-Verstoessen abbrechen, damit kein unsauberes Board committet wird.
+    cli = ["xvfb-run", "-a", "kicad-cli"] if _which("xvfb-run") else ["kicad-cli"]
+    rep = REPO / "docs" / "drc-master.rpt"
+    rc = subprocess.run([*cli, "pcb", "drc", "--exit-code-violations",
+                         "--severity-error", "-o", str(rep), str(PCB)],
+                        capture_output=True).returncode
+    if rc != 0:
+        sys.exit("DRC nach dem Patch nicht sauber -- Skript erneut ausfuehren "
+                 "(finish_routes A* nicht deterministisch).")
+    print("  DRC: 0 Fehler")
     return 0
 
 
