@@ -35,15 +35,45 @@
 	)
 	(setup
 		(stackup
-			(layer "F.SilkS" (type "Top Silk Screen") (color "White"))
-			(layer "F.Paste" (type "Top Solder Paste"))
-			(layer "F.Mask" (type "Top Solder Mask") (color "Black") (thickness 0.01))
-			(layer "F.Cu" (type "copper") (thickness 0.035))
-			(layer "dielectric 1" (type "core") (thickness 1.51) (material "FR4") (epsilon_r 4.5) (loss_tangent 0.02))
-			(layer "B.Cu" (type "copper") (thickness 0.035))
-			(layer "B.Mask" (type "Bottom Solder Mask") (color "Black") (thickness 0.01))
-			(layer "B.Paste" (type "Bottom Solder Paste"))
-			(layer "B.SilkS" (type "Bottom Silk Screen") (color "White"))
+			(layer "F.SilkS"
+				(type "Top Silk Screen")
+				(color "White")
+			)
+			(layer "F.Paste"
+				(type "Top Solder Paste")
+			)
+			(layer "F.Mask"
+				(type "Top Solder Mask")
+				(color "Black")
+				(thickness 0.01)
+			)
+			(layer "F.Cu"
+				(type "copper")
+				(thickness 0.035)
+			)
+			(layer "dielectric 1"
+				(type "core")
+				(thickness 1.51)
+				(material "FR4")
+				(epsilon_r 4.5)
+				(loss_tangent 0.02)
+			)
+			(layer "B.Cu"
+				(type "copper")
+				(thickness 0.035)
+			)
+			(layer "B.Mask"
+				(type "Bottom Solder Mask")
+				(color "Black")
+				(thickness 0.01)
+			)
+			(layer "B.Paste"
+				(type "Bottom Solder Paste")
+			)
+			(layer "B.SilkS"
+				(type "Bottom Silk Screen")
+				(color "White")
+			)
 			(copper_finish "HASL lead free")
 			(dielectric_constraints no)
 		)
@@ -3885,7 +3915,7 @@
 		(descr "SOT, 3 Pin (JEDEC TO-236 Var AB https://www.jedec.org/document_search?search_api_views_fulltext=TO-236), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOT TO_SOT_SMD")
 		(property "Reference" "D2"
-			(at -1.6 3.9 0)
+			(at 0 2.5 0)
 			(layer "F.SilkS")
 			(uuid "a4566e98-7c5a-4d7d-88dc-61fe0e28a3b8")
 			(effects
@@ -5363,7 +5393,7 @@
 		(descr "SOIC, 8 Pin (JEDEC MS-012AA, https://www.analog.com/media/en/package-pcb-resources/package/pkg_pdf/soic_narrow-r/r_8.pdf), generated with kicad-footprint-generator ipc_gullwing_generator.py")
 		(tags "SOIC SO")
 		(property "Reference" "U2"
-			(at 0 5.4 0)
+			(at 0 3.5 0)
 			(layer "F.SilkS")
 			(uuid "4ce8bda2-d7c7-4a18-ae19-4965127d6e23")
 			(effects
@@ -6328,7 +6358,7 @@
 		(descr "Resistor SMD 0805 (2012 Metric), square (rectangular) end terminal, IPC-7351 nominal, (Body size source: IPC-SM-782 page 72, https://www.pcb-3d.com/wordpress/wp-content/uploads/ipc-sm-782a_amendment_1_and_2.pdf), generated with kicad-footprint-generator")
 		(tags "resistor")
 		(property "Reference" "R4"
-			(at -2.8 0 0)
+			(at 2.5 0 0)
 			(layer "F.SilkS")
 			(uuid "c00e3a85-ccf4-4201-b2ad-a00f2b4d49cc")
 			(effects

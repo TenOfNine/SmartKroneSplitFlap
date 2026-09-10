@@ -343,10 +343,13 @@ nachrüsten; die offenen Bestückungsfragen entscheiden.
   reproduzierbar → `route_master.py`/`route_daughtercard.py` mit
   `-Dfreerouting.gui.enabled=false` + Popen-Watchdog gehärtet.
 - `docs/symbolpruefung-master.md`: AO3401A + SM712 gegen Datenblatt geprüft (M-4).
+- Silk: „ANT"-Text am U1-Footprint entfernt, + / − an J1, Referenztexte U2/D2/R4
+  ans Bauteil. GUI-Feinlayout (Bahnführung, Bestückungsdruck) vom Betreiber.
 
-**Fertig, wenn:** ERC 0/0, DRC 0/0, Fertigungspaket regeneriert — **erledigt**.
-Offen: Symbolprüfung (AO3401A + SM712, M-4) vom Betreiber freigeben, dann
-Bestellung. PR zur Prüfung.
+**Fertig, wenn:** ERC 0/0, DRC 0/0, Symbolprüfung + PCB vom Betreiber freigegeben,
+Fertigungspaket regeneriert.
+**Erledigt 10.09.2026** — PR #14. `master.kicad_pcb` ist der finale GUI-Stand,
+bereit zur Bestellung. Spez. v0.21.
 
 ---
 

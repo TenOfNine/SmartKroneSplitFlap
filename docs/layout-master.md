@@ -5,7 +5,7 @@
 | Bezug | `docs/schaltplan-master.md` Kapitel 8, Netzliste `hardware/master/master.net` |
 | Platine | 68 × 54 mm, 2 Lagen, 1,6 mm, 35 µm Cu, HASL bleifrei |
 | Befestigung | 4 × Bohrung 3,2 mm, je 4 mm von den Ecken |
-| Status | **Geroutet, Rev. 0.2** (`tools/patch_master_pcb.py`, siehe unten). **DRC 0 Fehler, 0 Warnungen, 0 unverdrahtet**, 2 Lagen, GND-Fläche F.Cu + B.Cu mit Stitching. Referenztexte U2 / D2 / R4 vom Skript unter das Bauteil gesetzt. Symbolprüfung `docs/symbolpruefung-master.md` **freigegeben** (10.09.2026). GUI-Feinlayout (Bahnführung) bleibt dem Betreiber. |
+| Status | **Fertig, Rev. 0.2.** Skript-Routing (`tools/patch_master_pcb.py`) + **GUI-Feinlayout vom Betreiber** (Bahnführung, Bestückungsdruck). Die committete `master.kicad_pcb` ist der finale Stand — nicht mehr regenerieren. **DRC 0 Fehler / 0 Warnungen / 0 unverdrahtet**, 2 Lagen, GND-Fläche F.Cu + B.Cu mit Stitching. Symbolprüfung `docs/symbolpruefung-master.md` **freigegeben** (10.09.2026). Bereit zur Bestellung. |
 | Datum | 10.09.2026 |
 
 **Rev. 0.2:** neu Q1 + R8 (Verpolschutz) links unten bei J1, D2 (RS-485-TVS) im
@@ -22,23 +22,25 @@ Koordinaten hier in KiCad-Konvention (Ursprung oben links, Y nach unten).
 
 ## Erzeugen
 
+> **Die committete `master.kicad_pcb` ist der finale, vom Betreiber im GUI
+> feinjustierte Stand (Rev. 0.2).** Nicht mehr neu erzeugen. Nur die
+> abgeleiteten Ansichten und das Fertigungspaket werden aus ihr regeneriert:
+
 ```bash
-python  tools/build_krone_master_symbols.py
-python  tools/gen_master_sch.py --erc --pdf --png --netlist
-# Rev. 0.2: inkrementell (Q1/R8/D2 in die geroutete Rev-0.1-Platine):
-/usr/bin/python3 tools/patch_master_pcb.py                # aus git HEAD, + finish_routes + Flächen
-/usr/bin/python3 tools/add_silk_marks.py --board hardware/master/master.kicad_pcb
-# alternativ Vollneuroute (wenn FreeRouting mitspielt):
-#   /usr/bin/python3 tools/gen_master_pcb.py --force
-#   /usr/bin/python3 tools/route_master.py
-/usr/bin/python3 tools/gen_master_pcb.py --render         # 3D-Ansicht oben/unten
+/usr/bin/python3 tools/gen_master_pcb.py --preview        # docs/pcb-master.png (2D)
+/usr/bin/python3 tools/gen_master_pcb.py --render         # docs/render-master-*.png (3D)
 /usr/bin/python3 tools/gen_master_manufacturing.py        # Gerber/BOM/CPL
 ```
 
-`docs/render-master-top.png` / `-bottom.png` sind für die Sichtprüfung der
-U1-Einbaulage: **Pin-1-Punkt (= 5V) rechts oben** neben dem „USB-C"-Aufdruck,
-„ANT: keine Cu-Flaeche" an der Unterkante. Das Modul selbst hat kein 3D-Modell —
-der Bestückungsdruck trägt die Aussage.
+Der ursprüngliche Weg (bis zur GUI-Freigabe): Schaltplan aus der Netzliste, PCB
+inkrementell mit `tools/patch_master_pcb.py` (Q1/R8/D2 in die geroutete
+Rev-0.1-Platine, `finish_routes` + Masseflächen), dann
+`tools/add_silk_marks.py --board hardware/master/master.kicad_pcb`. FreeRouting
+2.3.0 (`route_master.py`) hängt in der Dev-Umgebung reproduzierbar.
+
+`docs/render-master-{top,bottom}.png` = 3D-Ansicht (`kicad-cli pcb render`); das
+ESP32-C3-Modul hat kein 3D-Modell → als Pad-Feld sichtbar, der Bestückungsdruck
+(USB-C oben, „U1" unten) trägt die Aussage.
 
 - `gen_master_pcb.py` verweigert den Neuaufbau, wenn die `.kicad_pcb` schon
   Leiterbahnen hat (`--force` überschreibt). Die Vorschau der gerouteten Platine
