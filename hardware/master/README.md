@@ -16,7 +16,8 @@ Vollauflösung: [`docs/master.pdf`](../../docs/master.pdf) ·
 3D: [`docs/render-master-top.png`](../../docs/render-master-top.png) ·
 [`docs/render-master-bottom.png`](../../docs/render-master-bottom.png) ·
 ERC: 0 Fehler / 0 Warnungen (`gen_master_sch.py --erc`, in der CI geprüft) ·
-DRC: 0 Fehler (einige kosmetische Silk-Warnungen, siehe `docs/layout-master.md`)
+DRC: 0 Fehler / 0 unverdrahtet (3 kosmetische Silk-Warnungen: Referenztext
+D2/U2/R4 — im GUI zu bereinigen, siehe `docs/layout-master.md`)
 
 ## Dateien
 

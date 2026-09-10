@@ -4,8 +4,8 @@
 |---|---|
 | Zweck | Gegenprüfung der Schaltplan-Symbolpins gegen Datenblatt / Board-Silk, vor dem finalen Layout |
 | Bezug | CLAUDE.md, harte Regel 5 · `docs/schaltplan-master.md` · Backlog T11 |
-| Status | **freigegeben** (Betreiber, 01.09.2026, im Chat). Der Betreiber prüft die U1-Einbaulage zusätzlich an `docs/render-master-*.png` gegen ein echtes Modul. |
-| Datum | 01.09.2026 |
+| Status | **freigegeben** (Betreiber, im Chat): 74LVC1G17 / TP8485E / ESP32-C3 am 01.09.2026, AO3401A / SM712 / PCB-Sichtprüfung am 10.09.2026. |
+| Datum | 10.09.2026 |
 
 > Ein erfolgreicher ERC-Lauf beweist nicht, dass eine Pinbelegung stimmt. ERC läuft
 > auch bei vertauschtem VCC und GND fehlerfrei durch. Diese Prüfung ist der manuelle
@@ -195,10 +195,9 @@ zwei geschützten Leitungen, symmetrisch).
 | Pin 3 | GND (gemeinsam) | Pin 3 = `common` (input) | Pin 3 → GND |
 
 → Symbol, Footprint und Netzliste stimmen mit dem Datenblatt überein. Das
-7 V/12 V-Profil deckt den RS-485-Gleichtaktbereich −7…+12 V ab. **M-4 offen bis
-zur Freigabe** — die ProTek-PSM712-Belegung ist die branchenübliche
-SM712-Belegung, sollte aber vor der Bestellung am ProTek- oder LCSC-Datenblatt
-kurz gegengeprüft werden (Regel 5).
+7 V/12 V-Profil deckt den RS-485-Gleichtaktbereich −7…+12 V ab. Die
+PSM712-Belegung (ProTek) ist die branchenübliche SM712-Belegung. **M-4
+geschlossen.**
 
 ---
 
@@ -209,8 +208,14 @@ kurz gegengeprüft werden (Regel 5).
 | 74LVC1G17GV | `74LVC1G17` | Pinbelegung deckungsgleich mit Nexperia Rev. 16.1 §6.1 (GV/SOT753) | Betreiber, im Chat | 01.09.2026 |
 | TP8485E-SR | `TP8485E-SR` | unverändert ggü. `docs/symbolpruefung.md` (freigegeben 27.08.2026) | Betreiber | 27.08.2026 |
 | ESP32-C3 Super Mini | `ESP32-C3-SuperMini` (Symbol + Footprint) | Pin-Reihenfolge + Einbaulage aus den Fotos, Abschnitt 1.2 / 1.3 | Betreiber, im Chat | 01.09.2026 |
+| AO3401A | `AO3401A` | SOT-23 1=G / 2=S / 3=D (Abschnitt 4a) | Betreiber, im Chat | 10.09.2026 |
+| SM712 / PSM712 | `SM712_SOT23` | Pin 1/2 = I/O, Pin 3 = GND (Abschnitt 4b, Bourns-Datenblatt) | Betreiber, im Chat | 10.09.2026 |
 
 **M-1 ist damit geschlossen.** Der Betreiber gleicht die U1-Einbaulage zusätzlich
 an `docs/render-master-top.png` mit einem echten Modul ab (Pin-1-Punkt = 5V rechts
 oben, neben „USB-C"); eine reine Sichtkontrolle, kein Änderungsbedarf am Symbol
 oder Footprint erwartet.
+
+**Rev. 0.2 (10.09.2026):** AO3401A, SM712/PSM712 und die U1-/PCB-Prüfung vom
+Betreiber freigegeben. M-3 und M-4 geschlossen. Am Silk auf Wunsch des Betreibers:
+„ANT: keine Cu-Fläche" am U1-Footprint entfernt (Keepout bleibt), + / − neben J1.

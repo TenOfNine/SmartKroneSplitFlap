@@ -5,12 +5,14 @@
 | Bezug | `docs/schaltplan-master.md` Kapitel 8, Netzliste `hardware/master/master.net` |
 | Platine | 68 × 54 mm, 2 Lagen, 1,6 mm, 35 µm Cu, HASL bleifrei |
 | Befestigung | 4 × Bohrung 3,2 mm, je 4 mm von den Ecken |
-| Status | **Geroutet (Planungsstand), Rev. 0.2.** `tools/gen_master_pcb.py` platziert, `tools/route_master.py` (FreeRouting 2.3.0 + `finish_routes.py` + Masseflächen) verdrahtet: **DRC 0 Fehler, 0 unverdrahtet**, 2 Lagen, GND-Fläche F.Cu + B.Cu mit Stitching. Es bleiben einige kosmetische Silk-Warnungen (Referenztexte über Lötstopp / Textüberlapp bei D2/C1/U2) — im GUI beim Feinlayout zu bereinigen. Freigabe erst nach `docs/symbolpruefung-master.md`. |
+| Status | **Geroutet, Rev. 0.2** (`tools/patch_master_pcb.py`, siehe unten). **DRC 0 Fehler, 0 unverdrahtet**, 2 Lagen, GND-Fläche F.Cu + B.Cu mit Stitching. Es bleiben **3 kosmetische Silk-Warnungen** (Referenztext von D2, U2, R4 vom Lötstopp beschnitten) — im GUI beim Feinlayout zu bereinigen. Symbolprüfung `docs/symbolpruefung-master.md` **freigegeben** (10.09.2026). |
 | Datum | 10.09.2026 |
 
 **Rev. 0.2:** neu Q1 + R8 (Verpolschutz) links unten bei J1, D2 (RS-485-TVS) im
 freien Feld unter dem RS-485-Block. Keine Edge.Cuts-Aussparung für U1 (Modul
-steckbar/entnehmbar). **Inkrementell geroutet** mit `tools/patch_master_pcb.py`
+steckbar/entnehmbar). Silk: „ANT: keine Cu-Fläche" am U1-Footprint entfernt
+(Kupfer-Keepout bleibt), **+ / − auf F.SilkS neben J1** (`add_silk_marks.py`).
+**Inkrementell geroutet** mit `tools/patch_master_pcb.py`
 (Q1/R8/D2 in die Rev-0.1-Platine eingesetzt, Lücken per `finish_routes.py`
 geschlossen, Masseflächen neu) — FreeRouting 2.3.0 hängt in der Dev-Umgebung
 reproduzierbar; `route_master.py` hat dafür den `gui.enabled=false`-Fix +
@@ -86,7 +88,8 @@ Kein AC-Netz. Massefläche durchgehend, ausgespart nur im Antennenbereich unter 
 - [ ] U1-Footprint in der 3D-Ansicht: USB-C oben, Antenne unten, 5V-Pad rechts oben
 - [ ] J2 Pin 1 im Silk markiert, Aderbelegung gegen Daughter-Card-J2/J3 geprüft
 - [ ] JP1 „ADER9 / 5V / 15V" beschriftet, Auslieferung offen
-- [ ] Q1-Silk: Pin-1-Markierung; D2-Silk nicht über Lötstopp (Feinlayout)
+- [x] J1 mit + / − beschriftet (links = +5V, rechts = GND)
+- [ ] Referenztexte D2 / U2 / R4 im GUI aus dem Lötstoppbereich schieben
 - [ ] Antennen-Keepout: keine Massefläche, keine Vias unter der Modul-Unterkante
 - [ ] 4 Befestigungsbohrungen frei von Bahnen
 - [ ] Modulbezeichnung / Revision auf dem Silk
