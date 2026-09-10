@@ -10,7 +10,7 @@
  * Fuer (2) muss jsdom installiert sein (CI: npm i jsdom@24). Fehlt es, wird nur
  * (1) geprueft und mit Hinweis weitergemacht.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import vm from "node:vm";
@@ -48,6 +48,24 @@ for (const [i, code] of scripts.entries()) {
   }
 }
 console.log(`Syntax OK (${scripts.length} Inline-Script${scripts.length === 1 ? "" : "s"}).`);
+
+// ---- 1b) Demo-Bundle (falls gebaut): Syntax jedes Inline-<script> -----
+const demoFile = join(repo, "firmware/master/prebuilt/demo/index.html");
+if (existsSync(demoFile)) {
+  const demo = readFileSync(demoFile, "utf8");
+  const dscripts = [...demo.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map((x) => x[1]);
+  for (const [i, code] of dscripts.entries()) {
+    try {
+      new vm.Script(code, { filename: `demo/index.html script #${i + 1}` });
+    } catch (e) {
+      console.error(`SYNTAXFEHLER im Demo-Bundle, Inline-Script #${i + 1}: ${e.message}`);
+      process.exit(1);
+    }
+  }
+  console.log(`Demo-Bundle Syntax OK (${dscripts.length} Inline-Scripts, inkl. webui_demo_shim.html).`);
+} else {
+  console.log("Demo-Bundle nicht gebaut -- uebersprungen (python tools/build_webui_demo.py).");
+}
 
 // ---- 2) Laufzeit-Smoke mit jsdom ------------------------------------
 let JSDOM;

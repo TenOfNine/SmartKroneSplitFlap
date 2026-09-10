@@ -90,6 +90,7 @@ pio test -e native     -d firmware/module   # Protokolltests auf dem Host
 python tools/ota_keys.py init               # einmalig: OTA-Signaturschluessel (docs/firmware-signing.md)
 python tools/build_master_firmware.py       # factory.bin (USB) + signierte .kota -> firmware/master/prebuilt/
 python tools/build_module_firmware.py       # ATtiny-Hex + Bootloader + signierte .mota -> firmware/module/prebuilt/
+python tools/build_webui_demo.py            # statische Web-UI-Demo (Beispieldaten) -> firmware/master/prebuilt/demo/ (GitHub Page …/demo/)
 ```
 
 ## 4. PlatformIO-Ziele
@@ -133,7 +134,7 @@ Für SerialUPDI genügt ein FTDI-USB-Seriell-Adapter mit einem 4,7-kΩ-Widerstan
 
 | Job | Prüfung |
 |---|---|
-| `host-tests` | `pio test -e native` (Modul 71 / Master 57), `python tools/test_busctl.py` (13), `node tools/check_webui.mjs` (Web-UI-Syntax + jsdom-Smoke) |
+| `host-tests` | `pio test -e native` (Modul 71 / Master 57), `python tools/test_busctl.py` (13), `python tools/build_webui_demo.py` + `node tools/check_webui.mjs` (Web-UI-Syntax + jsdom-Smoke + Demo-Bundle) |
 | `firmware` | `pio run -e attiny1616` + `tools/check_flash.py … 8192`, `pio run -e esp32c3` |
 | `hardware` | KiCad 9, `build_krone_symbols.py --check` + `build_krone_master_symbols.py --check` (informativ), `gen_daughtercard_sch.py --check-only` + `gen_master_sch.py --check-only`, `kicad-cli sch erc` für beide Schaltpläne (0 Fehler / 0 Warnungen) |
 | `release` | nur bei Tag `v*`: Schaltplan-PDF, Gerber der Daughter Card |
