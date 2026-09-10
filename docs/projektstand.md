@@ -47,16 +47,19 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Modul-Bus-Update (T17) | Firmware-Verteilung an die Daughter Cards über den RS-485-Bus: residenter Bootloader (`firmware/bootloader`, `BOOTEND = 0x0C`), env `attiny1616_boot` (App @ 0x0C00), Protokoll 0x54–0x58, `lib/fwupdate` + `lib/moduleupdate` (host-getestet). Master bettet die signierte Modul-`.mota` ein (`module_fw.h`, Option A), verifiziert sie beim Start, verteilt über `/api/module/update` + Panel *Modul-Firmware* (Alle aktualisieren). `updi.js` schreibt jetzt Bootloader + App + Fuse. `pio test -e native` Master 56 / Modul 71. **Am Gerät nicht verifiziert** — Bench-Test-Checkliste in `docs/module-bootloader.md`. Spez. v0.18. | PR #11 |
 | Auto-Modulzahl (T18) | `cfg.module_count = 0` (Vorgabe) = Feldbreite folgt der Enumeration, `1…32` = Override. `effective_module_count()`, Nachführung im `loop()`, Auto-Rescan alle ~10 s bei 0 erkannt, `masterapp` sendet bei Breite 0 nichts (Test), Enum verwirft stale Daten. `/api/system` +`detected`/`field_width`/`auto_modules`. UI: *Anzeige*-Schalter + „Erkannt: N", Leerzustand in Übersicht/Modul-Tabelle. `pio test -e native` Master 57. Spez. v0.19. | PR (auto-module-count) |
 | Master-UI Zeitzone | Zeitzone jetzt Städte-Auswahlliste (18 Einträge) + eigener Sommerzeit-Schalter statt freiem POSIX-String; die UI baut den TZ-String, „Andere" behält die Direkteingabe. `/api/config`/Backup unverändert. `pio run -e esp32c3` ~1002 KB. Spez. v0.15. | direkt auf main |
-| Web-UI-Demo (GitHub Page) | `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `main.cpp` + `tools/webui_demo_shim.html` (fetch-Shim für `/api/*`, Beispieldaten) → `firmware/master/prebuilt/demo/index.html` (gitignored). `pages.yml` legt es unter `…/demo/` ab, `ci.yml` baut es und `check_webui.mjs` prüft das Bundle mit. Spez. v0.20. | PR (webui-demo) |
+| Web-UI-Demo (GitHub Page) | `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `main.cpp` + `tools/webui_demo_shim.html` (fetch-Shim für `/api/*`, Beispieldaten) → `firmware/master/prebuilt/demo/index.html` (gitignored). `pages.yml` legt es unter `…/demo/` ab, `ci.yml` baut es und `check_webui.mjs` prüft das Bundle mit. Spez. v0.20. | PR #13, `195ab39` |
+| Master-Trägerboard Rev. 0.2 (T20) | Eingangsschutz vor der PCB-Bestellung: Verpolschutz-P-FET Q1 (AO3401A, C15127) + R8 (100 k, C149504) am 5-V-Eingang (High-Side, schützt die ganze Kette), RS-485-TVS D2 (SM712/PSM712, C32677) am Bus. Alle JLC-Basic. M-3 entschieden (U3 bestückt, R7 DNP-Reserve), keine U1-Aussparung (Modul entnehmbar), 5-V- und 42-V~-Kreis komplett getrennt. `build_krone_master_symbols`/`gen_master_*`/`gen_master_manufacturing` neu; PCB inkrementell mit neuem `tools/patch_master_pcb.py` geroutet (FreeRouting 2.3.0 hängt in der Dev-Umgebung → `route_master.py` mit `gui.enabled=false` + Watchdog gehärtet). `symbolpruefung-master.md` (AO3401A + SM712, M-4). ERC 0/0, DRC 0/0, Fertigungspaket regeneriert. Spez. v0.21. **PR zur Prüfung, Bestellung nach Freigabe.** | PR (master-input-protection) |
 
 Nächste sinnvolle Schritte:
 
-**Hardware Master**
+**Hardware Master (Rev. 0.2, T20 — PR offen)**
 - Betreiber gleicht `docs/render-master-top.png` mit einem echten ESP32-C3-Modul
-  ab (Pin-1 = 5V rechts oben) und prüft `master.kicad_pcb` in der KiCad-GUI —
-  ggf. `Edge.Cuts`-Aussparung unter der USB-C-Buchse (siehe `docs/layout-master.md`).
-- Bench-Test **M-3** (CHAIN 3,3 V direkt vs. 74LVC1G17), danach Bestückungsvariante
-  festlegen und die Master-PCB bei JLCPCB bestellen.
+  ab (Pin-1 = 5V rechts oben) und prüft `master.kicad_pcb` in der KiCad-GUI.
+- `docs/symbolpruefung-master.md` (AO3401A + SM712, M-4) freigeben; ProTek-PSM712-
+  Belegung am LCSC-/ProTek-Datenblatt kurz gegenprüfen.
+- Kosmetische Silk-Warnungen (D2/C1/U2-Textüberlapp) im GUI bereinigen.
+- Danach Master-PCB bei JLCPCB bestellen (BOM/CPL in `hardware/master/manufacturing/`).
+- Ringkerntrafo 230 V → 2 × 18 V, 50–60 VA, EN 61558; primär träge Sicherung + NTC.
 
 **Firmware am Gerät**
 - Master-Firmware (`pio run -e esp32c3`) auf ein echtes Modul flashen — T12/T13

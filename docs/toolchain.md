@@ -80,6 +80,7 @@ python tools/build_krone_master_symbols.py             # Projektbibliothek krone
 python tools/gen_master_sch.py --erc --pdf --png       # Schaltplan, ERC 0/0
 /usr/bin/python3 tools/gen_master_pcb.py --png --drc   # Vorplatzierung (verweigert Neuaufbau bei vorhandener Verdrahtung; --force)
 /usr/bin/python3 tools/route_master.py                 # FreeRouting + Flaechen + Silk-Marks, DRC 0/0
+/usr/bin/python3 tools/patch_master_pcb.py             # kleine Revision: neue Bauteile in die geroutete Platine (statt route_master)
 /usr/bin/python3 tools/gen_master_manufacturing.py     # Fertigungspaket -> hardware/master/manufacturing/
 
 # Firmware
@@ -176,6 +177,15 @@ Der Router-Lauf gehoert an den Schluss, wenn die Bauteilpositionen feststehen.
 Signale 0,5 mm, Versorgung 0,8 mm, kein AC) und erzeugt am Ende `docs/pcb-master.png`.
 `gen_master_pcb.py --png` wuerde die Platine neu aufbauen und die Verdrahtung
 verwerfen -- es verweigert das, solange Bahnen vorhanden sind (`--force` erzwingt).
+
+FreeRouting 2.3.0 haengt in dieser Umgebung reproduzierbar nach dem Routing
+(GUI-Thread haelt die JVM). `route_master.py` startet es darum mit
+`-Dfreerouting.gui.enabled=false`, ueberwacht die `.ses` per Popen und macht bis
+zu 3 Anlaeufe. Fuer **kleine Revisionen** (neue Bauteile in eine schon geroutete
+Platine) ist `tools/patch_master_pcb.py` der Weg: es holt die Basis-Platine aus
+`git`, setzt die in `gen_master_pcb.PLACEMENT` neuen Refs ein und schliesst nur
+die neuen Verbindungen mit `finish_routes.py` -- kein FreeRouting, keine
+UUID-/Bahnen-Aenderung am Rest. So wurde Rev. 0.2 (Q1/R8/D2) geroutet.
 
 **KiCad-GUI-Plugin** (fuer die eigene Maschine): Plugin and Content Manager
 (Strg+M) → „Freerouting" → Installieren; ebenfalls Java 25 noetig.

@@ -52,6 +52,76 @@ def java_bin() -> str:
     return "java"
 
 
+def _cpu_seconds(pid: int) -> float:
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            parts = f.read().split()
+        clk = 100.0  # os.sysconf('SC_CLK_TCK'), praktisch immer 100
+        return (int(parts[13]) + int(parts[14])) / clk
+    except (OSError, ValueError, IndexError):
+        return -1.0
+
+
+def _run_freerouting(cmd: list, ses: Path, hard_timeout: int = 300) -> int:
+    """FreeRouting starten und die fertige .ses einsammeln.
+
+    FreeRouting 2.3.0 (unter xvfb/JRE 25) beendet sich nach dem Routing haeufig
+    nicht -- ein Thread haelt die JVM am Leben. Strategie:
+      * .ses existiert und ~6 s groessenstabil        -> fertig, Prozess killen
+      * Prozess lebt, verbraucht aber ~40 s keine CPU -> haengt: killen, .ses
+        pruefen (Erfolg nur, wenn schon geschrieben)
+      * Prozess beendet sich selbst / Zeitlimit       -> rc weiterreichen
+    Rueckgabe 0 = Erfolg (nutzbare .ses), sonst != 0 (Aufrufer wiederholt).
+    """
+    import time
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    start = time.monotonic()
+    last_size, size_stable_since = -1, None
+    last_cpu, cpu_flat_since = -1.0, None
+    while True:
+        rc = proc.poll()
+        if rc is not None:
+            return 0 if (rc == 0 and ses.is_file()) else (rc or 1)
+
+        if ses.is_file():
+            size = ses.stat().st_size
+            if size > 0 and size == last_size:
+                if size_stable_since is None:
+                    size_stable_since = time.monotonic()
+                elif time.monotonic() - size_stable_since > 6:
+                    _kill(proc)
+                    print("  FreeRouting: .ses stabil -> Prozess beendet")
+                    return 0
+            else:
+                last_size, size_stable_since = size, None
+
+        cpu = _cpu_seconds(proc.pid)
+        if cpu >= 0 and abs(cpu - last_cpu) < 0.2:
+            if cpu_flat_since is None:
+                cpu_flat_since = time.monotonic()
+            elif time.monotonic() - cpu_flat_since > 40:
+                _kill(proc)
+                ok = ses.is_file() and ses.stat().st_size > 0
+                print(f"  FreeRouting: haengt ohne CPU-Last -> beendet ({'ses da' if ok else 'keine ses'})")
+                return 0 if ok else 1
+        else:
+            last_cpu, cpu_flat_since = cpu, None
+
+        if time.monotonic() - start > hard_timeout:
+            _kill(proc)
+            return 1
+        time.sleep(2)
+
+
+def _kill(proc) -> None:
+    proc.terminate()
+    try:
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
 def board_outline_points(board: "pcbnew.BOARD") -> list[tuple[int, int]]:
     """Rechteck-Umriss der Platine aus der Bounding-Box der Edge.Cuts."""
     bb = board.GetBoardEdgesBoundingBox()
@@ -265,8 +335,11 @@ def run_drc() -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--passes", type=int, default=100,
-                    help="Obergrenze der Auto-Routing-Durchlaeufe (Vorgabe 100)")
+    ap.add_argument("--passes", type=int, default=6,
+                    help="Obergrenze der FreeRouting-Auto-Routing-Durchlaeufe "
+                         "(Vorgabe 6; konvergiert i. d. R. in <6 Passes. Hohe "
+                         "Werte verlaengern nur die Optimierung und provozieren "
+                         "einen JVM-Haenger nach dem Schreiben der .ses)")
     ap.add_argument("--dry-run", action="store_true",
                     help="nur .dsn/.ses erzeugen, nicht importieren")
     ap.add_argument("--no-zones", action="store_true",
@@ -298,12 +371,23 @@ def main() -> int:
             sys.exit("Specctra-DSN-Export fehlgeschlagen")
         print(f"DSN exportiert ({dsn.stat().st_size} B)")
 
-        cmd = [java_bin(), "-jar", str(jar), "-de", str(dsn), "-do", str(ses),
+        # -Dfreerouting.gui.enabled=false haelt FreeRouting 2.3.0 headless.
+        # Trotzdem beendet sich die JVM nach dem Schreiben der .ses gelegentlich
+        # nicht (haengender Executor/AWT-Thread). Darum: als Popen starten, auf
+        # eine stabile .ses warten und den Prozess dann selbst beenden.
+        cmd = [java_bin(), "-Dfreerouting.gui.enabled=false",
+               "-jar", str(jar), "-de", str(dsn), "-do", str(ses),
                "-mp", str(args.passes), "-l", "en"]
         print("  $", " ".join(cmd))
-        r = subprocess.run(cmd)
-        if r.returncode != 0 or not ses.is_file():
-            sys.exit(f"FreeRouting fehlgeschlagen (rc={r.returncode})")
+        # FreeRouting 2.3.0 ist hier nicht deterministisch -- bis zu 3 Anlaeufe.
+        for attempt in range(1, 4):
+            rc = _run_freerouting(cmd, ses)
+            if rc == 0 and ses.is_file() and ses.stat().st_size > 0:
+                break
+            ses.unlink(missing_ok=True)
+            print(f"  FreeRouting Anlauf {attempt} erfolglos (rc={rc}), neuer Versuch ...")
+        else:
+            sys.exit("FreeRouting fehlgeschlagen (3 Anlaeufe)")
 
         if args.dry_run:
             keep = REPO / "hardware" / "daughtercard" / "daughtercard.ses"

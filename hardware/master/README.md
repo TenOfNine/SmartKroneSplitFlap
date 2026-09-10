@@ -1,9 +1,10 @@
 # hardware/master
 
 KiCad-Projekt der Zentralsteuerung (RS-485-Master, eine je Anlage).
-**Stand:** geroutet (2 Lagen, DRC 0 Fehler), Fertigungspaket committet unter
-`manufacturing/`. Bestellung wartet auf den Bench-Test **M-3** (CHAIN-Pegel,
-U3 vs. 0-Ω-Brücke R7).
+**Stand:** Rev. 0.2, geroutet (2 Lagen, ERC 0/0, DRC 0 Fehler), Fertigungspaket
+committet unter `manufacturing/`. Rev. 0.2 = Eingangsschutz (Verpol-P-FET Q1 +
+R8, RS-485-TVS D2). Bestellung nach Freigabe von `docs/symbolpruefung-master.md`
+(AO3401A + SM712, M-4).
 
 ## Schnellcheck
 
@@ -15,7 +16,7 @@ Vollauflösung: [`docs/master.pdf`](../../docs/master.pdf) ·
 3D: [`docs/render-master-top.png`](../../docs/render-master-top.png) ·
 [`docs/render-master-bottom.png`](../../docs/render-master-bottom.png) ·
 ERC: 0 Fehler / 0 Warnungen (`gen_master_sch.py --erc`, in der CI geprüft) ·
-DRC: 0 Fehler (3 kosmetische Silk-Warnungen, siehe `docs/layout-master.md`)
+DRC: 0 Fehler (einige kosmetische Silk-Warnungen, siehe `docs/layout-master.md`)
 
 ## Dateien
 
@@ -26,9 +27,9 @@ DRC: 0 Fehler (3 kosmetische Silk-Warnungen, siehe `docs/layout-master.md`)
 | `footprints/logos.pretty/` | GitHub-Marke für die Rückseiten-Silkscreen (projektlokal, wie bei der Daughter Card) |
 | `footprints/modules.pretty/` | `ESP32-C3-SuperMini.kicad_mod` — 2×8-THT für Buchsenleisten, Reihenabstand 15,24 mm, Pad 1 = 5V rechts oben, Antennen-Keepout an der Unterkante. Von Hand erstellt (kein Standard-Footprint). |
 | `fp-lib-table` | projektlokale Footprint-Tabelle für die beiden `.pretty`-Ordner |
-| `master.kicad_sch` | **generiert** von `tools/gen_master_sch.py` aus Netzliste (`docs/schaltplan-master.md` Kap. 6) und Footprint-Tabelle. 29 Bauteile, 19 Netze. |
+| `master.kicad_sch` | **generiert** von `tools/gen_master_sch.py` aus Netzliste (`docs/schaltplan-master.md` Kap. 6) und Footprint-Tabelle. 32 Bauteile, 20 Netze. |
 | `master.kicad_pro` | Projektfile: projektlokale `sym-lib-table` / `fp-lib-table` + Netzklassen (Default, Power, GND — **kein AC**) aus Schaltplan Kap. 8 |
-| `master.kicad_pcb` | **Erstplatzierung** von `tools/gen_master_pcb.py` (System-Python, `pcbnew`, 68 × 54 mm), danach vom Betreiber feinjustiert und mit `tools/route_master.py` (FreeRouting + `finish_routes.py` + Masseflächen) verdrahtet. Maker-Mark / schwarz-weiß-Lagenaufbau von `tools/add_silk_marks.py --board …`. |
+| `master.kicad_pcb` | Rev. 0.1: **Erstplatzierung** `tools/gen_master_pcb.py` + FreeRouting (`route_master.py`). Rev. 0.2 (Q1/R8/D2): **inkrementell** mit `tools/patch_master_pcb.py` in die geroutete Rev-0.1-Platine eingesetzt und mit `finish_routes.py` geschlossen (FreeRouting 2.3.0 hängt hier reproduzierbar). Maker-Mark / schwarz-weiß-Lagenaufbau von `tools/add_silk_marks.py --board …`. DRC 0/0. |
 | `manufacturing/` | committetes Fertigungspaket (Gerber, Bohrdatei, Zip, BOM, CPL, README) von `tools/gen_master_manufacturing.py`. |
 | `master.net` | **generiert** (`--netlist`), nicht versioniert. PCB-Netzliste. |
 
@@ -77,25 +78,30 @@ handverlegt. Das ist bewusst so:
 
 ## Layout und Routing
 
-Footprints sind allen 29 Bauteilen zugeordnet (`FOOTPRINTS` in
+Footprints sind allen 32 Bauteilen zugeordnet (`FOOTPRINTS` in
 `tools/gen_master_sch.py`). Die Platine ist geroutet — Erstplatzierung, Zonen,
-Netzklassen (alle Bahnen 0,5 mm, Power `+5V(_IN)`/`+3V3`/`+15V`/`ADER9` 0,8 mm
-mit 0,8-mm-Vias), Masseflächen F.Cu + B.Cu mit 5-mm-Stitching und die offenen Punkte
-mit Layoutbezug stehen in [`docs/layout-master.md`](../../docs/layout-master.md).
+Netzklassen (alle Bahnen 0,5 mm, Power `+5V(_RAW/_IN)`/`+3V3`/`+15V`/`ADER9`
+0,8 mm mit 0,8-mm-Vias), Masseflächen F.Cu + B.Cu mit 5-mm-Stitching und die
+offenen Punkte mit Layoutbezug stehen in
+[`docs/layout-master.md`](../../docs/layout-master.md).
 Die Massefläche ist nur im Antennenbereich unter U1 ausgespart (Footprint-Keepout).
 Die JLCPCB-Bestückung beschreibt [`manufacturing/README.md`](manufacturing/README.md):
-15 SMD-Teile (0805 / SOIC-8 / SOT-23-5), J1–J4, U1-Sockel und JP1 von Hand.
+18 SMD-Teile (0805 / SOIC-8 / SOT-23 / SOT-23-5), alle LCSC-Basic; J1–J4,
+U1-Sockel und JP1 von Hand.
 
 ## Prüfpunkte
 
 `docs/symbolpruefung-master.md` ist vom Betreiber **freigegeben** (01.09.2026):
 74LVC1G17 gegen Nexperia Rev. 16.1 §6.1, ESP32-C3-Modul-Pinbelegung und
-Einbaulage aus den Betreiberfotos, TP8485E per Verweis.
+Einbaulage aus den Betreiberfotos, TP8485E per Verweis. **Rev. 0.2 nachgetragen,
+Freigabe offen:** AO3401A (SOT-23 1=G/2=S/3=D) und SM712 (Pin 3 = GND, gegen
+Bourns-CDSOT23-SM712-Datenblatt).
 
-Offen (als GitHub-Issue geführt, blockieren die Fertigung nicht):
+Offen (blockieren die Fertigung nicht bzw. sind vor der Bestellung zu klären):
 
 | Nr | Punkt | Wirkung |
 |---|---|---|
 | M-2 | Aufwärtswandler-IC + Pinbelegung | Boost-Steckplatz J4 bleibt DNP, bis O-2 gemessen ist |
-| M-3 | CHAIN 3,3 V → 5 V: Pegelwandler U3 nötig oder 0-Ω-Brücke R7? | Bench-Test vor der PCB-Bestellung |
+| M-3 | CHAIN 3,3 V → 5 V | **entschieden:** U3 wird bestückt, R7 (0 Ω) DNP-Reserveplatz |
+| M-4 | RS-485-TVS D2 (SM712/PSM712) | Pinbelegung gegen Bourns-Datenblatt geprüft; ProTek-Spot-Check + Freigabe vor Bestellung |
 | O-2 | 5 V oder 12–20 V an Anzeige-Pin 9 | ob JP1 auf +15 V steht und der Boost bestückt wird |

@@ -115,8 +115,8 @@ analog zur Daughter Card: Projektbibliothek + Generatoren + FreeRouting.
 **Fertig, wenn:** `gen_master_sch.py --check-only` sauber, ERC 0/0, DRC 0 Fehler,
 jedes Bauteil hat einen Footprint, das Fertigungspaket liegt in
 `hardware/master/manufacturing/`. **Erledigt 01.09.2026** — Symbolprüfung vom
-Betreiber freigegeben (M-1). Offen: Sichtkontrolle der U1-Einbaulage am Render,
-Bench-Test M-3 vor der Bestellung.
+Betreiber freigegeben (M-1). M-3 in T20 entschieden (U3 wird bestückt).
+Eingangsschutz + Bestückungsfragen → **T20**.
 
 ---
 
@@ -315,6 +315,38 @@ Fehlerberichte mit Screenshot).
 **Fertig, wenn:** `python tools/build_webui_demo.py` + `node tools/check_webui.mjs`
 grün, Demo unter `…/demo/` erreichbar.
 **Erledigt 10.09.2026** — Spezifikation v0.20.
+
+---
+
+## T20 — Master-Trägerboard Rev. 0.2: Eingangsschutz
+
+Vor der Bestellung der Master-PCB: Verpolschutz und Bus-Transientenschutz
+nachrüsten; die offenen Bestückungsfragen entscheiden.
+
+- **Q1 (AO3401A, SOT-23, LCSC C15127 Basic) + R8 (100 kΩ, C149504 Basic):**
+  Verpolschutz am 5-V-Eingang. P-Kanal-MOSFET als High-Side-Schalter direkt
+  hinter J1 (Source an `+5V_RAW`, Drain an `+5V_IN`, Gate an GND). Schützt bei
+  vertauschter Klemme die **gesamte Kette** (der FET sitzt vor der J2-Abzweigung).
+- **D2 (SM712 / PSM712-LF-T7, SOT-23, LCSC C32677 Basic):** RS-485-TVS-Array am
+  Master zwischen A/B und GND. 7 V/12 V asymmetrisch (RS-485-Gleichtakt −7…+12 V).
+- **M-3 entschieden:** U3 (74LVC1G17) wird bestückt — 3,3 V erreicht V_IH des
+  ATtiny1616 bei 5-V-Betrieb nicht sicher. R7 (0 Ω) bleibt DNP-Reserveplatz.
+- **U1 ohne Edge.Cuts-Aussparung:** Modul steckt in Buchsenleisten und wird zum
+  Flashen entnommen — USB-C muss im gesteckten Zustand nicht erreichbar sein.
+- **5-V-Versorgung:** eigenes 230-V→5-V-Netzteil, galvanisch getrennt vom
+  42-V~-Kreis. Kein gemeinsamer Trafo, 5 V nicht aus den 42 V~ (Spez. 8).
+- `tools/build_krone_master_symbols.py` (AO3401A + SM712_SOT23), `gen_master_sch.py`,
+  `gen_master_pcb.py`, `gen_master_manufacturing.py` neu.
+- **PCB inkrementell** mit neuem `tools/patch_master_pcb.py` geroutet: Q1/R8/D2 in
+  die geroutete Rev-0.1-Platine eingesetzt, Lücken per `finish_routes.py`
+  geschlossen, Masseflächen neu. FreeRouting 2.3.0 hängt in der Dev-Umgebung
+  reproduzierbar → `route_master.py`/`route_daughtercard.py` mit
+  `-Dfreerouting.gui.enabled=false` + Popen-Watchdog gehärtet.
+- `docs/symbolpruefung-master.md`: AO3401A + SM712 gegen Datenblatt geprüft (M-4).
+
+**Fertig, wenn:** ERC 0/0, DRC 0/0, Fertigungspaket regeneriert — **erledigt**.
+Offen: Symbolprüfung (AO3401A + SM712, M-4) vom Betreiber freigeben, dann
+Bestellung. PR zur Prüfung.
 
 ---
 
