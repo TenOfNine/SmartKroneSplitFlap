@@ -10,6 +10,10 @@ __pycache__/
 node_modules/
 package-lock.json
 
+# statische Web-UI-Demo fuer die GitHub Page -- reines Bauartefakt aus
+# tools/build_webui_demo.py (Quelle: firmware/master/src/main.cpp)
+firmware/master/prebuilt/demo/
+
 # PlatformIO
 .pio/
 

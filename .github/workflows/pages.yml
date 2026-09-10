@@ -5,6 +5,8 @@ name: Pages – ESP Web Flasher
 # Der Publish-Ordner wird aus beiden prebuilt/-Verzeichnissen zusammengestellt:
 #   Master : index.html, updi.js, manifest.json, krone-master-esp32c3.factory.bin
 #   Modul  : krone-daughtercard-{attiny1616,attiny1616-boot,bootloader}.hex
+#   demo/  : statische Master-Web-UI mit Beispieldaten (tools/build_webui_demo.py),
+#            https://tenofnine.github.io/SmartKroneSplitFlap/demo/
 # Die .kota bleibt aussen vor -- die laeuft ueber die Geraete-Web-UI, nicht ueber
 # diese Seite.
 #
@@ -16,6 +18,9 @@ on:
     paths:
       - 'firmware/master/prebuilt/**'
       - 'firmware/module/prebuilt/**'
+      - 'firmware/master/src/main.cpp'
+      - 'tools/build_webui_demo.py'
+      - 'tools/webui_demo_shim.html'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -54,7 +59,11 @@ jobs:
           jq --arg v "$d ($sha)" '.version = $v' _site/manifest.json > _site/manifest.tmp \
             && mv _site/manifest.tmp _site/manifest.json
           echo "manifest version -> $d ($sha)"
-          ls -l _site
+
+          # Statische Master-Web-UI mit Beispieldaten (aus main.cpp erzeugt)
+          python3 tools/build_webui_demo.py -o _site/demo/index.html
+
+          ls -lR _site
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

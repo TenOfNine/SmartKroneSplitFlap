@@ -1,0 +1,136 @@
+<!-- ============================================================================
+     DEMO-SHIM fuer die Master-Web-UI
+     ----------------------------------------------------------------------------
+     Wird von tools/build_webui_demo.py unveraendert in die aus
+     firmware/master/src/main.cpp extrahierte Seite eingesetzt (direkt nach
+     <body>, vor dem UI-Skript). Ueberlagert window.fetch fuer /api/* mit
+     Beispieldaten, damit die Oberflaeche ohne Zentralsteuerung laeuft.
+
+     KEIN Firmware-Bestandteil. Nur die Beispieldaten unten pflegen -- der
+     eigentliche UI-Code bleibt die einzige Quelle in main.cpp.
+     ============================================================================ -->
+<style>
+#demo-banner{background:#1a1d22;border-bottom:1px solid #262a31;color:#8b8f98;
+  font:12px/1.45 ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  padding:8px 24px;text-align:center}
+#demo-banner b{color:#f2b03d}
+#demo-banner a{color:#6ea8d8}
+@media(max-width:820px){#demo-banner{padding:8px 12px}}
+</style>
+<script>
+(function () {
+  "use strict";
+
+  /* --- Beispiel-Bus: 10 Module, ein Fehler 0x05, ein Homing, eins offline --- */
+  var M = [
+    { addr: 1,  online: true,  state: 0, ist: 1,  ziel: 1,  error: 0, corr: 0, blatt: 40, fw: "1", miss: 0 },
+    { addr: 2,  online: true,  state: 0, ist: 1,  ziel: 1,  error: 0, corr: 2, blatt: 40, fw: "1", miss: 0 },
+    { addr: 3,  online: true,  state: 0, ist: 4,  ziel: 4,  error: 0, corr: 0, blatt: 40, fw: "1", miss: 0 },
+    { addr: 4,  online: true,  state: 0, ist: 7,  ziel: 7,  error: 0, corr: 1, blatt: 40, fw: "1", miss: 0 },
+    { addr: 5,  online: true,  state: 0, ist: 40, ziel: 40, error: 0, corr: 0, blatt: 40, fw: "1", miss: 0 },
+    { addr: 6,  online: true,  state: 0, ist: 6,  ziel: 6,  error: 0, corr: 0, blatt: 40, fw: "1", miss: 0 },
+    { addr: 7,  online: true,  state: 2, ist: 8,  ziel: 5,  error: 0, corr: 3, blatt: 40, fw: "1", miss: 0 },
+    { addr: 8,  online: true,  state: 1, ist: 1,  ziel: 1,  error: 0, corr: 0, blatt: 40, fw: "1", miss: 1 },
+    { addr: 9,  online: false, state: 0, ist: 0,  ziel: 0,  error: 0, corr: 0, blatt: 0,  fw: "1", miss: 4 },
+    { addr: 10, online: true,  state: 3, ist: 22, ziel: 22, error: 5, corr: 7, blatt: 40, fw: "1", miss: 0 }
+  ];
+
+  var CFG = {
+    module_count: 0, mqtt_enabled: true, mqtt_host: "192.168.1.10", mqtt_port: 1883,
+    mqtt_user: "krone", mqtt_pass: "", base_topic: "krone", node_id: "krone_anzeige",
+    hms_timeout_s: 600, ntp_enabled: true, ntp_server: "pool.ntp.org",
+    tz: "CET-1CEST,M3.5.0,M10.5.0/3", sep: ".",
+    use_static: false, ip: "", mask: "", gw: "", dns: "",
+    api_write: true, ota_enabled: true, mdns_enabled: true,
+    net_scope: 1, admin_user: "admin", admin_set: true
+  };
+
+  var SYS = {
+    uptime_s: 191244, fw: "krone-master 0.16 esp32c3", mac: "a0:76:4e:2b:11:c4",
+    hostname: "krone_anzeige", node_id: "krone_anzeige", mdns_enabled: true,
+    ssid: "Werkstatt", rssi: -58, ip: "192.168.1.42",
+    heap_free: 214560, heap_total: 327680, heap_min: 186720, cpu_load: 12, temp_c: 41.3,
+    sketch_used: 1148928, sketch_free: 1245184,
+    mqtt_enabled: true, mqtt_connected: true,
+    time: "14:32:07", time_src: "NTP", crc_err: 0, timeouts: 1,
+    net_scope: 1, auth_on: true, ota_enabled: true, ota_signed: true,
+    tz: "CET-1CEST,M3.5.0,M10.5.0/3",
+    detected: 9, enum_busy: false
+  };
+
+  var STATUS = { mode: "clock_hm", time_valid: true, detected: 9, enum_busy: false, modules: M };
+
+  var T0 = 191244000;
+  var LOG = { entries: [
+    { t: T0 - 4000,    sev: 0, src: "ntp", msg: "Zeit synchronisiert (Drift +38 ms)" },
+    { t: T0 - 92000,   sev: 1, src: "bus", msg: "Adr 9 antwortet nicht (3/3 verpasst) - als offline markiert" },
+    { t: T0 - 540000,  sev: 2, src: "bus", msg: "Adr 10 meldet Fehler 0x05 (Laufzeitueberwachung)" },
+    { t: T0 - 880000,  sev: 0, src: "web", msg: "Modus gesetzt: clock_hm" },
+    { t: T0 - 1500000, sev: 0, src: "sys", msg: "Enumeration abgeschlossen - 9 Module" },
+    { t: T0 - 1500500, sev: 0, src: "sys", msg: "Start (Reset-Grund: Power-on)" }
+  ] };
+
+  var MODFW = { ok: true, ver: 0x0102, len: 5712, modules: [
+    { addr: 1,  ver: 0x0102, status: "current",  has_bl: true },
+    { addr: 2,  ver: 0x0102, status: "current",  has_bl: true },
+    { addr: 3,  ver: 0x0101, status: "outdated", has_bl: true },
+    { addr: 4,  ver: 0x0101, status: "outdated", has_bl: true },
+    { addr: 5,  ver: 0x0102, status: "current",  has_bl: true },
+    { addr: 6,  ver: 0x0102, status: "current",  has_bl: true },
+    { addr: 7,  ver: 0x0102, status: "current",  has_bl: true },
+    { addr: 8,  ver: 0,      status: "unknown",  has_bl: false },
+    { addr: 10, ver: 0x0102, status: "current",  has_bl: true }
+  ] };
+
+  var WIFI = { nets: [
+    { ssid: "Werkstatt",         rssi: -52, enc: 1 },
+    { ssid: "Werkstatt-Gast",    rssi: -58, enc: 1 },
+    { ssid: "FRITZ!Box 7590 XL", rssi: -71, enc: 1 },
+    { ssid: "Nachbar-2.4G",      rssi: -84, enc: 1 }
+  ] };
+
+  var GET = {
+    "/api/status": STATUS,
+    "/api/system": SYS,
+    "/api/config": CFG,
+    "/api/log": LOG,
+    "/api/module/firmware": MODFW,
+    "/api/module/update/status": { busy: false, ok: 0, failed: 0, results: [] },
+    "/api/wifi/scan": WIFI,
+    "/api/backup": { demo: true, cfg: CFG }
+  };
+
+  var real = window.fetch ? window.fetch.bind(window) : null;
+  window.fetch = function (u, o) {
+    var p = String(u).split("?")[0].replace(/^https?:\/\/[^/]+/, "");
+    if (p.slice(0, 5) !== "/api/") {
+      return real ? real(u, o) : Promise.reject(new Error("kein fetch"));
+    }
+    var post = o && o.method && String(o.method).toUpperCase() !== "GET";
+    var body = post ? { ok: true } : (GET[p] !== undefined ? GET[p] : {});
+    return Promise.resolve({
+      ok: true, status: 200,
+      json: function () { return Promise.resolve(body); },
+      text: function () { return Promise.resolve(JSON.stringify(body)); }
+    });
+  };
+
+  function banner() {
+    if (document.getElementById("demo-banner")) return;
+    var d = document.createElement("div");
+    d.id = "demo-banner";
+    d.innerHTML =
+      'Live-Demo der Master-Web-UI mit <b>Beispieldaten</b> — simulierter Bus, ' +
+      '10 Module, keine echte Steuerung. Quelle: ' +
+      '<a href="https://github.com/TenOfNine/SmartKroneSplitFlap" target="_blank" rel="noopener">' +
+      'TenOfNine/SmartKroneSplitFlap</a>';
+    var main = document.querySelector(".main") || document.body;
+    main.insertBefore(d, main.firstChild);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", banner);
+  } else {
+    banner();
+  }
+})();
+</script>

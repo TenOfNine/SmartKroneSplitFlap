@@ -47,6 +47,7 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Modul-Bus-Update (T17) | Firmware-Verteilung an die Daughter Cards über den RS-485-Bus: residenter Bootloader (`firmware/bootloader`, `BOOTEND = 0x0C`), env `attiny1616_boot` (App @ 0x0C00), Protokoll 0x54–0x58, `lib/fwupdate` + `lib/moduleupdate` (host-getestet). Master bettet die signierte Modul-`.mota` ein (`module_fw.h`, Option A), verifiziert sie beim Start, verteilt über `/api/module/update` + Panel *Modul-Firmware* (Alle aktualisieren). `updi.js` schreibt jetzt Bootloader + App + Fuse. `pio test -e native` Master 56 / Modul 71. **Am Gerät nicht verifiziert** — Bench-Test-Checkliste in `docs/module-bootloader.md`. Spez. v0.18. | PR #11 |
 | Auto-Modulzahl (T18) | `cfg.module_count = 0` (Vorgabe) = Feldbreite folgt der Enumeration, `1…32` = Override. `effective_module_count()`, Nachführung im `loop()`, Auto-Rescan alle ~10 s bei 0 erkannt, `masterapp` sendet bei Breite 0 nichts (Test), Enum verwirft stale Daten. `/api/system` +`detected`/`field_width`/`auto_modules`. UI: *Anzeige*-Schalter + „Erkannt: N", Leerzustand in Übersicht/Modul-Tabelle. `pio test -e native` Master 57. Spez. v0.19. | PR (auto-module-count) |
 | Master-UI Zeitzone | Zeitzone jetzt Städte-Auswahlliste (18 Einträge) + eigener Sommerzeit-Schalter statt freiem POSIX-String; die UI baut den TZ-String, „Andere" behält die Direkteingabe. `/api/config`/Backup unverändert. `pio run -e esp32c3` ~1002 KB. Spez. v0.15. | direkt auf main |
+| Web-UI-Demo (GitHub Page) | `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `main.cpp` + `tools/webui_demo_shim.html` (fetch-Shim für `/api/*`, Beispieldaten) → `firmware/master/prebuilt/demo/index.html` (gitignored). `pages.yml` legt es unter `…/demo/` ab, `ci.yml` baut es und `check_webui.mjs` prüft das Bundle mit. Spez. v0.20. | PR (webui-demo) |
 
 Nächste sinnvolle Schritte:
 
@@ -90,7 +91,8 @@ Nächste sinnvolle Schritte:
   trägt die bisherige Adresse (Rewrite nur vor einer Veröffentlichung sinnvoll).
 - **GitHub Pages** muss der Betreiber einmalig aktivieren (Settings → Pages →
   Source „GitHub Actions"), damit der Web-Flasher unter
-  `tenofnine.github.io/SmartKroneSplitFlap` erreichbar wird.
+  `tenofnine.github.io/SmartKroneSplitFlap` (und die Web-UI-Demo unter
+  `…/demo/`) erreichbar wird.
 - **OTA-Signaturschlüssel** (`docs/firmware-signing.md`): privater Schlüssel
   liegt nur lokal unter `~/.config/krone/ota-signing.pem` — sichern und als
   GitHub-Secret `OTA_SIGNING_KEY` hinterlegen, falls in CI signiert werden soll.

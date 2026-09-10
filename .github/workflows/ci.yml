@@ -34,6 +34,7 @@ jobs:
         run: python tools/test_busctl.py
       - name: Web-UI (Syntax + jsdom-Smoke)
         run: |
+          python tools/build_webui_demo.py
           npm install --no-save --no-audit --no-fund jsdom@24
           node tools/check_webui.mjs
 
