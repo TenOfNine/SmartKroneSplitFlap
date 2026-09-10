@@ -302,6 +302,10 @@
       },
       {
         "netclass": "Power",
+        "pattern": "/+5V_RAW"
+      },
+      {
+        "netclass": "Power",
         "pattern": "/+5V_IN"
       },
       {

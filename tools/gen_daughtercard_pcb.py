@@ -363,6 +363,26 @@ def render_png() -> None:
         print(f"PNG: {out.relative_to(REPO)}  ({canvas.width}x{canvas.height})")
 
 
+def render_3d() -> None:
+    """3D-Ansicht (kicad-cli pcb render) von oben und unten ->
+    docs/render-daughtercard-{top,bottom}.png. Rendert die committete Platine,
+    baut sie NICHT neu."""
+    from shutil import which
+    if not which("kicad-cli"):
+        return
+    cli = ["xvfb-run", "-a", "kicad-cli"] if which("xvfb-run") else ["kicad-cli"]
+    for side in ("top", "bottom"):
+        out = REPO / "docs" / f"render-daughtercard-{side}.png"
+        r = subprocess.run([*cli, "pcb", "render", "--side", side,
+                            "--quality", "high", "--background", "opaque",
+                            "-w", "1600", "-h", "1200", "--floor",
+                            "-o", str(out), str(PCB)], capture_output=True, text=True)
+        if r.returncode == 0:
+            print(f"Render: {out.relative_to(REPO)}")
+        else:
+            print(f"[!] Render {side} fehlgeschlagen: {r.stderr.strip()[:200]}")
+
+
 # ---------------------------------------------------------------------------
 # JLCPCB-Export (--jlc): Stueckliste (BOM) und Bestueckungsplan (CPL/Pick&Place)
 # im JLCPCB-Format. Erzeugt jlc/BOM.csv und jlc/CPL.csv.
@@ -462,6 +482,9 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--drc", action="store_true", help="nach dem Schreiben DRC laufen lassen")
     ap.add_argument("--png", action="store_true", help="Vorschau docs/pcb-daughtercard.png")
+    ap.add_argument("--render", action="store_true",
+                    help="3D-Ansicht docs/render-daughtercard-{top,bottom}.png aus "
+                         "der committeten Platine (kein Neu-Aufbau)")
     ap.add_argument("--jlc", action="store_true",
                     help="nur jlc/BOM.csv + jlc/CPL.csv aus der vorhandenen "
                          ".kicad_pcb erzeugen (kein Neu-Aufbau)")
@@ -469,6 +492,10 @@ def main() -> int:
 
     if args.jlc:
         export_jlc()
+        return 0
+
+    if args.render:
+        render_3d()
         return 0
 
     board = build()
