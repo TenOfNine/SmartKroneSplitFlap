@@ -18,7 +18,10 @@ UUID aendert. Dieses Skript ist der inkrementelle Weg:
     /usr/bin/python3 tools/patch_master_pcb.py            # schreibt hardware/master/master.kicad_pcb
     /usr/bin/python3 tools/patch_master_pcb.py --base HEAD~1
 
-Danach `gen_master_manufacturing.py` und ein DRC-Lauf.
+Danach `tools/add_silk_marks.py --board hardware/master/master.kicad_pcb`,
+`gen_master_manufacturing.py` und ein DRC-Lauf. `finish_routes.py` ist eine
+A*-Rastersuche und nicht streng deterministisch -- bleiben Verbindungen offen
+(DRC: unverdrahtet), den Lauf einfach wiederholen.
 """
 from __future__ import annotations
 
@@ -86,6 +89,18 @@ def main() -> int:
     uuids = gpcb.parse_sch_uuids(SCH.read_text(encoding="utf-8"))
     pad_nets = _pad_nets()
 
+    # Footprint-Silk-Texte, die nicht mehr gewuenscht sind (im Board-Instanz
+    # eingebacken -> hier entfernen; die .kicad_mod ist bereits bereinigt).
+    dropped = 0
+    for fp in board.GetFootprints():
+        for item in list(fp.GraphicalItems()):
+            if (item.GetClass() == "PCB_TEXT"
+                    and item.GetText().strip().startswith("ANT:")):
+                fp.Delete(item)
+                dropped += 1
+    if dropped:
+        print(f"  {dropped} veralteten Silk-Text entfernt (\"ANT: …\")")
+
     def net(name: str):
         return (board.FindNet(name) or board.FindNet("/" + name)
                 or board.FindNet(name.lstrip("/")))
@@ -152,10 +167,19 @@ def main() -> int:
     board.BuildConnectivity()
     pcbnew.SaveBoard(str(PCB), board)
 
-    n = finish_routes.finish(board, PCB)
-    print(f"  finish_routes: {n} Verbindung(en) geschlossen")
-    pcbnew.SaveBoard(str(PCB), board)
-    board = pcbnew.LoadBoard(str(PCB))
+    # finish_routes ist eine A*-Rastersuche und nicht streng deterministisch --
+    # bis zu 4 Runden, bis nichts mehr offen ist.
+    for rnd in range(1, 5):
+        n = finish_routes.finish(board, PCB)
+        pcbnew.SaveBoard(str(PCB), board)
+        board = pcbnew.LoadBoard(str(PCB))
+        left = len(finish_routes.drc_unconnected(PCB))
+        print(f"  finish_routes Runde {rnd}: {n} geschlossen, {left} offen")
+        if left == 0:
+            break
+    else:
+        sys.exit(f"finish_routes: nach 4 Runden noch {left} Verbindung(en) offen "
+                 "-- erneut ausfuehren oder D2-Position pruefen")
 
     # Masseflaechen neu (alte Zonen + GND-Bahnen weg, Stitching + Fuellung neu)
     for z in list(board.Zones()):
