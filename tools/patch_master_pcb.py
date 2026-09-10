@@ -54,10 +54,10 @@ NEW_REFS = ["Q1", "R8", "D2"]
 # Feste Referenztext-Positionen (Absolutkoordinaten, mm), damit der auto-
 # platzierte Text nicht in den Loetstoppbereich der Nachbarpads faellt.
 # Betreiber-Wunsch 10.09.2026: U2/D2 unter das Bauteil, R4 knapp links darunter.
-REF_POS_MM = {                    # (x, y, textsize_mm)
-    "U2": (38.5, 31.8, 0.9),      # unter dem IC, linke Haelfte
-    "D2": (45.6, 37.6, 0.9),      # unter dem Bauteil
-    "R4": (42.9, 33.2, 0.9),      # knapp links unter dem Bauteil
+REF_POS_MM = {                    # (x, y, textsize_mm) -- direkt am Bauteil
+    "U2": (40.0, 31.4, 1.0),      # dicht unter dem IC
+    "D2": (44.4, 36.9, 0.9),      # dicht unter dem Bauteil
+    "R4": (41.2, 30.0, 0.9),      # dicht links am Bauteil
 }
 
 
