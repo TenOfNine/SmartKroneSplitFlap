@@ -55,13 +55,59 @@ def set_black_white_stackup_text(pcb_path: Path) -> None:
     print("Lagenaufbau: Loetstoppmaske schwarz / Bestueckungsdruck weiss")
 
 
+_POLARITY = {"+", "−", "-"}
+
+
 def clear_existing(board: "pcbnew.BOARD") -> None:
     for f in list(board.GetFootprints()):
         if f.GetFPID().GetLibItemName() == "Logo_GitHub":
             board.Delete(f)
     for d in list(board.GetDrawings()):
-        if d.GetClass() == "PCB_TEXT" and d.GetText() == OWNER:
+        if d.GetClass() == "PCB_TEXT" and d.GetText() in ({OWNER} | _POLARITY):
             board.Delete(d)
+
+
+def add_power_terminal_polarity(board: "pcbnew.BOARD", ref: str = "J1") -> None:
+    """+ / - auf F.SilkS neben eine 2-polige Versorgungsklemme.
+
+    Findet das Footprint <ref>, ordnet den Pad mit +5V*-Netz "+" und den mit
+    GND "-" zu und setzt die Markierung aussen neben den jeweiligen Pad.
+    No-op, wenn <ref> fehlt oder die Netze nicht passen (z. B. Daughter Card).
+    """
+    fp = next((f for f in board.GetFootprints() if f.GetReference() == ref), None)
+    if fp is None or len(list(fp.Pads())) != 2:
+        return                               # nur 2-polige Klemme (nicht die
+                                             # 2x5-Buchsenleiste der Daughter Card)
+    plus = minus = None
+    for pad in fp.Pads():
+        n = pad.GetNetname().lstrip("/")
+        if n.startswith("+5V") or n.startswith("+3V") or n == "VCC":
+            plus = pad
+        elif n == "GND":
+            minus = pad
+    if plus is None or minus is None:
+        return
+
+    py = plus.GetPosition().y
+    my = minus.GetPosition().y
+    bb = fp.GetBoundingBox()                 # Klemmenkoerper inkl. Silk
+    gap = pcbnew.FromMM(1.1)
+    left_x, right_x = bb.GetLeft() - gap, bb.GetRight() + gap
+    # "+" auf die Seite des Plus-Pads legen
+    if plus.GetPosition().x <= minus.GetPosition().x:
+        plus_x, minus_x = left_x, right_x
+    else:
+        plus_x, minus_x = right_x, left_x
+    for label, pos in (("+", (plus_x, py)), ("−", (minus_x, my))):
+        t = pcbnew.PCB_TEXT(board)
+        t.SetText(label)
+        t.SetLayer(pcbnew.F_SilkS)
+        t.SetPosition(pcbnew.VECTOR2I(int(pos[0]), int(pos[1])))
+        t.SetTextSize(pcbnew.VECTOR2I(pcbnew.FromMM(1.4), pcbnew.FromMM(1.4)))
+        t.SetTextThickness(pcbnew.FromMM(0.25))
+        t.SetHorizJustify(pcbnew.GR_TEXT_H_ALIGN_CENTER)
+        board.Add(t)
+    print(f"Polaritaet + / − auf F.SilkS neben {ref}")
 
 
 def add_marks(board: "pcbnew.BOARD") -> None:
@@ -106,6 +152,7 @@ def main() -> int:
     board = pcbnew.LoadBoard(str(PCB))
     clear_existing(board)
     add_marks(board)
+    add_power_terminal_polarity(board)
     pcbnew.SaveBoard(str(PCB), board)
     set_black_white_stackup_text(PCB)
     print(f"geschrieben: {PCB}")

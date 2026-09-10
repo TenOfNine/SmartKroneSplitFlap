@@ -27,7 +27,6 @@
 	(fp_rect (start -9.2 -11.46) (end 9.2 11.46) (stroke (width 0.15) (type solid)) (fill none) (layer "F.SilkS"))
 	(fp_circle (center 9.02 -8.89) (end 9.22 -8.89) (stroke (width 0.3) (type solid)) (fill solid) (layer "F.SilkS"))
 	(fp_text user "USB-C" (at 0 -9.66 0) (layer "F.SilkS") (effects (font (size 0.9 0.9) (thickness 0.15))))
-	(fp_text user "ANT: keine Cu-Flaeche" (at 0 12.66 0) (layer "F.SilkS") (effects (font (size 0.8 0.8) (thickness 0.13))))
 	(fp_rect (start -9.25 -13.21) (end 9.25 11.51) (stroke (width 0.05) (type solid)) (fill none) (layer "F.CrtYd"))
 	(zone (net 0) (net_name "") (layers "F&B.Cu") (name "ANT_keepout") (hatch edge 0.5) (connect_pads (clearance 0)) (min_thickness 0.25) (keepout (tracks allowed) (vias not_allowed) (pads allowed) (copperpour not_allowed) (footprints allowed)) (fill (thermal_gap 0.5) (thermal_bridge_width 0.5)) (polygon (pts (xy -10.5 10.49) (xy 10.5 10.49) (xy 10.5 14.26) (xy -10.5 14.26))))
 )

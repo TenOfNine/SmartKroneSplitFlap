@@ -51,10 +51,10 @@ HOLE_INSET = 4.0
 # Oberkante, Antenne + Cu-Keepout an der Unterkante (y ~21..27). Alle uebrigen
 # Bauteile liegen rechts davon bzw. unterhalb. docs/layout-master.md.
 PLACEMENT: dict[str, tuple[float, float, float]] = {
-    # U1: Modulkoerper endet ~2,7 mm vor der Oberkante, USB-C-Buchse ragt knapp
-    # daran. Fuer klaren Ueberstand im GUI eine kleine Edge.Cuts-Aussparung unter
-    # der USB-C-Buchse einfuegen -- weiter hochsetzen sprengt den Routingkanal
-    # (Leiterbahnen an der Oberkante). Siehe docs/layout-master.md.
+    # U1: steckt in Buchsenleisten ~5 mm ueber der Platine und ist zum Flashen
+    # entnehmbar -- die USB-C-Buchse muss NICHT im gesteckten Zustand erreichbar
+    # sein, daher keine Edge.Cuts-Aussparung (Betreiber-Entscheidung 10.09.2026).
+    # Modulkoerper endet ~2,7 mm vor der Oberkante. Siehe docs/layout-master.md.
     "U1": (18, 14, 0),
     "C4": (32, 6, 0),        # 100n direkt am 5V-Pin von U1
     # --- RS-485 (Mitte, nahe Bus) ---
@@ -65,6 +65,9 @@ PLACEMENT: dict[str, tuple[float, float, float]] = {
     "R2": (33, 26, 90),      # Bias A
     "R3": (33, 30, 90),      # Bias B
     "R4": (44, 30, 0),       # DE-Pulldown
+    "D2": (46, 33, 0),       # RS-485-TVS im freien Feld unter dem RS-485-Block;
+                             # A/B-Stubs nach oben zum Bus. Weit genug vom dichten
+                             # A/B/+3V3-Routing um U2 herum.
     # --- CHAIN-Pegelwandler ---
     "U3": (34, 38, 0),
     "C2": (34, 34, 0),
@@ -72,6 +75,8 @@ PLACEMENT: dict[str, tuple[float, float, float]] = {
     "R7": (30, 42, 0),       # Bypass (DNP)
     # --- Versorgung 5V (Unterkante links) ---
     "J1": (11, 48, 0),       # Schraubklemme, Draehte nach unten/links
+    "Q1": (16, 40, 0),       # Verpolschutz-P-FET, direkt hinter J1 (ueber der Klemme)
+    "R8": (20, 40, 0),       # V_GS-Widerstand fuer Q1
     "FB1": (24, 48, 90),
     "C3": (29, 48, 90),      # 47u Bulk
     # --- Status-LED (Unterkante Mitte, sichtbar) ---
@@ -99,6 +104,7 @@ NETCLASSES = [
 ]
 NETCLASS_PATTERNS = [
     {"netclass": "Power", "pattern": "/+5V"},
+    {"netclass": "Power", "pattern": "/+5V_RAW"},
     {"netclass": "Power", "pattern": "/+5V_IN"},
     {"netclass": "Power", "pattern": "/+3V3"},
     {"netclass": "Power", "pattern": "/+15V"},
@@ -220,11 +226,15 @@ def build() -> "pcbnew.BOARD":
         if ref in uuids:
             fp.SetPath(pcbnew.KIID_PATH("/" + uuids[ref]))
 
-        x, y, rot = PLACEMENT.get(ref, (None, None, 0))
+        spec = PLACEMENT.get(ref, (None, None, 0))
+        x, y, rot = spec[0], spec[1], spec[2]
+        layer = spec[3] if len(spec) > 3 else "F"
         if x is None:
             missing_place.append(ref)
             x, y = 80.0, 5.0 + 3.0 * len(missing_place)
         fp.SetPosition(pcbnew.VECTOR2I(mm(x), mm(y)))
+        if layer == "B":
+            fp.SetLayerAndFlip(pcbnew.B_Cu)
         if rot:
             fp.SetOrientationDegrees(rot)
 

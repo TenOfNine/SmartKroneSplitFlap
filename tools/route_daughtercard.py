@@ -297,10 +297,15 @@ def main() -> int:
             sys.exit("Specctra-DSN-Export fehlgeschlagen")
         print(f"DSN exportiert ({dsn.stat().st_size} B)")
 
-        cmd = [java_bin(), "-jar", str(jar), "-de", str(dsn), "-do", str(ses),
+        # -Dfreerouting.gui.enabled=false: sonst startet FreeRouting 2.3.0 auch
+        # mit -de/-do eine GUI (unter xvfb), deren Threads die JVM nach dem
+        # Routing am Leben halten -> der Prozess haengt, ohne die .ses zu
+        # schreiben. Mit dem Flag laeuft es sauber headless und beendet.
+        cmd = [java_bin(), "-Dfreerouting.gui.enabled=false",
+               "-jar", str(jar), "-de", str(dsn), "-do", str(ses),
                "-mp", str(args.passes), "-l", "en"]
         print("  $", " ".join(cmd))
-        r = subprocess.run(cmd)
+        r = subprocess.run(cmd, timeout=900)
         if r.returncode != 0 or not ses.is_file():
             sys.exit(f"FreeRouting fehlgeschlagen (rc={r.returncode})")
 
