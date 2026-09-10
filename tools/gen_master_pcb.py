@@ -424,6 +424,8 @@ def main() -> int:
                     help="Neuaufbau auch dann, wenn die .kicad_pcb bereits Leiterbahnen hat")
     ap.add_argument("--render", action="store_true",
                     help="nur 3D-Ansicht (oben/unten) aus der vorhandenen .kicad_pcb")
+    ap.add_argument("--preview", action="store_true",
+                    help="nur docs/pcb-master.png (2D F.Cu/B.Cu) aus der vorhandenen .kicad_pcb")
     args = ap.parse_args()
 
     if args.jlc:
@@ -432,6 +434,10 @@ def main() -> int:
 
     if args.render:
         render_3d()
+        return 0
+
+    if args.preview:
+        render_png()
         return 0
 
     if PCB.is_file() and not args.force:

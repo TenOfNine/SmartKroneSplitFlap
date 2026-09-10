@@ -28,7 +28,7 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 |---|---|
 | `build_krone_master_symbols.py` | `hardware/master/symbols/krone_master.kicad_sym` (inkl. handgebautem `ESP32-C3-SuperMini`-Symbol). `--check` für die CI. |
 | `gen_master_sch.py` | Schaltplan aus `docs/schaltplan-master.md` Kap. 6. Flags wie beim Daughter-Card-Pendant. |
-| `gen_master_pcb.py` | Erstplatzierung `hardware/master/master.kicad_pcb` (**System-Python**). `PLACEMENT`-Dict (opt. 4. Element `"B"` = Rückseite). `--png`, `--drc`, `--jlc`, `--render` (3D), `--force`. |
+| `gen_master_pcb.py` | Erstplatzierung `hardware/master/master.kicad_pcb` (**System-Python**). `PLACEMENT`-Dict (opt. 4. Element `"B"` = Rückseite). `--png`, `--drc`, `--jlc`, `--render` (3D aus der Datei), `--preview` (2D `docs/pcb-master.png` aus der Datei), `--force`. |
 | `route_master.py` | wie `route_daughtercard.py` für die Master-Platine, ruft `add_silk_marks.py` selbst auf. FreeRouting mit `-Dfreerouting.gui.enabled=false` + Popen-Watchdog (JVM hängt sonst nach dem Routing), `--passes`-Default 6, bis zu 3 Anläufe. |
 | `patch_master_pcb.py` | **inkrementell**: setzt die in `gen_master_pcb.PLACEMENT` neuen Refs in die geroutete Platine (`git show <base>`) ein, kappt kurzschließende Bahnen, schließt Lücken mit `finish_routes.py` (bis 4 Runden), setzt Referenztexte aus `REF_POS_MM`, baut Masseflächen neu, End-DRC. Für kleine Revisionen ohne Vollneuroute (Rev. 0.2: Q1/R8/D2). **System-Python.** |
 | `gen_master_manufacturing.py` | Fertigungspaket → `hardware/master/manufacturing/`. |
