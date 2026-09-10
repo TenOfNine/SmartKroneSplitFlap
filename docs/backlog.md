@@ -293,6 +293,31 @@ angeschlossene Karten.
 
 ---
 
+## T19 — Web-UI-Demo auf der GitHub Page
+
+Die Master-Weboberfläche soll ohne Gerät ansehbar sein (Vorführung, Doku,
+Fehlerberichte mit Screenshot).
+
+- `tools/webui_demo_shim.html`: `<style>`-Banner + `<script>`, der `window.fetch`
+  für `/api/*` mit Beispieldaten überlagert (10 Module, ein Fehler 0x05, ein
+  Homing, eins offline). Kein Firmware-Bestandteil.
+- `tools/build_webui_demo.py`: schneidet `INDEX_HTML` (`R"HTML(...)HTML"`) aus
+  `firmware/master/src/main.cpp`, setzt den Shim direkt nach `<body>` →
+  `firmware/master/prebuilt/demo/index.html`. `--check` prüft nur.
+- Ausgabe in `.gitignore` — reines Bauartefakt, keine Drift zur Quelle.
+- `pages.yml`: `python3 tools/build_webui_demo.py -o _site/demo/index.html`;
+  Trigger-Pfade um `main.cpp` + Generator + Shim erweitert.
+- `ci.yml`: Generator läuft im `host-tests`-Job vor `check_webui.mjs`, das das
+  Bundle mitprüft (Syntax jedes Inline-`<script>`).
+- Verlinkt aus `firmware/master/prebuilt/index.html` (Flasher-Startseite) und
+  der README.
+
+**Fertig, wenn:** `python tools/build_webui_demo.py` + `node tools/check_webui.mjs`
+grün, Demo unter `…/demo/` erreichbar.
+**Erledigt 10.09.2026** — Spezifikation v0.20.
+
+---
+
 ## Offene Messungen
 
 Diese Punkte sind noch nicht geklärt. Alles, was davon abhängt, bleibt parametrierbar und blockiert die Fertigung nicht.

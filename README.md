@@ -83,6 +83,11 @@ committet unter `firmware/master/prebuilt/`; neu bauen mit
 `python tools/build_master_firmware.py` oder direkt
 `pio run -e esp32c3 -t upload -d firmware/master`.
 
+Die Web-Oberfläche vorab ansehen — dieselbe Seite mit Beispieldaten und
+simuliertem Bus, ohne Gerät:
+**<https://tenofnine.github.io/SmartKroneSplitFlap/demo/>**
+(erzeugt aus `firmware/master/src/main.cpp` per `python tools/build_webui_demo.py`).
+
 Spätere Updates laufen über die Web-UI (*Einstellungen › Firmware aktualisieren*):
 den **signierten Container** `firmware/master/prebuilt/krone-master-esp32c3.kota`
 hochladen. Das Modul verlangt eine gültige ECDSA-Signatur des Projektschlüssels —

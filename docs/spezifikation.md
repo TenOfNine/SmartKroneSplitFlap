@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.19 |
-| Datum | 09.09.2026 |
+| Version | 0.20 |
+| Datum | 10.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -624,6 +624,12 @@ in die zweite App-Partition und startet neu. Ein Netzwerk-OTA über
 ArduinoOTA/espota ist bewusst nicht vorgesehen (offener Port ohne Passwort);
 jenseits des Browsers wird per USB geflasht. Details `docs/firmware-signing.md`.
 
+**Demo.** Für einen Vorab-Blick ohne Gerät liegt dieselbe Seite als statische
+Demo auf der GitHub Page (`…/demo/`). Sie wird von `tools/build_webui_demo.py`
+aus `firmware/master/src/main.cpp` erzeugt; ein vorgeschalteter Shim
+(`tools/webui_demo_shim.html`) überlagert `window.fetch` für `/api/*` mit
+Beispieldaten. Die Demo ist ein reines Bau­artefakt und nicht Teil der Firmware.
+
 **Persistenz.** Die Konfiguration liegt im NVS und überdauert OTA-Updates. Für
 den Fall eines vollständigen Flash-Löschens gibt es eine Voll­sicherung als
 JSON-Datei (inkl. WLAN-, MQTT- und Admin-Zugangsdaten); das Flasher-Manifest
@@ -851,3 +857,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.17 | 09.09.2026 | Werkzeuge/Doku: **Browser-UPDI-Flasher** für die Modul-Firmware (`firmware/master/prebuilt/updi.js`, Port von SerialUPDI auf die Web Serial API) als zweiter Tab neben dem Master-Flasher der GitHub Page; `tools/build_module_firmware.py` legt das Intel-HEX nach `firmware/module/prebuilt/`. Geräte-ID-Prüfung (ATtiny1616 = `1E 94 21`), Chip-Erase, Page-Programmierung, Verify. **Experimentell, am Gerät noch nicht verifiziert** — `pio -t upload` bleibt der abgesicherte Weg. README-Ausblick: Modul-Firmware über den Bus verteilen (Bootloader oder UPDI-Ader im Kabel, spätere Layout-Revision). Keine Firmware- oder Hardware-Änderung. |
 | 0.16 | 08.09.2026 | Kapitel 7.2/7.3/7.5, 9: Sicherheitspaket der Zentralsteuerung. (1) **Signiertes Browser-OTA** — `/api/update` nimmt nur den Container `krone-master-esp32c3.kota` an (Magic, SHA-256, ECDSA-P-256-Signatur über einen einkompilierten Public Key, Prüfung per mbedTLS); neuer host-getesteter Parser `lib/otaverify`, Signaturwerkzeug `tools/ota_keys.py`, `docs/firmware-signing.md`. (2) **Zugriffsschutz** — Herkunftsfilter `net_scope` (Vorgabe: private Netze RFC 1918) + optionale HTTP-Basic-Auth, als Wrapper auf allen Endpunkten; NF-9. (3) Doku: private E-Mail aus den Prüfpunkt-/Symbolprüfungs-Tabellen entfernt, Messfotos ohne EXIF und verkleinert. Keine Hardware-Änderung. |
 | 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |
+| 0.20 | 10.09.2026 | Kapitel 7.5: **statische Web-UI-Demo auf der GitHub Page** (`https://tenofnine.github.io/SmartKroneSplitFlap/demo/`). `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `firmware/master/src/main.cpp` und setzt `tools/webui_demo_shim.html` davor — überlagert `window.fetch` für `/api/*` mit Beispieldaten (10 Module, ein Fehler 0x05), Demo-Banner. Reines Bauartefakt (`.gitignore`), von `pages.yml` und `ci.yml` erzeugt; `check_webui.mjs` prüft das Bundle mit. Keine Firmware-, Schnittstellen- oder Hardware-Änderung. |
