@@ -111,8 +111,11 @@ zwischen TXD und RXD:
 
 An UPDI kein Kondensator (Schaltplan 4.4). Dann:
 
-- **Browser (experimentell):** <https://tenofnine.github.io/SmartKroneSplitFlap/>,
-  Tab *Daughter Card*. Am Gerät noch nicht verifiziert.
+- **Browser:** <https://tenofnine.github.io/SmartKroneSplitFlap/>,
+  Tab *Daughter Card* — Werksflash (Bootloader + App + `BOOTEND`-Fuse).
+  **Am Gerät verifiziert** (10.09.2026): Chip-Erase, Geräte-ID-Prüfung, Fuse-
+  und Seitenschreiben sowie die Bootloader→App-Übergabe laufen auf echter
+  Hardware durch.
 - **Sicher:** `pio run -e attiny1616 -t upload -d firmware/module` (Protokoll
   `serialupdi`, Port ggf. per `--upload-port`).
 
@@ -132,10 +135,13 @@ Daughter Cards aus ihrer Web-UI, ohne PC und Adapter.
   der Bootloader bleibt intakt). Der Master trägt die signierte Modul-Firmware
   eingebettet und verteilt sie aus *Einstellungen › Modul-Firmware*
   („Alle aktualisieren"). Erstflash von Bootloader + App + Fuse über den
-  Browser-Werksflasher (Tab „Daughter Card") oder UPDI. `BOOTEND` sperrt den
-  Baustein nicht. **Am Gerät noch nicht verifiziert** — Design und
-  Bench-Test-Checkliste in [`docs/module-bootloader.md`](docs/module-bootloader.md);
-  bis dahin `pio run -e attiny1616 -t upload` (ohne Bootloader).
+  Browser-Werksflasher (Tab „Daughter Card") oder UPDI — **das Werksflashen
+  selbst und die Bootloader→App-Übergabe sind am Gerät verifiziert**
+  (10.09.2026). `BOOTEND` sperrt den Baustein nicht. Die **Verteilung über den
+  Bus** (Master erkennt/aktualisiert die Modul-Firmware) ist noch nicht
+  getestet — Design und Bench-Test-Checkliste in
+  [`docs/module-bootloader.md`](docs/module-bootloader.md); bis dahin
+  `pio run -e attiny1616 -t upload` (ohne Bootloader) als abgesicherter Weg.
 - **UPDI-Ader im Flachbandkabel (verworfener Bastelweg).** Ader 9 des Busbands
   ist frei; eine Drahtbrücke je Karte von `J6.2` auf `J2.9` brächte UPDI auf den
   Bus, aber allen zehn Karten gemeinsam (kein Einzeladressieren). Der

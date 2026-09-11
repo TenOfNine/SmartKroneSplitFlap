@@ -1,9 +1,11 @@
 # Modul-Bootloader und Firmware-Verteilung über den Bus
 
-> **Status: experimentell.** Bootloader, Werksflash und Bus-Update sind am Gerät
-> **noch nicht verifiziert**. `pio run -e attiny1616 -t upload` (App @ 0x0000,
-> ohne Bootloader) bleibt der abgesicherte Weg. Vor dem ersten Einsatz die
-> **Bench-Test-Checkliste** unten abarbeiten.
+> **Status: experimentell.** Der **Werksflash über den Browser** (Bootloader +
+> App + `BOOTEND`-Fuse, Bench-Punkte 1+2) ist **am Gerät verifiziert**
+> (10.09.2026). Die **Firmware-Verteilung über den Bus** (Punkte 3–8) ist noch
+> **nicht verifiziert** — dafür wird die Master-Hardware gebraucht (bestellt,
+> noch nicht aufgebaut). `pio run -e attiny1616 -t upload` (App @ 0x0000, ohne
+> Bootloader) bleibt bis dahin der abgesicherte Weg für Firmware-Änderungen.
 
 ## Ziel
 
@@ -96,13 +98,19 @@ REST: `GET /api/module/firmware`, `POST /api/module/update` (`{"all":true}` oder
 
 ## Bench-Test-Checkliste (vor dem ersten Einsatz)
 
-1. **Bootloader isoliert.** `pio run -e bootloader`, per UPDI @ 0x0000 flashen,
+1. ✅ **Bootloader isoliert.** `pio run -e bootloader`, per UPDI @ 0x0000 flashen,
    Fuse `BOOTEND = 0x0C` setzen (`pymcuprog write -m fuses -o 8 --values 0x0C`
    oder der Werksflasher). Ohne App: bleibt der Bootloader im Warte-Loop, WDT
    löst nicht aus (kein Dauerreset).
-2. **Sprung in die App.** `attiny1616_boot`-App @ 0x0C00 dazuflashen. Reset →
-   Bootloader übergibt an die App, RS-485-Kommunikation + Motorsteuerung laufen
-   normal (Interruptvektoren korrekt, IVSEL = 0).
+   **Verifiziert 10.09.2026** über den Browser-Werksflasher (schreibt
+   Bootloader + Fuse in einem Zug): Chip-Erase, Geräte-ID, Fuse- und
+   Seitenschreiben liefen sauber, kein Dauerreset.
+2. ✅ **Sprung in die App.** `attiny1616_boot`-App @ 0x0C00 dazuflashen. Reset →
+   Bootloader übergibt an die App (Interruptvektoren korrekt, IVSEL = 0) —
+   **verifiziert** (Status-LED blinkt/leuchtet wie von der App vorgegeben, der
+   1-ms-Timer-Interrupt läuft also). RS-485-Kommunikation + Motorsteuerung im
+   Zusammenspiel mit dem Master noch offen (Punkte 3+, Master-Hardware
+   bestellt, noch nicht aufgebaut).
 3. **`CMD_GET_VERSION`.** Master fragt Version ab, bekommt `1 · 1 · 0 · 0x03 · x`
    (App gültig + Bootloader vorhanden).
 4. **`CMD_ENTER_BOOTLOADER`.** Modul startet in den Bootloader und bleibt dort.

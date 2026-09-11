@@ -234,9 +234,12 @@ reichen.
 
 **Fertig, wenn:** `pio run -e attiny1616` grün, `build_module_firmware.py` läuft,
 Intel-HEX-Parser gegen die echte Datei gegengeprüft.
-**Erledigt 09.09.2026** — Spezifikation v0.17. **Am Gerät nicht verifiziert**
-(kein Browser/keine Hardware in der Umgebung); als „experimentell" markiert,
-`pio -t upload` bleibt der abgesicherte Weg.
+**Erledigt 09.09.2026** — Spezifikation v0.17. **Am Gerät verifiziert
+(10.09.2026):** Werksflash (Bootloader + App + `BOOTEND`-Fuse) über den Browser
+lief auf echter Hardware durch, inkl. Bootloader→App-Übergabe. Unterwegs ein
+Bug behoben: `stPtrIncBlock` schrieb Seiten ohne `CTRLA.RSD` → Byte-Kollisionen
+auf der Ein-Draht-Leitung (`59710f8`). `pio -t upload` bleibt der abgesicherte
+Weg für Firmware ohne Bootloader.
 
 ---
 

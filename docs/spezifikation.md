@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.21 |
-| Datum | 10.09.2026 |
+| Version | 0.22 |
+| Datum | 11.09.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -435,10 +435,13 @@ nicht überschrieben werden.
 Der Bootloader schaltet den Triac-Treiberpin nie aktiv → der Motor kann während
 eines Updates nicht bestromt werden; er hat einen eigenen Watchdog.
 
-**Status: am Gerät noch nicht verifiziert.** Der Erstflash (Bootloader + App +
-Fuse) läuft über UPDI/J6 — Browser-Werksflasher oder `pymcuprog`. `pio run -e
-attiny1616 -t upload` (App @ 0x0000, ohne Bootloader) bleibt der abgesicherte
-Weg. Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
+**Status.** Der Erstflash (Bootloader + App + Fuse) läuft über UPDI/J6 —
+Browser-Werksflasher oder `pymcuprog`; **dieser Werksflash inkl. der
+Bootloader→App-Übergabe ist am Gerät verifiziert** (10.09.2026). Die
+**Firmware-Verteilung über den Bus** selbst ist noch nicht verifiziert (braucht
+die Master-Hardware). `pio run -e attiny1616 -t upload` (App @ 0x0000, ohne
+Bootloader) bleibt bis dahin der abgesicherte Weg für Firmware-Änderungen.
+Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 
 ---
 
@@ -863,3 +866,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.14 | 01.09.2026 | Kapitel 7.6: MQTT/Home-Assistant-Anbindung vervollständigt. Verfügbarkeits-Topic `<base>/status` mit Last Will (`online`/`offline`, retained) und `availability_topic` in jeder Discovery-Payload → Entities werden bei Ausfall „nicht verfügbar". Zustands-Topics inkl. `text/state` und `mode/state` werden retained gesendet (Stand nach HA-Neustart sofort da). `module/<n>/char` liefert das dargestellte Zeichen statt der Blattnummer (neue Umkehrfunktion `charmap_char`, host-getestet). Beim Verkleinern der Modulzahl werden die Discovery-Configs entfallener Module gelöscht. Keine Hardware-Änderung. |
 | 0.20 | 10.09.2026 | Kapitel 7.5: **statische Web-UI-Demo auf der GitHub Page** (`https://tenofnine.github.io/SmartKroneSplitFlap/demo/`). `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `firmware/master/src/main.cpp` und setzt `tools/webui_demo_shim.html` davor — überlagert `window.fetch` für `/api/*` mit Beispieldaten (10 Module, ein Fehler 0x05), Demo-Banner. Reines Bauartefakt (`.gitignore`), von `pages.yml` und `ci.yml` erzeugt; `check_webui.mjs` prüft das Bundle mit. Keine Firmware-, Schnittstellen- oder Hardware-Änderung. |
 | 0.21 | 10.09.2026 | Kapitel 5.1/8.2: **Master-Trägerboard Rev. 0.2** — Eingangsschutz. (1) Verpolschutz am 5-V-Eingang: P-Kanal-MOSFET Q1 (AO3401A) als High-Side-Schalter + R8 (100 kΩ V_GS); schützt bei vertauschter Klemme die gesamte Kette. (2) RS-485-TVS D2 (SM712/PSM712, 7 V/12 V asymmetrisch) am Master zwischen A/B und GND. Beide LCSC-Basic-Teile (C15127, C32677, C149504). 5-V- und 42-V~-Kreis bleiben vollständig galvanisch getrennt (kein gemeinsamer Trafo, 5 V nicht aus den 42 V~). CHAIN-Pegelwandler U3 als feste Bestückung bestätigt (M-3), R7 bleibt DNP-Reserve. Für U1 keine Edge.Cuts-Aussparung (Modul entnehmbar). `docs/schaltplan-master.md` Rev. 0.2, `symbolpruefung-master.md` (AO3401A + SM712, M-4), ERC 0/0, DRC 0/0. Keine Firmware-Änderung. |
+| 0.22 | 11.09.2026 | Kapitel 5.7: **Browser-UPDI-Werksflasher der Daughter Card am Gerät verifiziert** (10.09.2026) — Chip-Erase, Geräte-ID-Prüfung, Fuse- und Seitenschreiben (`BOOTEND = 0x0C`) sowie die Bootloader→App-Übergabe (IVSEL/Vektortabelle) laufen auf echter Hardware. Grund für den vorherigen Fehlschlag („Timeout: 1/66 B") war eine fehlende `CTRLA.RSD`-Blockschreibsequenz in `updi.js` (Commit `59710f8`, bereits vor dieser Verifikation behoben). Die **Firmware-Verteilung über den Bus selbst** (Kommandos 0x54–0x58, `docs/module-bootloader.md` Bench-Punkte 3–9) bleibt offen, bis die bestellte Master-Hardware aufgebaut ist. Keine Code-Änderung, reine Statuskorrektur in README/Spezifikation/Backlog/`module-bootloader.md`. |
