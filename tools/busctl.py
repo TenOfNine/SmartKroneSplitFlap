@@ -13,8 +13,8 @@ Bootloader-Kommandos (Abschnitt 5.7, GET_VERSION/ENTER_BOOTLOADER/FW_*, 0x54-0x5
 sind mit dabei -- Bench-Test-Checkliste in docs/module-bootloader.md, Punkte 3+.
 
 Adapter ohne automatische Richtungsumschaltung (z. B. ein MAX485-Modul mit
-getrennten DE/RE-Pins): DE und RE bruecken, an RTS des USB-Serial-Adapters,
-dann --rts-rs485 (pyserial schaltet RTS automatisch waehrend des Sendens).
+getrennten DE/RE-Pins): DE und RE bruecken, an RTS (--rts-rs485) oder DTR
+(--dtr-rs485) des USB-Serial-Adapters, je nachdem, was dort herausgefuehrt ist.
 
 Beispiele:
     tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 enum
@@ -165,10 +165,15 @@ class Transport:
 
 
 class SerialTransport(Transport):
-    def __init__(self, port: str, baud: int, rts_rs485: bool = False) -> None:
+    def __init__(self, port: str, baud: int, rts_rs485: bool = False,
+                 dtr_rs485: bool = False) -> None:
         import serial  # nur bei echter Hardware benoetigt
 
+        if rts_rs485 and dtr_rs485:
+            raise ValueError("--rts-rs485 und --dtr-rs485 schliessen sich aus")
+
         self._s = serial.Serial(port, baud, timeout=0)
+        self._dtr_rs485 = dtr_rs485
         if rts_rs485:
             # Fuer Adapter ohne automatische Richtungsumschaltung, z. B. ein
             # MAX485-Modul mit DE+RE gebrueckt und an RTS angeschlossen:
@@ -177,8 +182,21 @@ class SerialTransport(Transport):
             import serial.rs485
 
             self._s.rs485_mode = serial.rs485.RS485Settings()
+        elif dtr_rs485:
+            # Gleiche Idee, aber ueber DTR statt RTS -- fuer Adapter, bei
+            # denen nur DTR herausgefuehrt ist. pyserial kennt dafuer keinen
+            # eingebauten Modus, darum hier von Hand: DTR vor dem Schreiben
+            # aktiv, flush() wartet (tcdrain), bis alles tatsaechlich auf der
+            # Leitung war, danach DTR wieder inaktiv.
+            self._s.dtr = False
 
     def write(self, data: bytes) -> None:
+        if self._dtr_rs485:
+            self._s.dtr = True
+            self._s.write(data)
+            self._s.flush()
+            self._s.dtr = False
+            return
         self._s.write(data)
         self._s.flush()
 
@@ -537,7 +555,8 @@ def build_transport(args: argparse.Namespace) -> Transport:
         return LoopbackTransport()
     if not args.port:
         sys.exit("Kein --port angegeben (oder --sim N / --loopback fuer Tests).")
-    return SerialTransport(args.port, args.baud, rts_rs485=args.rts_rs485)
+    return SerialTransport(args.port, args.baud, rts_rs485=args.rts_rs485,
+                           dtr_rs485=args.dtr_rs485)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -549,6 +568,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rts-rs485", action="store_true",
                     help="RTS steuert DE/RE (Adapter ohne Auto-Richtungsumschaltung, "
                          "z. B. MAX485-Modul mit DE+RE gebrueckt an RTS)")
+    ap.add_argument("--dtr-rs485", action="store_true",
+                    help="wie --rts-rs485, aber ueber DTR statt RTS")
     ap.add_argument("--sim", type=int, metavar="N",
                     help="N simulierte Module (Trockentest ohne Hardware)")
     ap.add_argument("-v", "--verbose", action="store_true", help="Rohrahmen anzeigen")

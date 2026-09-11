@@ -72,10 +72,11 @@ python busctl.py --port /dev/ttyUSB0 version 3             # GET_VERSION (App + 
 python busctl.py --port /dev/ttyUSB0 enterboot 3           # ENTER_BOOTLOADER
 
 # Adapter ohne automatische Sende-/Empfangsumschaltung (z. B. ein MAX485-
-# Modul mit getrennten DE/RE-Pins): DE und RE brücken, an RTS des
-# USB-Serial-Adapters anschließen, dann --rts-rs485 (pyserial schaltet RTS
-# passend zum write() um):
+# Modul mit getrennten DE/RE-Pins): DE und RE brücken, an RTS ODER DTR des
+# USB-Serial-Adapters anschließen (je nachdem, was dort herausgeführt ist),
+# dann --rts-rs485 bzw. --dtr-rs485:
 python busctl.py --port /dev/ttyUSB0 --rts-rs485 enum
+python busctl.py --port /dev/ttyUSB0 --dtr-rs485 enum
 
 # ohne Hardware:
 python busctl.py selftest              # Rahmen-/CRC-Logik
