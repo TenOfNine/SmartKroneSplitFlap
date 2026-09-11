@@ -98,6 +98,12 @@ REST: `GET /api/module/firmware`, `POST /api/module/update` (`{"all":true}` oder
 
 ## Bench-Test-Checkliste (vor dem ersten Einsatz)
 
+> **Verkabelung vorbereitet (11.09.2026):** zwei Daughter Cards vollständig
+> bestückt (alle Anschlüsse gelötet) und per Flachbandkabel in Reihe
+> verbunden, Durchgangsprüfung der Kette ok. Reine Verkabelungs-/
+> Lötprüfung — noch kein Signal auf dem Bus. Deckt Punkte 3–7 vor, sobald
+> die Master-Hardware aufgebaut ist.
+
 1. ✅ **Bootloader isoliert.** `pio run -e bootloader`, per UPDI @ 0x0000 flashen,
    Fuse `BOOTEND = 0x0C` setzen (`pymcuprog write -m fuses -o 8 --values 0x0C`
    oder der Werksflasher). Ohne App: bleibt der Bootloader im Warte-Loop, WDT

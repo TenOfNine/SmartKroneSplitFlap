@@ -60,6 +60,10 @@ Nächste sinnvolle Schritte:
   Sicherung + NTC.
 
 **Firmware am Gerät**
+- **Zwei Daughter Cards bereits bestückt und per Flachbandkabel verkettet,
+  Durchgangsprüfung ok (11.09.2026)** — Verkabelung, noch kein Bus-Signal.
+  Bereit für die Bench-Test-Checkliste (`docs/module-bootloader.md`), sobald
+  die Master-Hardware aufgebaut ist.
 - Master-Firmware (`pio run -e esp32c3`) auf ein echtes Modul flashen — T12/T13
   kompilieren und die Host-Tests laufen, am Gerät ungetestet. Web-Flasher:
   <https://tenofnine.github.io/SmartKroneSplitFlap/> (nachdem Pages aktiviert ist).
