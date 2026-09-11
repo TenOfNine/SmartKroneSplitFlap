@@ -103,6 +103,14 @@ REST: `GET /api/module/firmware`, `POST /api/module/update` (`{"all":true}` oder
 > verbunden, Durchgangsprüfung der Kette ok. Reine Verkabelungs-/
 > Lötprüfung — noch kein Signal auf dem Bus. Deckt Punkte 3–7 vor, sobald
 > die Master-Hardware aufgebaut ist.
+>
+> **`tools/busctl.py` beherrscht seit T17 auch die Bootloader-Kommandos**
+> (`version`/`enterboot`/`fwbegin`/`fwdata`/`fwend`, 0x54–0x58) — Punkte 3+4
+> und mit `fwbegin`/`fwdata`/`fwend` von Hand auch 5–8 lassen sich damit
+> direkt über einen USB-Serial-Adapter (z. B. FTDI + separates RS-485-Modul
+> mit `--rts-rs485`) testen, **ohne** dass die Master-Hardware aufgebaut sein
+> muss. `POST /api/module/update` (Master-Web-UI) bleibt der bequeme Weg für
+> den Praxisbetrieb mit mehreren Karten.
 
 1. ✅ **Bootloader isoliert.** `pio run -e bootloader`, per UPDI @ 0x0000 flashen,
    Fuse `BOOTEND = 0x0C` setzen (`pymcuprog write -m fuses -o 8 --values 0x0C`
@@ -117,9 +125,10 @@ REST: `GET /api/module/firmware`, `POST /api/module/update` (`{"all":true}` oder
    1-ms-Timer-Interrupt läuft also). RS-485-Kommunikation + Motorsteuerung im
    Zusammenspiel mit dem Master noch offen (Punkte 3+, Master-Hardware
    bestellt, noch nicht aufgebaut).
-3. **`CMD_GET_VERSION`.** Master fragt Version ab, bekommt `1 · 1 · 0 · 0x03 · x`
-   (App gültig + Bootloader vorhanden).
-4. **`CMD_ENTER_BOOTLOADER`.** Modul startet in den Bootloader und bleibt dort.
+3. **`CMD_GET_VERSION`.** Master (oder `busctl.py version <addr>`) fragt Version
+   ab, bekommt `1 · 1 · 0 · 0x03 · x` (App gültig + Bootloader vorhanden).
+4. **`CMD_ENTER_BOOTLOADER`.** Master (oder `busctl.py enterboot <addr>`) schickt
+   die Karte in den Bootloader; sie bleibt dort.
 5. **Update über den Bus.** `POST /api/module/update` für eine Karte. Verlauf im
    Log; nach `FW_END` startet die Karte neu, `GET_VERSION` bestätigt die Version.
 6. **Abbruch mitten im Transfer** (Karte kurz stromlos): App bleibt ungültig,

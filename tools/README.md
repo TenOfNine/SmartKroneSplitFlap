@@ -54,6 +54,11 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 ## busctl.py
 
 Für die stufenweise Inbetriebnahme nach `docs/spezifikation.md` Kapitel 10.
+Enthält seit T17 auch die Bootloader-Kommandos (5.7, `GET_VERSION`/
+`ENTER_BOOTLOADER`/`FW_BEGIN`/`FW_DATA`/`FW_END`, 0x54–0x58) — damit lassen
+sich die Bench-Punkte 3+4 aus `docs/module-bootloader.md` (und mit `fwbegin`/
+`fwdata`/`fwend` von Hand auch 5–8) direkt am PC gegen echte Karten prüfen,
+ganz ohne Master-Hardware.
 
 ```bash
 source ../.venv/bin/activate
@@ -63,12 +68,20 @@ python busctl.py --port /dev/ttyUSB0 enum
 python busctl.py --port /dev/ttyUSB0 status 3
 python busctl.py --port /dev/ttyUSB0 show 13 3 40 1 1     # SET_ALL + GO
 python busctl.py --port /dev/ttyUSB0 sniff 10             # Rohrahmen mitschneiden
+python busctl.py --port /dev/ttyUSB0 version 3             # GET_VERSION (App + Bootloader)
+python busctl.py --port /dev/ttyUSB0 enterboot 3           # ENTER_BOOTLOADER
+
+# Adapter ohne automatische Sende-/Empfangsumschaltung (z. B. ein MAX485-
+# Modul mit getrennten DE/RE-Pins): DE und RE brücken, an RTS des
+# USB-Serial-Adapters anschließen, dann --rts-rs485 (pyserial schaltet RTS
+# passend zum write() um):
+python busctl.py --port /dev/ttyUSB0 --rts-rs485 enum
 
 # ohne Hardware:
 python busctl.py selftest              # Rahmen-/CRC-Logik
 python busctl.py --sim 3 enum          # 3 simulierte Module
 python busctl.py --sim 3 -v status 2   # -v zeigt die Rohrahmen
-python test_busctl.py                  # 13 Tests
+python test_busctl.py                  # Tests
 ```
 
 Unterkommandos: `enum`, `status`, `uid`, `ping`, `set`, `show`, `home`, `stop`,

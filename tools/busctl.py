@@ -9,11 +9,20 @@ ohne Hardware -- einen Loopback (TX auf RX).
 Das Rahmenformat ist dieselbe Spezifikation wie in firmware/module/lib/protocol
 (5.3): Praeambel 0xAA 0x55, LEN, CMD, ADDR, PAYLOAD, CRC16/MODBUS little endian.
 
+Bootloader-Kommandos (Abschnitt 5.7, GET_VERSION/ENTER_BOOTLOADER/FW_*, 0x54-0x58)
+sind mit dabei -- Bench-Test-Checkliste in docs/module-bootloader.md, Punkte 3+.
+
+Adapter ohne automatische Richtungsumschaltung (z. B. ein MAX485-Modul mit
+getrennten DE/RE-Pins): DE und RE bruecken, an RTS des USB-Serial-Adapters,
+dann --rts-rs485 (pyserial schaltet RTS automatisch waehrend des Sendens).
+
 Beispiele:
-    tools/busctl.py --port /dev/ttyUSB0 enum
-    tools/busctl.py --port /dev/ttyUSB0 status 3
-    tools/busctl.py --port /dev/ttyUSB0 show 13 3 40 1 1
-    tools/busctl.py --port /dev/ttyUSB0 sniff 10
+    tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 enum
+    tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 status 3
+    tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 show 13 3 40 1 1
+    tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 sniff 10
+    tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 version 3
+    tools/busctl.py --port /dev/ttyUSB0 --rts-rs485 enterboot 3
     tools/busctl.py selftest          # ohne Hardware
 """
 
@@ -38,11 +47,22 @@ CMD = {
     "SET": 0x01, "SET_ALL": 0x02, "GO": 0x03, "STOP": 0x04,
     "GET_STATUS": 0x10, "HOME": 0x20, "SET_CONFIG": 0x30, "GET_CONFIG": 0x31,
     "IDENTIFY": 0x40, "ENUM_RESET": 0x50, "ENUM_ASSIGN": 0x51,
-    "ENUM_DONE": 0x52, "GET_UID": 0x53, "PING": 0xF0,
+    "ENUM_DONE": 0x52, "GET_UID": 0x53,
+    # Firmware-Verteilung ueber den Bus (5.7, experimentell) -- Spiegel von
+    # firmware/module/lib/protocol/protocol.h, Bootloader-Bench-Checkliste
+    # in docs/module-bootloader.md.
+    "GET_VERSION": 0x54, "ENTER_BOOTLOADER": 0x55,
+    "FW_BEGIN": 0x56, "FW_DATA": 0x57, "FW_END": 0x58,
+    "PING": 0xF0,
 }
 CMD_NAME = {v: k for k, v in CMD.items()}
 
 STATE_NAME = {0: "idle", 1: "homing", 2: "moving", 3: "fehler"}
+
+# Flags in der GET_VERSION-Antwort, Byte 3 (protocol.h PROTO_VER_FLAG_*).
+VER_FLAG_BOOTLOADER = 0x01
+VER_FLAG_APP_VALID = 0x02
+FW_DATA_CHUNK = 30  # PROTO_FW_CHUNK: 2 Byte Offset + Daten <= PROTO_MAX_PAYLOAD (32)
 
 
 def crc16(data: bytes) -> int:
@@ -145,10 +165,18 @@ class Transport:
 
 
 class SerialTransport(Transport):
-    def __init__(self, port: str, baud: int) -> None:
+    def __init__(self, port: str, baud: int, rts_rs485: bool = False) -> None:
         import serial  # nur bei echter Hardware benoetigt
 
         self._s = serial.Serial(port, baud, timeout=0)
+        if rts_rs485:
+            # Fuer Adapter ohne automatische Richtungsumschaltung, z. B. ein
+            # MAX485-Modul mit DE+RE gebrueckt und an RTS angeschlossen:
+            # pyserial haelt RTS waehrend write() aktiv (Senden) und sonst
+            # inaktiv (Empfangen) -- kein manuelles Timing noetig.
+            import serial.rs485
+
+            self._s.rs485_mode = serial.rs485.RS485Settings()
 
     def write(self, data: bytes) -> None:
         self._s.write(data)
@@ -241,6 +269,13 @@ class _SimModule:
             return Frame(CMD["GET_UID"], self.address, self.uid)
         if f.cmd == CMD["PING"]:
             return Frame(CMD["PING"], self.address, bytes([1]))
+        if f.cmd == CMD["GET_VERSION"]:
+            # Spiegelt firmware/module/src/main.c: proto=1, App-Version,
+            # Flags (App gueltig, kein simulierter Bootloader), bl_version=0.
+            v = bytes([1, 1, 0, VER_FLAG_APP_VALID, 0])
+            return Frame(CMD["GET_VERSION"], self.address, v)
+        if f.cmd == CMD["ENTER_BOOTLOADER"]:
+            return None  # echtes Modul antwortet nicht, es startet per SW-Reset neu
         if f.cmd in (CMD["HOME"], CMD["STOP"], CMD["SET_CONFIG"]):
             return Frame(f.cmd, self.address)
         return None
@@ -362,6 +397,57 @@ class Bus:
         self.recv()
         return assigned
 
+    def get_version(self, addr: int) -> dict | None:
+        """GET_VERSION (0x54) -- laeuft sowohl an der App als auch am
+        Bootloader (docs/module-bootloader.md Bench-Punkt 3)."""
+        self.send(CMD["GET_VERSION"], addr)
+        for f in self.recv():
+            if f.cmd == CMD["GET_VERSION"] and len(f.payload) >= 5:
+                p = f.payload
+                return {
+                    "addr": addr, "proto": p[0],
+                    "app_major": p[1], "app_minor": p[2],
+                    "bootloader": bool(p[3] & VER_FLAG_BOOTLOADER),
+                    "app_valid": bool(p[3] & VER_FLAG_APP_VALID),
+                    "bl_version": p[4],
+                }
+        return None
+
+    def enter_bootloader(self, addr: int) -> None:
+        """ENTER_BOOTLOADER (0x55) -- Karte setzt den Marker und startet per
+        SW-Reset neu, keine Antwort spezifiziert (Bench-Punkt 4)."""
+        self.send(CMD["ENTER_BOOTLOADER"], addr)
+        self.recv()
+
+    def fw_begin(self, addr: int, length: int, crc: int) -> bool:
+        """FW_BEGIN (0x56): [len16][crc16] -> [0x01 ok | 0x00 nak]."""
+        payload = bytes([length & 0xFF, (length >> 8) & 0xFF,
+                          crc & 0xFF, (crc >> 8) & 0xFF])
+        self.send(CMD["FW_BEGIN"], addr, payload)
+        for f in self.recv():
+            if f.cmd == CMD["FW_BEGIN"] and f.payload:
+                return f.payload[0] == 0x01
+        return False
+
+    def fw_data(self, addr: int, offset: int, chunk: bytes) -> bool:
+        """FW_DATA (0x57): [off16][bis zu 30 Byte] -> [0x01 ok | 0x00 nak]."""
+        if len(chunk) > FW_DATA_CHUNK:
+            raise ValueError(f"FW_DATA: hoechstens {FW_DATA_CHUNK} Byte je Bruchstueck")
+        payload = bytes([offset & 0xFF, (offset >> 8) & 0xFF]) + chunk
+        self.send(CMD["FW_DATA"], addr, payload)
+        for f in self.recv():
+            if f.cmd == CMD["FW_DATA"] and f.payload:
+                return f.payload[0] == 0x01
+        return False
+
+    def fw_end(self, addr: int) -> int | None:
+        """FW_END (0x58) -> [0x01 ok | Fehlercode]."""
+        self.send(CMD["FW_END"], addr)
+        for f in self.recv():
+            if f.cmd == CMD["FW_END"] and f.payload:
+                return f.payload[0]
+        return None
+
     def sniff(self, seconds: float) -> list[tuple[float, Frame]]:
         start = time.monotonic()
         seen: list[tuple[float, Frame]] = []
@@ -433,6 +519,11 @@ def selftest() -> int:
     st = sim.status(1)
     check(st is not None and st["ziel"] == 13, "SET_ALL + GO wirkt auf Modul 1")
 
+    # 7. GET_VERSION (5.7, Bootloader-Bench-Punkt 3)
+    ver = sim.get_version(1)
+    check(ver is not None and ver["proto"] == 1 and ver["app_valid"],
+          "GET_VERSION von Modul 1")
+
     print("\n" + ("selftest bestanden" if ok else "selftest FEHLGESCHLAGEN"))
     return 0 if ok else 1
 
@@ -446,7 +537,7 @@ def build_transport(args: argparse.Namespace) -> Transport:
         return LoopbackTransport()
     if not args.port:
         sys.exit("Kein --port angegeben (oder --sim N / --loopback fuer Tests).")
-    return SerialTransport(args.port, args.baud)
+    return SerialTransport(args.port, args.baud, rts_rs485=args.rts_rs485)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -455,6 +546,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--port", help="serieller Port des USB-RS485-Adapters")
     ap.add_argument("--baud", type=int, default=115200)
     ap.add_argument("--loopback", action="store_true", help="TX auf RX, ohne Hardware")
+    ap.add_argument("--rts-rs485", action="store_true",
+                    help="RTS steuert DE/RE (Adapter ohne Auto-Richtungsumschaltung, "
+                         "z. B. MAX485-Modul mit DE+RE gebrueckt an RTS)")
     ap.add_argument("--sim", type=int, metavar="N",
                     help="N simulierte Module (Trockentest ohne Hardware)")
     ap.add_argument("-v", "--verbose", action="store_true", help="Rohrahmen anzeigen")
@@ -479,6 +573,21 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("flags", type=lambda s: int(s, 0))
     p = sub.add_parser("sniff", help="Rohrahmen mitschneiden")
     p.add_argument("seconds", type=float, nargs="?", default=5.0)
+
+    p = sub.add_parser("version", help="Version abfragen (GET_VERSION, App + Bootloader)")
+    p.add_argument("addr", type=int)
+    p = sub.add_parser("enterboot", help="Karte in den Bootloader schicken (ENTER_BOOTLOADER)")
+    p.add_argument("addr", type=int)
+    p = sub.add_parser("fwbegin", help="Update ankuendigen (FW_BEGIN, nur im Bootloader)")
+    p.add_argument("addr", type=int)
+    p.add_argument("length", type=int, help="Laenge des Images in Byte")
+    p.add_argument("crc", type=lambda s: int(s, 0), help="CRC16/MODBUS des Images")
+    p = sub.add_parser("fwdata", help="Ein Bruchstueck senden (FW_DATA, <=30 Byte Hex)")
+    p.add_argument("addr", type=int)
+    p.add_argument("offset", type=int)
+    p.add_argument("hexbytes", help="Nutzdaten als Hex-String, z. B. 0011aaff")
+    p = sub.add_parser("fwend", help="Update abschliessen (FW_END)")
+    p.add_argument("addr", type=int)
 
     args = ap.parse_args(argv)
 
@@ -517,6 +626,25 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "sniff":
             for t, f in bus.sniff(args.seconds):
                 print(f"  {t:7.3f}s  {f}")
+        elif args.cmd == "version":
+            v = bus.get_version(args.addr)
+            print(v if v else "keine Antwort")
+        elif args.cmd == "enterboot":
+            bus.enter_bootloader(args.addr)
+            print("ENTER_BOOTLOADER gesendet (Karte startet neu)")
+        elif args.cmd == "fwbegin":
+            ok = bus.fw_begin(args.addr, args.length, args.crc)
+            print("ACK" if ok else "NAK / keine Antwort")
+        elif args.cmd == "fwdata":
+            chunk = bytes.fromhex(args.hexbytes)
+            ok = bus.fw_data(args.addr, args.offset, chunk)
+            print("ACK" if ok else "NAK / keine Antwort")
+        elif args.cmd == "fwend":
+            r = bus.fw_end(args.addr)
+            if r is None:
+                print("keine Antwort")
+            else:
+                print("ACK" if r == 0x01 else f"Fehlercode 0x{r:02X}")
     finally:
         bus.transport.close()
     return 0

@@ -59,6 +59,19 @@ class TestFrame(unittest.TestCase):
         frames = p.feed_bytes(bytes([0x00, 0xFF, 0xAA, 0x13]) + encode(CMD["STOP"], 7))
         self.assertEqual(frames, [Frame(CMD["STOP"], 7, b"")])
 
+    def test_bootloader_cmds_roundtrip(self):
+        # 5.7: GET_VERSION/ENTER_BOOTLOADER/FW_BEGIN/FW_DATA/FW_END, 0x54-0x58
+        p = Parser()
+        for cmd, addr, pl in [
+            (CMD["GET_VERSION"], 3, b""),
+            (CMD["ENTER_BOOTLOADER"], 3, b""),
+            (CMD["FW_BEGIN"], 3, bytes([0x00, 0x10, 0x34, 0x12])),
+            (CMD["FW_DATA"], 3, bytes([0, 0]) + bytes(range(30))),
+            (CMD["FW_END"], 3, b""),
+        ]:
+            frames = p.feed_bytes(encode(cmd, addr, pl))
+            self.assertEqual(frames, [Frame(cmd, addr, pl)])
+
 
 class TestSim(unittest.TestCase):
     def test_enumeration(self):
@@ -82,6 +95,20 @@ class TestSim(unittest.TestCase):
         bus = Bus(SimBusTransport(2))
         self.assertEqual(bus.ping(2), 1)
         self.assertTrue(bus.set_target(1, 20))
+
+    def test_get_version(self):
+        bus = Bus(SimBusTransport(2))
+        v = bus.get_version(2)
+        self.assertIsNotNone(v)
+        self.assertEqual(v["proto"], 1)
+        self.assertTrue(v["app_valid"])
+        self.assertFalse(v["bootloader"])  # simuliertes Modul, kein Bootloader
+
+    def test_enter_bootloader_no_crash(self):
+        # Das simulierte Modul antwortet nicht (wie die echte Karte) -- der
+        # Aufruf darf trotzdem nicht blockieren oder werfen.
+        bus = Bus(SimBusTransport(1))
+        bus.enter_bootloader(1)
 
 
 class TestSelftest(unittest.TestCase):
