@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 612 82" width="612" height="82">
+  <title>KRONE REW</title>
+  <defs>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="2" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- K -->
+  <g transform="translate(0,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">K</text>
+  </g>
+  <!-- R -->
+  <g transform="translate(68,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">R</text>
+  </g>
+  <!-- O -->
+  <g transform="translate(136,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">O</text>
+  </g>
+  <!-- N -->
+  <g transform="translate(204,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">N</text>
+  </g>
+  <!-- E -->
+  <g transform="translate(272,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">E</text>
+  </g>
+  <!-- space -->
+  <g transform="translate(340,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+  </g>
+  <!-- R -->
+  <g transform="translate(408,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">R</text>
+  </g>
+  <!-- E -->
+  <g transform="translate(476,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">E</text>
+  </g>
+  <!-- W -->
+  <g transform="translate(544,0)">
+    <rect x="4" y="4" width="52" height="74" rx="10" fill="#0b0c0e" stroke="#262a31" stroke-width="1.6"/>
+    <rect x="9" y="9" width="42" height="64" rx="7" fill="#131519"/>
+    <rect x="9" y="39.5" width="42" height="3" fill="#0b0c0e"/>
+    <rect x="9" y="39.3" width="42" height="1" fill="#000000" opacity=".5"/>
+    <rect x="9" y="42.5" width="42" height="1" fill="#454b54" opacity=".6"/>
+    <text x="30" y="54" text-anchor="middle" font-family="'IBM Plex Mono',ui-monospace,monospace" font-weight="700" font-size="38" fill="#f2b03d" filter="url(#glow)">W</text>
+  </g>
+</svg>
