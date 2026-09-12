@@ -164,6 +164,17 @@ class Transport:
         pass
 
 
+
+# Sicherheitsabstand vor dem ersten und nach dem letzten Byte, bevor die
+# Richtungsleitung umschaltet: Setzen von RTS/DTR ist ein USB-Control-Transfer
+# zum Adapter (z. B. FTDI) und wirkt nicht synchron zur Byte-Uebertragung, und
+# flush()/tcdrain() garantiert nur, dass der Kernel-Treiber die Daten an den
+# Chip uebergeben hat -- nicht, dass sie ihn schon tatsaechlich verlassen
+# haben. Ohne Vorlauf kappt das die ersten Bytes (bei uns die Praeambel),
+# ohne Nachlauf die letzten (bei uns die CRC) -- das Modul verwirft den
+# Frame dann still, in beiden Faellen ohne jede sichtbare Fehlermeldung.
+RS485_TX_SETTLE_S = 0.003
+
 class SerialTransport(Transport):
     def __init__(self, port: str, baud: int, rts_rs485: bool = False,
                  dtr_rs485: bool = False) -> None:
@@ -178,23 +189,28 @@ class SerialTransport(Transport):
             # Fuer Adapter ohne automatische Richtungsumschaltung, z. B. ein
             # MAX485-Modul mit DE+RE gebrueckt und an RTS angeschlossen:
             # pyserial haelt RTS waehrend write() aktiv (Senden) und sonst
-            # inaktiv (Empfangen) -- kein manuelles Timing noetig.
+            # inaktiv (Empfangen). delay_before_rx gibt den oben beschriebenen
+            # Sicherheitsabstand, bevor RTS zurueck auf Empfang faellt.
             import serial.rs485
 
-            self._s.rs485_mode = serial.rs485.RS485Settings()
+            self._s.rs485_mode = serial.rs485.RS485Settings(
+                delay_before_tx=RS485_TX_SETTLE_S,
+                delay_before_rx=RS485_TX_SETTLE_S)
         elif dtr_rs485:
             # Gleiche Idee, aber ueber DTR statt RTS -- fuer Adapter, bei
             # denen nur DTR herausgefuehrt ist. pyserial kennt dafuer keinen
             # eingebauten Modus, darum hier von Hand: DTR vor dem Schreiben
-            # aktiv, flush() wartet (tcdrain), bis alles tatsaechlich auf der
-            # Leitung war, danach DTR wieder inaktiv.
+            # aktiv, flush() wartet (tcdrain), danach RS485_TX_SETTLE_S
+            # Sicherheitsabstand, erst dann DTR wieder inaktiv.
             self._s.dtr = False
 
     def write(self, data: bytes) -> None:
         if self._dtr_rs485:
             self._s.dtr = True
+            time.sleep(RS485_TX_SETTLE_S)  # Vorlaufzeit -- DTR muss angekommen sein
             self._s.write(data)
             self._s.flush()
+            time.sleep(RS485_TX_SETTLE_S)  # Nachlaufzeit -- siehe oben
             self._s.dtr = False
             return
         self._s.write(data)
