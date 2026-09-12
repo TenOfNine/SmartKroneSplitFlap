@@ -677,6 +677,27 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div id=modfwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden"><div id=modfwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
 <p class=hint id=modfwlog style=margin-top:8px></p>
 </div>
+
+<div class=sect><h3>Modul-Konfiguration</h3>
+<p class=hint>Blattzahl, Blatt-Offset (Ausrichtung zum Leerbildimpuls, Spez. 6.3 / O-6) und Abschaltvorhalt je Modul. Erst „Lesen", damit die Felder vom aktuellen Stand der Karte ausgehen.</p>
+<div class="row mt"><div class=field style=width:90px><span class=lbl>Adresse</span><input type=number id=cfgaddr min=1 max=250 value=1></div>
+<button class=btn id=cfgread style=align-self:flex-end>Lesen</button>
+<span id=cfghint class=hint style=margin:0 0 2px;align-self:flex-end></span></div>
+<div class="grid c2" id=cfgform hidden style=margin-top:12px>
+<div class=field><span class=lbl>Blattzahl</span><select id=cfgblattzahl><option value=40>40</option><option value=64>64</option><option value=80>80</option></select></div>
+<div class=field><span class=lbl>Offset</span><input type=number id=cfgoffset min=0 max=79></div>
+<div class=field><span class=lbl>Abschaltvorhalt (ms)</span><input type=number id=cfgvorhalt min=0 max=60></div>
+</div>
+<div id=cfgflags hidden style=margin-top:12px>
+<div class=trow><label class=switch><input type=checkbox id=cfgf0><span class=t></span></label>
+<div class=tx><b>Positionsspeicherung</b><span>Position nach jedem Stillstand ins EEPROM schreiben (Ringpuffer über 16 Zellen).</span></div></div>
+<div class=trow><label class=switch><input type=checkbox id=cfgf1><span class=t></span></label>
+<div class=tx><b>Autohoming beim Start</b><span>Nach Kaltstart selbsttätig homen, statt auf ein Kommando zu warten.</span></div></div>
+<div class=trow><label class=switch><input type=checkbox id=cfgf2><span class=t></span></label>
+<div class=tx><b>Triac-Polarität invertiert</b><span>Ausgangspolarität an PA7 tauschen (Quelle/Senke, je nach O-2).</span></div></div>
+</div>
+<div class="row mt"><button class="btn primary" id=cfgwrite disabled>Speichern</button></div>
+</div>
 </div></section>
 </div></div>
 <div id=toast></div>
@@ -960,6 +981,32 @@ $("#modfwlog").textContent=(s.busy?`läuft: Modul ${s.cur} · ${s.progress}% · 
 if(s.busy){setTimeout(pollModFw,700)}else{_modfwBusy=false;setTimeout(()=>{$("#modfwbar").style.display="none";loadModFw()},1500)}
 }
 
+// ── Modul-Konfiguration ──
+$("#cfgread").onclick=async()=>{
+const addr=+$("#cfgaddr").value;
+$("#cfghint").textContent="liest …";
+try{await P("/api/module",{addr,action:"get_config"})}catch(e){return toast("Anfrage fehlgeschlagen")}
+setTimeout(()=>pollCfg(addr),250);
+};
+async function pollCfg(addr){
+let c;try{c=await J("/api/module/config?addr="+addr)}catch(e){return}
+if(!c.known){$("#cfghint").textContent="keine Antwort von Adr "+addr;return}
+$("#cfgblattzahl").value=c.blattzahl;$("#cfgoffset").value=c.offset;$("#cfgvorhalt").value=c.vorhalt;
+$("#cfgf0").checked=!!(c.flags&1);$("#cfgf1").checked=!!(c.flags&2);$("#cfgf2").checked=!!(c.flags&4);
+$("#cfgform").hidden=false;$("#cfgflags").hidden=false;$("#cfgwrite").disabled=false;
+$("#cfghint").textContent="Adr "+addr+" gelesen";
+}
+$("#cfgwrite").onclick=async()=>{
+const addr=+$("#cfgaddr").value;
+const flags=(+$("#cfgf0").checked)|(+$("#cfgf1").checked<<1)|(+$("#cfgf2").checked<<2);
+const body={addr,action:"set_config",blattzahl:+$("#cfgblattzahl").value,
+  offset:+$("#cfgoffset").value,vorhalt:+$("#cfgvorhalt").value,flags};
+try{await P("/api/module",body)}catch(e){return toast("Speichern fehlgeschlagen")}
+toast("Konfiguration an Adr "+addr+" gesendet");
+$("#cfghint").textContent="prüfe …";
+setTimeout(()=>pollCfg(addr),250);
+};
+
 // ── Poll-Schleifen ──
 async function refresh(){
 try{st=await J("/api/status")}catch(e){}
@@ -1208,8 +1255,33 @@ static void handle_module()
     if (!strcmp(a, "home"))          busmaster_home(&g_bus, addr);
     else if (!strcmp(a, "stop"))     busmaster_stop(&g_bus, addr);
     else if (!strcmp(a, "identify")) busmaster_identify(&g_bus, addr, doc["s"] | 5);
+    else if (!strcmp(a, "get_config")) busmaster_poll_config(&g_bus, addr, millis());
+    else if (!strcmp(a, "set_config"))
+        busmaster_set_config(&g_bus, addr, doc["blattzahl"] | 40, doc["offset"] | 0,
+                             doc["vorhalt"] | 0, doc["flags"] | 0);
     else { send_json(400, "{\"error\":\"action\"}"); return; }
     ok_json();
+}
+
+/* Letzter per CMD_GET_CONFIG gelesener Stand (ausgeloest ueber /api/module
+ * Aktion "get_config"); rein lesend, keine eigene Buskommunikation hier. */
+static void handle_module_config()
+{
+    const uint8_t addr = web.hasArg("addr") ? (uint8_t)web.arg("addr").toInt() : 0;
+    JsonDocument d;
+    if (addr < PROTO_ADDR_MIN || addr > BUSMASTER_MAX_MODULES) {
+        d["known"] = false;
+    } else {
+        const bm_module_t &m = g_bus.mod[addr - 1];
+        d["known"]     = m.cfg_known;
+        d["blattzahl"] = m.cfg_blattzahl;
+        d["offset"]    = m.cfg_offset;
+        d["vorhalt"]   = m.cfg_vorhalt;
+        d["flags"]     = m.cfg_flags;
+    }
+    char out[128];
+    serializeJson(d, out, sizeof(out));
+    send_json(200, out);
 }
 
 static void handle_enumerate()
@@ -1663,6 +1735,7 @@ static void web_begin()
     web.on("/api/home",      HTTP_POST, guard(handle_home));
     web.on("/api/selftest",  HTTP_POST, guard(handle_selftest));
     web.on("/api/module",    HTTP_POST, guard(handle_module));
+    web.on("/api/module/config", HTTP_GET, guard(handle_module_config));
     web.on("/api/enumerate", HTTP_POST, guard(handle_enumerate));
     web.on("/api/module/firmware",      HTTP_GET,  guard(handle_module_firmware));
     web.on("/api/module/update",        HTTP_POST, guard(handle_module_update));

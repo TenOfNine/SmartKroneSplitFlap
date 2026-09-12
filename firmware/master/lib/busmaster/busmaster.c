@@ -72,6 +72,15 @@ void busmaster_poll_version(busmaster_t *bm, uint8_t addr, uint32_t now_ms)
     expect(bm, CMD_GET_VERSION, addr, now_ms);
 }
 
+void busmaster_poll_config(busmaster_t *bm, uint8_t addr, uint32_t now_ms)
+{
+    if (addr < PROTO_ADDR_MIN || addr > PROTO_ADDR_MAX || bm->awaiting) {
+        return;
+    }
+    send(bm, CMD_GET_CONFIG, addr, NULL, 0);
+    expect(bm, CMD_GET_CONFIG, addr, now_ms);
+}
+
 void busmaster_home(busmaster_t *bm, uint8_t addr)
 {
     send(bm, CMD_HOME, addr, NULL, 0);
@@ -104,6 +113,7 @@ void busmaster_start_enumeration(busmaster_t *bm, uint32_t now_ms)
         bm->mod[i].app_ver = 0;
         bm->mod[i].ver_flags = 0;
         bm->mod[i].ver_known = false;
+        bm->mod[i].cfg_known = false;
     }
     bm->module_count = 0;
     bm->chain_active = true;
@@ -208,6 +218,18 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
             m->app_ver = (uint16_t)((f->payload[1] << 8) | f->payload[2]);
             m->ver_flags = f->payload[3];
             m->ver_known = true;
+        }
+    } else if (f->cmd == CMD_GET_CONFIG) {
+        if (f->payload_len < 4) {
+            return;  /* eigenes Echo (unser GET_CONFIG traegt kein Payload) */
+        }
+        if (f->addr >= PROTO_ADDR_MIN && f->addr <= BUSMASTER_MAX_MODULES) {
+            bm_module_t *m = &bm->mod[f->addr - 1u];
+            m->cfg_blattzahl = f->payload[0];
+            m->cfg_offset    = f->payload[1];
+            m->cfg_vorhalt   = f->payload[2];
+            m->cfg_flags     = f->payload[3];
+            m->cfg_known     = true;
         }
     }
     bm->awaiting = false;

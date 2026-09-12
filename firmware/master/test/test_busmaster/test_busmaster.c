@@ -195,6 +195,25 @@ static void test_enumeration_two_modules(void)
     TEST_ASSERT_FALSE(bm.mod[2].online);
 }
 
+static void test_poll_config_updates_table(void)
+{
+    busmaster_poll_config(&bm, 3, 0);
+    proto_frame_t f;
+    TEST_ASSERT_TRUE(nth_frame(0, &f));
+    TEST_ASSERT_EQUAL_HEX8(CMD_GET_CONFIG, f.cmd);
+    TEST_ASSERT_EQUAL_HEX8(3, f.addr);
+
+    const uint8_t cfg[4] = { 40, 17, 12, 0x03 };
+    inject(&bm, CMD_GET_CONFIG, 3, cfg, 4, 1);
+
+    TEST_ASSERT_TRUE(bm.mod[2].cfg_known);
+    TEST_ASSERT_EQUAL_UINT8(40, bm.mod[2].cfg_blattzahl);
+    TEST_ASSERT_EQUAL_UINT8(17, bm.mod[2].cfg_offset);
+    TEST_ASSERT_EQUAL_UINT8(12, bm.mod[2].cfg_vorhalt);
+    TEST_ASSERT_EQUAL_HEX8(0x03, bm.mod[2].cfg_flags);
+    TEST_ASSERT_FALSE(bm.awaiting);
+}
+
 static void test_set_config_payload(void)
 {
     busmaster_set_config(&bm, 4, 40, 5, 12, 0x03);
@@ -214,6 +233,7 @@ int main(void)
     RUN_TEST(test_own_echo_does_not_swallow_response);
     RUN_TEST(test_status_timeout_retries_then_offline);
     RUN_TEST(test_enumeration_two_modules);
+    RUN_TEST(test_poll_config_updates_table);
     RUN_TEST(test_set_config_payload);
     return UNITY_END();
 }

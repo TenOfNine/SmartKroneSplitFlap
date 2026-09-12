@@ -39,6 +39,12 @@ typedef struct {
     uint16_t app_ver;      /* (major<<8)|minor, 0 = unbekannt   */
     uint8_t  ver_flags;    /* PROTO_VER_FLAG_*                    */
     bool     ver_known;
+    /* aus CMD_GET_CONFIG (Spezifikation 5.4 / 6.3) */
+    uint8_t  cfg_blattzahl;
+    uint8_t  cfg_offset;
+    uint8_t  cfg_vorhalt;
+    uint8_t  cfg_flags;
+    bool     cfg_known;
 } bm_module_t;
 
 typedef enum {
@@ -89,6 +95,9 @@ void busmaster_poll_status(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
 
 /* CMD_GET_VERSION an ein Modul; die Antwort fuellt mod[addr-1].app_ver/ver_flags. */
 void busmaster_poll_version(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
+
+/* CMD_GET_CONFIG an ein Modul; die Antwort fuellt mod[addr-1].cfg_*. */
+void busmaster_poll_config(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
 
 /* HOME / STOP; addr 0 = Broadcast. */
 void busmaster_home(busmaster_t *bm, uint8_t addr);
