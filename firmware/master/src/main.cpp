@@ -496,6 +496,13 @@ td.mono{font-family:var(--mono)}td .cm{font:700 14px/1 var(--mono);color:var(--a
 .wifi .lock{color:var(--faint);font-size:12px}
 .sect{border-top:1px solid var(--line);padding-top:18px;margin-top:18px}.sect:first-child{border-top:0;padding-top:0;margin-top:0}
 .sect h3{font-size:13px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.grp{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);margin-bottom:12px}
+.grp>summary{cursor:pointer;list-style:none;padding:16px;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:space-between;user-select:none}
+.grp>summary::-webkit-details-marker{display:none}
+.grp>summary::after{content:"›";display:inline-block;transform:rotate(90deg);color:var(--faint);transition:transform .15s;font-size:18px;line-height:1}
+.grp[open]>summary{border-bottom:1px solid var(--line)}
+.grp[open]>summary::after{transform:rotate(-90deg)}
+.grp>.grpbody{padding:18px 16px}
 .kv{display:grid;grid-template-columns:150px 1fr;gap:8px 16px;font-size:13px}.kv dt{color:var(--dim)}.kv dd{margin:0;font-family:var(--mono)}
 .hint{font-size:12px;color:var(--faint);margin-top:8px}.hint.warn{color:var(--warn)}
 code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);border-radius:5px;padding:.1em .4em}
@@ -566,7 +573,9 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <p class=hint>Ringpuffer, 32 Einträge im RAM. Zeitstempel relativ zum Systemstart (keine gepufferte Uhr).</p>
 </section>
 
-<section class=view data-v=set><div class=card>
+<section class=view data-v=set>
+
+<details class=grp><summary>Netzwerk</summary><div class=grpbody>
 <div class=sect><h3><span class=dot id=wdot></span> WLAN</h3>
 <dl class=kv id=wkv></dl>
 <div class="row mt"><button class="btn sm" id=wscan>Netze suchen</button>
@@ -601,28 +610,9 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class="row" style=margin-top:16px><input type=datetime-local id=mtime style=max-width:240px>
 <button class=btn id=setclock>Uhr manuell setzen</button></div>
 <p class=hint id=timehint></p></div>
+</div></details>
 
-<div class=sect><h3><span class=dot id=mqdot></span> MQTT / Home Assistant</h3>
-<div class=trow><label class=switch><input type=checkbox id=cf_mqtt_enabled checked><span class=t></span></label>
-<div class=tx><b>MQTT aktiv</b><span>Anbindung an Home Assistant per Auto-Discovery.</span></div></div>
-<div class=collapse id=mqf><div class="grid c2">
-<div class=field><span class=lbl>Broker</span><input type=text id=cf_mqtt_host></div>
-<div class=field><span class=lbl>Port</span><input type=number id=cf_mqtt_port></div>
-<div class=field><span class=lbl>Benutzer</span><input type=text id=cf_mqtt_user></div>
-<div class=field><span class=lbl>Passwort</span><input type=password id=cf_mqtt_pass></div>
-<div class=field><span class=lbl>Basis-Topic</span><input type=text id=cf_base_topic></div></div>
-<div class="row mt"><button class="btn primary" data-save=mqtt>Speichern</button></div></div></div>
-
-<div class=sect><h3>Anzeige</h3>
-<div class=trow><label class=switch><input type=checkbox id=cf_auto_modules checked><span class=t></span></label>
-<div class=tx><b>Modulzahl automatisch erkennen</b><span id=modcnthint>Über die Enumeration.</span></div></div>
-<div class=field id=modcntf style="max-width:220px;margin-top:10px" hidden><span class=lbl>Feste Feldbreite</span><input type=number id=cf_modules min=1 max=32></div>
-<div class="grid c2" style=margin-top:12px>
-<div class=field><span class=lbl>Uhr-Trennzeichen</span><select id=cf_sep><option>.</option><option>:</option><option>-</option></select></div>
-<div class=field><span class=lbl>hh:mm:ss Auto-Rückfall (min)</span><input type=number id=cf_hms></div></div>
-<p class=hint>hh:mm:ss lässt ein Modul rund alle 10 s eine volle Umdrehung fahren (≈173 Tage bis zur MTBF) — daher der automatische Rückfall auf hh:mm.</p>
-<div class="row mt"><button class="btn primary" data-save=disp>Speichern</button></div></div>
-
+<details class=grp><summary>Sicherheit</summary><div class=grpbody>
 <div class=sect><h3>Schnittstellen</h3>
 <div class=trow><label class=switch><input type=checkbox id=cf_api_write checked><span class=t></span></label>
 <div class=tx><b>REST-Schreib-API</b><span><code>POST /api/text</code>, <code>/mode</code>, <code>/home</code>, <code>/module</code> … Aus = die Anzeige lässt sich nur über diese Oberfläche und MQTT steuern; GET-Status und Einstellungen bleiben erreichbar.</span></div></div>
@@ -646,18 +636,34 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=tx><b>Passwort entfernen</b><span>Anmeldung wieder abschalten. Sonst bleibt ein gesetztes Passwort erhalten, wenn das Feld leer bleibt.</span></div></div>
 <p class=hint id=authhint></p>
 <div class="row mt"><button class="btn primary" data-save=access>Speichern</button></div></div>
+</div></details>
 
-<div class=sect><h3>System</h3>
-<div class=field style=max-width:320px><span class=lbl>Hostname / mDNS-Name</span><input type=text id=cf_node_id placeholder=krone_anzeige></div>
-<p class=hint>Wird für mDNS (<code>&lt;name&gt;.local</code>), OTA und die MQTT-Client-ID verwendet. Nach dem Speichern neu starten.</p>
-<div class="row mt"><button class="btn primary" data-save=host>Hostname speichern</button></div>
-<dl class=kv id=syskv style=margin-top:18px></dl>
-<div class="row mt"><button class=btn id=backup>Einstellungen sichern</button>
-<label class=btn style=cursor:pointer>Wiederherstellen<input type=file id=restore accept="application/json,.json" hidden></label>
-<button class="btn danger" id=reboot>Neu starten</button></div>
-<p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen.</p>
-</div>
+<details class=grp><summary>Integration</summary><div class=grpbody>
+<div class=sect><h3><span class=dot id=mqdot></span> MQTT / Home Assistant</h3>
+<div class=trow><label class=switch><input type=checkbox id=cf_mqtt_enabled checked><span class=t></span></label>
+<div class=tx><b>MQTT aktiv</b><span>Anbindung an Home Assistant per Auto-Discovery.</span></div></div>
+<div class=collapse id=mqf><div class="grid c2">
+<div class=field><span class=lbl>Broker</span><input type=text id=cf_mqtt_host></div>
+<div class=field><span class=lbl>Port</span><input type=number id=cf_mqtt_port></div>
+<div class=field><span class=lbl>Benutzer</span><input type=text id=cf_mqtt_user></div>
+<div class=field><span class=lbl>Passwort</span><input type=password id=cf_mqtt_pass></div>
+<div class=field><span class=lbl>Basis-Topic</span><input type=text id=cf_base_topic></div></div>
+<div class="row mt"><button class="btn primary" data-save=mqtt>Speichern</button></div></div></div>
+</div></details>
 
+<details class=grp><summary>Anzeige</summary><div class=grpbody>
+<div class=sect><h3>Anzeige</h3>
+<div class=trow><label class=switch><input type=checkbox id=cf_auto_modules checked><span class=t></span></label>
+<div class=tx><b>Modulzahl automatisch erkennen</b><span id=modcnthint>Über die Enumeration.</span></div></div>
+<div class=field id=modcntf style="max-width:220px;margin-top:10px" hidden><span class=lbl>Feste Feldbreite</span><input type=number id=cf_modules min=1 max=32></div>
+<div class="grid c2" style=margin-top:12px>
+<div class=field><span class=lbl>Uhr-Trennzeichen</span><select id=cf_sep><option>.</option><option>:</option><option>-</option></select></div>
+<div class=field><span class=lbl>hh:mm:ss Auto-Rückfall (min)</span><input type=number id=cf_hms></div></div>
+<p class=hint>hh:mm:ss lässt ein Modul rund alle 10 s eine volle Umdrehung fahren (≈173 Tage bis zur MTBF) — daher der automatische Rückfall auf hh:mm.</p>
+<div class="row mt"><button class="btn primary" data-save=disp>Speichern</button></div></div>
+</div></details>
+
+<details class=grp><summary>Firmware</summary><div class=grpbody>
 <div class=sect><h3>Firmware aktualisieren</h3>
 <p class=hint>Signierten Container <code>krone-master-esp32c3.kota</code> hochladen. Das Modul prüft <b>Herkunft (Signatur)</b> und Prüfsumme, schreibt dann in die zweite App-Partition und startet neu. Fremde, manipulierte oder beschädigte Dateien werden abgewiesen; die laufende Firmware bleibt aktiv.</p>
 <div class="row mt"><label class="btn" style=cursor:pointer>Datei wählen<input type=file id=fw accept=".kota,application/octet-stream" hidden></label>
@@ -677,7 +683,9 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div id=modfwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden"><div id=modfwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
 <p class=hint id=modfwlog style=margin-top:8px></p>
 </div>
+</div></details>
 
+<details class=grp><summary>Modul-Konfiguration</summary><div class=grpbody>
 <div class=sect><h3>Modul-Konfiguration</h3>
 <p class=hint>Blattzahl, Blatt-Offset (Ausrichtung zum Leerbildimpuls, Spez. 6.3 / O-6) und Abschaltvorhalt je Modul. Erst „Lesen", damit die Felder vom aktuellen Stand der Karte ausgehen.</p>
 <div class="row mt"><div class=field style=width:90px><span class=lbl>Adresse</span><input type=number id=cfgaddr min=1 max=250 value=1></div>
@@ -698,7 +706,22 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 </div>
 <div class="row mt"><button class="btn primary" id=cfgwrite disabled>Speichern</button></div>
 </div>
-</div></section>
+</div></details>
+
+<details class=grp><summary>System</summary><div class=grpbody>
+<div class=sect><h3>System</h3>
+<div class=field style=max-width:320px><span class=lbl>Hostname / mDNS-Name</span><input type=text id=cf_node_id placeholder=krone_anzeige></div>
+<p class=hint>Wird für mDNS (<code>&lt;name&gt;.local</code>), OTA und die MQTT-Client-ID verwendet. Nach dem Speichern neu starten.</p>
+<div class="row mt"><button class="btn primary" data-save=host>Hostname speichern</button></div>
+<dl class=kv id=syskv style=margin-top:18px></dl>
+<div class="row mt"><button class=btn id=backup>Einstellungen sichern</button>
+<label class=btn style=cursor:pointer>Wiederherstellen<input type=file id=restore accept="application/json,.json" hidden></label>
+<button class="btn danger" id=reboot>Neu starten</button></div>
+<p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen.</p>
+</div>
+</div></details>
+
+</section>
 </div></div>
 <div id=toast></div>
 <script>
