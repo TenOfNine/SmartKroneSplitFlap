@@ -419,7 +419,9 @@ static charmap_align_t align_from(uint8_t a)
 
 static const char INDEX_HTML[] PROGMEM = R"HTML(<!doctype html><html lang=de><head>
 <meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>KRONE REW Zentralsteuerung</title><style>
+<title>KRONE REW Zentralsteuerung</title>
+<link rel=icon type=image/svg+xml href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%220%200%20100%20100%22%20width=%22100%22%20height=%22100%22%3E%20%3Ctitle%3ESmartKroneSplitFlap%3C/title%3E%20%3Cdefs%3E%20%3Cfilter%20id=%22glow%22%20x=%22-60%25%22%20y=%22-60%25%22%20width=%22220%25%22%20height=%22220%25%22%3E%20%3CfeGaussianBlur%20stdDeviation=%222.4%22%20result=%22b%22/%3E%20%3CfeMerge%3E%3CfeMergeNode%20in=%22b%22/%3E%3CfeMergeNode%20in=%22SourceGraphic%22/%3E%3C/feMerge%3E%20%3C/filter%3E%20%3C/defs%3E%20%3Crect%20x=%228%22%20y=%228%22%20width=%2284%22%20height=%2284%22%20rx=%2216%22%20fill=%22%230b0c0e%22%20stroke=%22%23262a31%22%20stroke-width=%222%22/%3E%20%3Crect%20x=%2215%22%20y=%2215%22%20width=%2270%22%20height=%2270%22%20rx=%2211%22%20fill=%22%23131519%22/%3E%20%3Ctext%20x=%2250%22%20y=%2268%22%20text-anchor=%22middle%22%20font-family=%22%27IBM%20Plex%20Mono%27,ui-monospace,monospace%22%20font-weight=%22700%22%20font-size=%2254%22%20fill=%22%23f2b03d%22%20filter=%22url%28%23glow%29%22%3EK%3C/text%3E%20%3Crect%20x=%2215%22%20y=%2248.5%22%20width=%2270%22%20height=%223%22%20fill=%22%230b0c0e%22/%3E%20%3Crect%20x=%2215%22%20y=%2248.3%22%20width=%2270%22%20height=%221%22%20fill=%22%23000000%22%20opacity=%22.55%22/%3E%20%3Crect%20x=%2215%22%20y=%2251.5%22%20width=%2270%22%20height=%221%22%20fill=%22%23454b54%22%20opacity=%22.7%22/%3E%20%3C/svg%3E">
+<style>
 :root{--bg:#0b0c0e;--panel:#131519;--p2:#1a1d22;--p3:#22262c;--line:#262a31;--ls:#1e2127;
 --ink:#e8e6e1;--dim:#8b8f98;--faint:#5b606a;--amber:#f2b03d;--amberd:#b98428;--ai:#17120a;
 --ok:#56b877;--warn:#e0a63a;--err:#e5675c;--cool:#6ea8d8;--r:10px;--rs:6px;

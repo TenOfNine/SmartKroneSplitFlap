@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" width="72" alt="Logo: Fallblatt-Kachel mit „K"">
+
 # KRONE REW Fallblattanzeige — Ersatzsteuerung
 
 ![CI](https://github.com/TenOfNine/SmartKroneSplitFlap/actions/workflows/ci.yml/badge.svg)
