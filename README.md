@@ -1,4 +1,4 @@
-<img src="docs/logo.svg" width="72" alt="Logo: Fallblatt-Kachel mit K">
+<p align="center"><img src="docs/logo.svg" width="72" alt="Logo: Fallblatt-Kachel mit K"></p>
 
 # KRONE REW Fallblattanzeige — Ersatzsteuerung
 
