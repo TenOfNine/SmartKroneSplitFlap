@@ -65,9 +65,10 @@ Nächste sinnvolle Schritte:
   Durchgangsprüfung ok (11.09.2026)** — Verkabelung, noch kein Bus-Signal.
   Bereit für die Bench-Test-Checkliste (`docs/module-bootloader.md`), sobald
   die Master-Hardware aufgebaut ist.
-- Master-Firmware (`pio run -e esp32c3`) auf ein echtes Modul flashen — T12/T13
-  kompilieren und die Host-Tests laufen, am Gerät ungetestet. Web-Flasher:
-  <https://tenofnine.github.io/SmartKroneSplitFlap/> (nachdem Pages aktiviert ist).
+- **Master-Firmware am Gerät bestätigt (13.09.2026)** — auf einem ESP32-C3
+  geflasht und funktionsfähig, vor dem Einbau in die Master-PCB. WLAN/Web-UI
+  laufen; das RS-485-Zusammenspiel mit den Daughter Cards braucht weiterhin die
+  aufgebaute Master-PCB. Web-Flasher: <https://tenofnine.github.io/SmartKroneSplitFlap/>.
 - **Selbsttest** (Spez. 7.3) über eine volle Umdrehung je Modul mit
   Timing-Auswertung — bislang nur Homing-Broadcast.
 - **Verifikationslauf über `GET_UID`** (Spez. 4.5.4 / A-13): `busmaster` hat noch

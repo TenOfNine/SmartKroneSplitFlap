@@ -135,7 +135,10 @@ Portierung auf den ESP32-C3 Super Mini:
 Host-Tests (`pio test -e native`) unverändert grün bleiben.
 **Erledigt 01.09.2026** — `esp32c3`-Env, RS-485 auf UART1, Pins via `build_flags`,
 Status-LED an GPIO6, `-DARDUINO_USB_CDC_ON_BOOT=1`. `pio test -e native` grün.
-Am Gerät noch nicht getestet.
+**Firmware läuft am Gerät** (13.09.2026, Betreiber) — auf einem ESP32-C3 geflasht
+und bestätigt funktionsfähig (vor dem Einbau in die Master-PCB getestet). Das
+RS-485-Zusammenspiel mit den Daughter Cards (TP8485E-Transceiver, CHAIN) bleibt
+offen, bis die Master-PCB aufgebaut ist.
 
 ---
 
@@ -164,7 +167,9 @@ und Freigabe mit dem Betreiber über einen Design-Mockup).
 **Fertig, wenn:** `pio run -e esp32c3` kompiliert und `pio test -e native` grün
 bleibt (inkl. `test_eventlog`).
 **Erledigt 01.09.2026** — `pio test -e native` 40/40, Flash ~1002 KB (76,5 %).
-Spezifikation v0.12. Am Gerät noch nicht getestet.
+Spezifikation v0.12. **Grundfunktion am Gerät bestätigt** (13.09.2026, wie T12) —
+WLAN und Web-UI liefen auf echter Hardware. Die seither ergänzten Panels
+(Modul-Firmware, Modul-Konfiguration u. a.) sind davon nicht separat verifiziert.
 
 ---
 
