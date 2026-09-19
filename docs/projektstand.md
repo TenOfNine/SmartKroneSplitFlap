@@ -50,6 +50,7 @@ Kurzer Einstieg für eine neue Arbeitssitzung. Details in `docs/backlog.md`.
 | Web-UI-Demo (GitHub Page) | `tools/build_webui_demo.py` schneidet `INDEX_HTML` aus `main.cpp` + `tools/webui_demo_shim.html` (fetch-Shim für `/api/*`, Beispieldaten) → `firmware/master/prebuilt/demo/index.html` (gitignored). `pages.yml` legt es unter `…/demo/` ab, `ci.yml` baut es und `check_webui.mjs` prüft das Bundle mit. Spez. v0.20. | PR #13, `195ab39` |
 | Master-Trägerboard Rev. 0.2 (T20) | Eingangsschutz vor der PCB-Bestellung: Verpolschutz-P-FET Q1 (AO3401A, C15127) + R8 (100 k, C149504) am 5-V-Eingang (High-Side, schützt die ganze Kette), RS-485-TVS D2 (SM712/PSM712, C32677) am Bus. Alle JLC-Basic. M-3 entschieden (U3 bestückt, R7 DNP-Reserve), keine U1-Aussparung (Modul entnehmbar), 5-V- und 42-V~-Kreis komplett getrennt. `build_krone_master_symbols`/`gen_master_*`/`gen_master_manufacturing` neu; PCB inkrementell mit neuem `tools/patch_master_pcb.py` geroutet (FreeRouting 2.3.0 hängt in der Dev-Umgebung → `route_master.py` mit `gui.enabled=false` + Watchdog gehärtet). `symbolpruefung-master.md` **freigegeben** (AO3401A + SM712, M-3/M-4 geschlossen). Silk: „ANT: keine Cu-Fläche" entfernt, + / − neben J1, Referenztexte U2/D2/R4 am Bauteil. **GUI-Feinlayout vom Betreiber erledigt** — committete `master.kicad_pcb` ist final. ERC 0/0, DRC 0/0/0, Fertigungspaket regeneriert. Spez. v0.21. **Bei JLCPCB bestellt (10.09.2026).** | PR #14 + #15 |
 | Modul-Konfiguration in der Web-UI | `busmaster_poll_config()` (`CMD_GET_CONFIG`, spiegelt `poll_version`) ergänzt `bm_module_t.cfg_*`. `GET /api/module/config?addr=N` + `POST /api/module` Aktionen `get_config`/`set_config`. *Einstellungen › Modul-Konfiguration*: Blattzahl/Offset/Vorhalt/Flags lesen und schreiben, ohne `busctl.py`/Host-Zugriff. Macht O-6 (Blatt-Offset-Kalibrierung) über die Web-UI durchführbar. `pio test -e native` Master 58. Spez. v0.23. | direkt auf main |
+| **Master-PCB-Inbetriebnahme — DI-Pin-Bug gefunden und behoben (19.09.2026)** | Erste bestückte Master-PCB enumerierte 0 Karten. Stundenlange Hardware-Diagnose (Multimeter, dann Logic Analyzer an `A`/`B`/`DE`/`DI`) zeigte: Master sendet byte-genau korrekt (per Logic-Analyzer-Mitschnitt bewiesen, FTDI+MAX485-Mithöraufbau selbst war der irreführende Faktor). Fund am Modul: `gpio_init()` (`firmware/module/src/main.c`) setzte in `PORTB.DIRSET` nur `XDIR` (PB0), nie `TXD` (PB2) — die USART0-Peripherie konnte den `DI`-Pin zu `U2` nie treiben. Fix `f24b861`: `PIN_USART_TXD` ergänzt. Mit einer einzelnen Daughter Card danach vollständig bestätigt (Enumeration, Status-Polling, `CMD_IDENTIFY`). Nebenbei: LED-Blinkraten auf exakt 1/4 Hz korrigiert und Helligkeit per PWM auf 10 % gedeckelt (Master: Hardware-LEDC, Modul: Software-Träger — reines Software-PWM auf dem Master flackerte durch Loop-Jitter), neue Einstellung „Bus-Debug" (`cfg.debug_enabled`, `/debug`-Seite mit `CMD_IDENTIFY` an Serviceadresse 250), Fix für nie ausgelöste Modul-Versionsabfrage bei < 4 Modulen (`poll_addr % 4` konnte bei `count<4` nie 0 werden). **Offen (Issue [#16](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/16)):** Mit zwei Daughter Cards in Reihe fällt nach kurzer Zeit mindestens eine (zeitweise beide) wieder auf „offline" — Verdacht auf die Sendeecho-Kollisionserkennung (`tx_echo_bad`/`enum_fsm_on_echo_mismatch`), Live-Messung mit Logic Analyzer noch ausstehend. | `f24b861`..`67dc876` |
 
 Nächste sinnvolle Schritte:
 
@@ -61,14 +62,16 @@ Nächste sinnvolle Schritte:
   Sicherung + NTC.
 
 **Firmware am Gerät**
-- **Zwei Daughter Cards bereits bestückt und per Flachbandkabel verkettet,
-  Durchgangsprüfung ok (11.09.2026)** — Verkabelung, noch kein Bus-Signal.
-  Bereit für die Bench-Test-Checkliste (`docs/module-bootloader.md`), sobald
-  die Master-Hardware aufgebaut ist.
-- **Master-Firmware am Gerät bestätigt (13.09.2026)** — auf einem ESP32-C3
-  geflasht und funktionsfähig, vor dem Einbau in die Master-PCB. WLAN/Web-UI
-  laufen; das RS-485-Zusammenspiel mit den Daughter Cards braucht weiterhin die
-  aufgebaute Master-PCB. Web-Flasher: <https://tenofnine.github.io/SmartKroneSplitFlap/>.
+- **Master-PCB in Betrieb, einzelne Daughter Card vollständig bestätigt
+  (19.09.2026)** — DI-Pin-Bug gefunden und behoben (siehe Tabelle oben).
+  Enumeration, Status-Polling, `CMD_IDENTIFY` einzeln per Logic Analyzer
+  verifiziert.
+- **Offen: zwei Daughter Cards gleichzeitig instabil** (Issue
+  [#16](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/16)) —
+  fällt nach kurzer Zeit auf „offline" zurück, Verdacht auf die
+  Sendeecho-Kollisionserkennung im Modul. Nächster Schritt: Logic-Analyzer-
+  Mitschnitt an der zweiten Karte während eines laufenden Status-Polls.
+  Auf Betreiberwunsch zeitlich verschoben.
 - **Selbsttest** (Spez. 7.3) über eine volle Umdrehung je Modul mit
   Timing-Auswertung — bislang nur Homing-Broadcast.
 - **Verifikationslauf über `GET_UID`** (Spez. 4.5.4 / A-13): `busmaster` hat noch

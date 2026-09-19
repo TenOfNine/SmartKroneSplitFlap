@@ -43,6 +43,7 @@ Bei Widerspruch zwischen Spezifikation und Schaltplan gilt die **Netzliste** im 
 - Die Protokollschicht wird hardwareunabhängig implementiert und ist auf dem Host testbar (`pio test -e native`). Kein direkter Registerzugriff darin.
 - Vor jeder Änderung an `docs/spezifikation.md` die Änderungshistorie im Anhang fortschreiben.
 - Offene Punkte werden als GitHub Issue geführt, nicht nur als Tabellenzeile.
+- **Nach jeder Firmware-Änderung alle davon abhängigen vorgebauten Firmware-Dateien neu erzeugen**, nicht nur die geänderte Umgebung selbst bauen und testen. Betrifft insbesondere: `tools/build_module_firmware.py` (→ `firmware/module/prebuilt/`, inkl. signiertem `.mota`) bei jeder Änderung in `firmware/module/`, und `tools/build_master_firmware.py` (→ `firmware/master/prebuilt/`, `factory.bin` + signiertes `.kota`) bei jeder Änderung in `firmware/master/` — **und auch dann**, wenn sich nur `firmware/module/` geändert hat, weil der Master die Modul-Firmware für die Bus-Verteilung eingebettet trägt (`firmware/master/src/module_fw.h`). Der Webflasher/Browser-OTA liefert sonst unbemerkt eine veraltete Firmware aus. `tools/build_webui_demo.py` bei Änderungen an der Web-UI in `main.cpp` ebenfalls neu ausführen.
 
 ## Was nicht zu tun ist
 
