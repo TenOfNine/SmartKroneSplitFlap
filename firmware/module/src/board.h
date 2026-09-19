@@ -33,6 +33,7 @@
 
 /* USART0 Standard-MUX: TXD = PB2, RXD = PB3, XDIR = PB0. */
 #define PIN_USART_XDIR   PIN0_bm
+#define PIN_USART_TXD    PIN2_bm
 #define PORT_USART       PORTB
 
 /* --- Takt ----------------------------------------------------------- */

@@ -135,7 +135,10 @@ static void gpio_init(void)
     PORTA.PIN4CTRL = PORT_ISC_FALLING_gc;
     PORTA.PIN5CTRL = PORT_ISC_FALLING_gc;
 
-    PORTB.DIRSET = PIN_USART_XDIR;  /* XDIR wird von USART0 getrieben */
+    /* XDIR und TXD muessen als Ausgang stehen, damit USART0 sie tatsaechlich
+     * treibt -- sonst bleibt der Pin ein unbeschalteter Eingang, egal was die
+     * Peripherie intern schiebt. */
+    PORTB.DIRSET = PIN_USART_XDIR | PIN_USART_TXD;
 }
 
 static void tick_init(void)

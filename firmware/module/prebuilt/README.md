@@ -1,6 +1,6 @@
 # Vorgebaute Modul-Firmware (ATtiny1616)
 
-Erzeugt von `tools/build_module_firmware.py` (zuletzt nahe Commit `1a600af`, 2026-09-09). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_module_firmware.py` (zuletzt nahe Commit `98a6aaa`, 2026-09-19). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|
@@ -9,7 +9,7 @@ Erzeugt von `tools/build_module_firmware.py` (zuletzt nahe Commit `1a600af`, 202
 | `krone-daughtercard-attiny1616-boot.hex` | App @ 0x0C00, laeuft hinter dem Bootloader (Werksflash). |
 | `krone-daughtercard-attiny1616.mota` | signierter Container der `-boot`-App fuer die Firmware-Verteilung ueber den Bus (der Master bettet sie ein). |
 
-SHA-256 (`krone-daughtercard-attiny1616.hex`): `10abb0395472e6e4aa5bf8522754c4b6831ef765d0b1153a0090d154fd8d70c3`
+SHA-256 (`krone-daughtercard-attiny1616.hex`): `9aacfd8dd9637cb797d6404d1b65bd3d4b81662f29c9dca1ee6dde272700a65f`
 
 ## Flashen
 
