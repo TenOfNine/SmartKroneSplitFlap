@@ -89,7 +89,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 8;
+static constexpr uint8_t FW_VERSION_MINOR = 9;
 
 /* --- Zustand -------------------------------------------------------- */
 

@@ -1,6 +1,6 @@
 # Vorgebaute Modul-Firmware (ATtiny1616)
 
-Erzeugt von `tools/build_module_firmware.py` (zuletzt nahe Commit `1dd87dc`, 2026-09-19). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_module_firmware.py` (zuletzt nahe Commit `3ee3d9f`, 2026-09-19). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|

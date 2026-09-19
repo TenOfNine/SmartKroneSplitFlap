@@ -44,7 +44,12 @@
 
 static void usart_init(void)
 {
-    PORTB.DIRSET = PIN0_bm;                                 /* XDIR */
+    /* XDIR (PB0) UND TXD (PB2) muessen als Ausgang stehen, sonst kann die
+     * USART0 den DI-Pin zu U2 nicht treiben -- derselbe Bug wie in der App
+     * (firmware/module/src/main.c, siehe firmware/CHANGELOG.md 1.8), hier
+     * unabhaengig nochmal gemacht, weil der Bootloader seine eigene
+     * GPIO-Initialisierung hat. */
+    PORTB.DIRSET = PIN0_bm | PIN2_bm;                       /* XDIR, TXD */
     USART0.BAUD = (uint16_t)((4UL * F_CPU) / 115200UL);
     USART0.CTRLA = USART_RS485_EXT_gc;                      /* gepollt, kein RXCIE */
     USART0.CTRLC = USART_CHSIZE_8BIT_gc | USART_PMODE_DISABLED_gc | USART_SBMODE_1BIT_gc;
