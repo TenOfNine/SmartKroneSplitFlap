@@ -2222,12 +2222,29 @@ void loop()
 {
     const uint32_t now = millis();
 
+    /* Diagnose Issue #16: web.handleClient()/mqtt.loop() koennen gelegentlich
+     * mehrere zehn/hundert ms blockieren (TCP/WiFi-Stack) -- solange busmaster
+     * in dieser Zeit nicht bedient wird, laeuft sein 5-ms-Timeout faktisch
+     * viel spaeter als beabsichtigt. Nur bei "Bus-Debug" aktiv, dbg_log()
+     * kehrt sonst sofort zurueck. */
+    const uint32_t t0 = now;
     web.handleClient();
+    const uint32_t t1 = millis();
+    if (t1 - t0 >= 3) { dbg_log("[loop] web.handleClient %lums", (unsigned long)(t1 - t0)); }
+
     handle_portal_request();
+    const uint32_t t2 = millis();
+    if (t2 - t1 >= 3) { dbg_log("[loop] handle_portal_request %lums", (unsigned long)(t2 - t1)); }
+
     mqtt_ensure();
     mqtt.loop();
+    const uint32_t t3 = millis();
+    if (t3 - t2 >= 3) { dbg_log("[loop] mqtt %lums", (unsigned long)(t3 - t2)); }
 
-    bus_pump(now);
+    /* Frischer Zeitstempel fuer den Bus-Pfad -- now oben kann durch die
+     * blockierenden Aufrufe schon veraltet sein (siehe drift im await-Log). */
+    const uint32_t bus_now = millis();
+    bus_pump(bus_now);
     if (moduleupdate_busy(&g_mu)) {
         /* Waehrend eines Modul-Updates ruht der Statusverkehr auf dem Bus. */
         if (now - g_mu_last_tick >= 20) {
@@ -2235,7 +2252,7 @@ void loop()
             moduleupdate_tick(&g_mu, now);
         }
     } else {
-        busmaster_tick(&g_bus, now);
+        busmaster_tick(&g_bus, bus_now);
     }
     status_led_tick(now);
     cpu_load_tick(now);
@@ -2290,9 +2307,9 @@ void loop()
                 if (g_bus.mod[a - 1].online && !g_bus.mod[a - 1].ver_known) { vaddr = a; break; }
             }
             if (vaddr && (poll_cycle % 4u) == 0u) {
-                busmaster_poll_version(&g_bus, vaddr, now);
+                busmaster_poll_version(&g_bus, vaddr, bus_now);
             } else {
-                busmaster_poll_status(&g_bus, poll_addr, now);
+                busmaster_poll_status(&g_bus, poll_addr, bus_now);
             }
             poll_addr = (poll_addr % count) + 1;
             if (poll_addr == 1 && mqtt.connected()) {
