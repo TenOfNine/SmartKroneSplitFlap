@@ -1,6 +1,6 @@
 {
   "name": "KRONE REW Zentralsteuerung",
-  "version": "2026-09-12",
+  "version": "2026-09-19",
   "new_install_prompt_erase": false,
   "builds": [
     {
