@@ -74,6 +74,15 @@ static constexpr int      CHAIN_PIN    = PIN_CHAIN;
 static constexpr int      STATUS_LED   = PIN_STATUS_LED;
 static constexpr uint32_t BUS_BAUD     = 115200;
 
+/* Status-LED per Hardware-PWM (LEDC) statt Software-Bitbanging -- die
+ * ESP32-loop() (WiFi/Webserver/JSON) jittert genug, dass ein per Software
+ * getakteter Traeger sichtbar flackert. LEDC laeuft unabhaengig davon. */
+static constexpr uint32_t LED_PWM_HZ   = 2000;
+static constexpr uint8_t  LED_PWM_BITS = 8;
+static constexpr uint8_t  LED_PWM_DUTY = 26;   /* ~10 % von 255 */
+static constexpr uint8_t  LED_PWM_CHAN = 0;
+static bool s_led_pwm_ok = false;
+
 static const char FW_BUILD[] = __DATE__ " " __TIME__;
 
 /* --- Zustand -------------------------------------------------------- */
@@ -200,8 +209,10 @@ static void bus_begin()
     pinMode(CHAIN_PIN, OUTPUT);
     digitalWrite(CHAIN_PIN, LOW);
     if (STATUS_LED >= 0) {
-        pinMode(STATUS_LED, OUTPUT);
-        digitalWrite(STATUS_LED, LOW);
+        ledcSetup(LED_PWM_CHAN, LED_PWM_HZ, LED_PWM_BITS);
+        ledcAttachPin(STATUS_LED, LED_PWM_CHAN);
+        ledcWrite(LED_PWM_CHAN, 0);
+        s_led_pwm_ok = true;
     }
 }
 
@@ -329,11 +340,6 @@ static void status_led_tick(uint32_t now)
             trouble = true;
         }
     }
-    /* Helligkeit per Software-PWM auf 25 % gedeckelt (kein Hardware-PWM
-     * verwendet): ~125-Hz-Traeger fuer den Ein/Aus-Anteil. */
-    const uint32_t PWM_PERIOD_MS = 8;
-    const uint32_t PWM_ON_MS     = PWM_PERIOD_MS / 4;   /* Deckel 25 % */
-    const uint32_t pwm_phase     = now % PWM_PERIOD_MS;
     bool on;
     if (WiFi.status() != WL_CONNECTED) {
         on = (now / 125) & 1;  /* 4 Hz */
@@ -342,8 +348,11 @@ static void status_led_tick(uint32_t now)
     } else {
         on = true;
     }
-    const bool lit = on && (pwm_phase < PWM_ON_MS);
-    digitalWrite(STATUS_LED, lit ? HIGH : LOW);
+    if (s_led_pwm_ok) {
+        ledcWrite(LED_PWM_CHAN, on ? LED_PWM_DUTY : 0);
+    } else {
+        digitalWrite(STATUS_LED, on ? HIGH : LOW);
+    }
 }
 
 /* ================================================================== */
