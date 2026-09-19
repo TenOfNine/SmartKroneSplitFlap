@@ -248,7 +248,10 @@ static void bus_begin()
     uc.parity    = UART_PARITY_DISABLE;
     uc.stop_bits = UART_STOP_BITS_1;
     uc.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
-    uart_driver_install(RS485_UART, 512, 0, 0, nullptr, 0);
+    /* Grosszuegiger RX-Puffer als Marge gegen loop()-Stalls (Issue #16):
+     * 2 KiB statt 512 B haelt bei 115200 Bd auch mehrere volle Antworten,
+     * falls bus_pump() mal verspaetet dran kommt. */
+    uart_driver_install(RS485_UART, 2048, 0, 0, nullptr, 0);
     uart_param_config(RS485_UART, &uc);
     uart_set_pin(RS485_UART, RS485_TX_PIN, RS485_RX_PIN, RS485_DE_PIN, UART_PIN_NO_CHANGE);
     uart_set_mode(RS485_UART, UART_MODE_RS485_HALF_DUPLEX);
@@ -2189,6 +2192,11 @@ void setup()
     esp_register_freertos_idle_hook(idle_hook);
 
     WiFi.mode(WIFI_STA);
+    /* Kein Akku am Master -- WLAN-Modem-Sleep bringt hier nur Latenzspitzen
+     * (Funk schlaeft zwischen den AP-Beacons, ~100-300 ms je nach DTIM-
+     * Intervall). Erklaerte die in Issue #16 gemessenen 100-120 ms
+     * web.handleClient()-Blockaden. */
+    WiFi.setSleep(false);
     apply_static_ip();
 
     WiFiManager wm;
