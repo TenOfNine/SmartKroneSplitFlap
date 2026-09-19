@@ -185,11 +185,11 @@ static uint32_t reboot_at = 0;
 /* Ringpuffer der letzten Bus-Debug-Zeilen, zusaetzlich zur seriellen
  * Konsole ueber /api/debug/buslog abrufbar (Tab "Bus-Debug" auf /debug) --
  * praktisch, wenn das Geraet gerade nicht per USB dran haengt (Issue #16). */
-static constexpr uint8_t BUSLOG_LINES    = 40;
-static constexpr uint8_t BUSLOG_LINE_LEN = 100;
+static constexpr uint16_t BUSLOG_LINES    = 400;   /* ~10-15 s Vorlauf bei aktueller Taktung */
+static constexpr uint8_t  BUSLOG_LINE_LEN = 100;
 static char     g_buslog[BUSLOG_LINES][BUSLOG_LINE_LEN];
-static uint8_t  g_buslog_next  = 0;
-static uint16_t g_buslog_total = 0;
+static uint16_t g_buslog_next  = 0;
+static uint32_t g_buslog_total = 0;
 
 static void dbg_log(const char *fmt, ...)
 {
@@ -203,7 +203,7 @@ static void dbg_log(const char *fmt, ...)
     va_end(ap);
     Serial.println(line);
     strlcpy(g_buslog[g_buslog_next], line, sizeof(g_buslog[0]));
-    g_buslog_next = (uint8_t)((g_buslog_next + 1) % BUSLOG_LINES);
+    g_buslog_next = (uint16_t)((g_buslog_next + 1) % BUSLOG_LINES);
     g_buslog_total++;
 }
 
@@ -1532,7 +1532,7 @@ static const char DEBUG_HTML[] PROGMEM =
     "<pre id=\"out\"></pre>"
     "<h2>Bus-Log</h2>"
     "<p><button onclick=\"refreshLog()\">Aktualisieren</button> "
-    "<label><input type=\"checkbox\" id=\"autoref\" checked> automatisch (1 s)</label></p>"
+    "<label><input type=\"checkbox\" id=\"autoref\" checked> automatisch (3 s)</label></p>"
     "<pre id=\"buslog\" style=\"max-height:60vh;overflow:auto;background:#111;color:#0f0;"
     "padding:0.5rem;font-size:0.85rem\"></pre>"
     "<script>"
@@ -1541,7 +1541,7 @@ static const char DEBUG_HTML[] PROGMEM =
     "el.scrollTop+el.clientHeight>=el.scrollHeight-4;el.textContent=t;"
     "if(atEnd)el.scrollTop=el.scrollHeight;});}"
     "refreshLog();"
-    "setInterval(()=>{if(document.getElementById('autoref').checked)refreshLog();},1000);"
+    "setInterval(()=>{if(document.getElementById('autoref').checked)refreshLog();},3000);"
     "</script>"
     "</body></html>";
 
@@ -1562,10 +1562,11 @@ static void handle_debug_buslog()
 {
     if (!cfg.debug_enabled) { send_json(404, "{\"error\":\"debug_disabled\"}"); return; }
     String out;
-    const uint16_t count = g_buslog_total < BUSLOG_LINES ? g_buslog_total : BUSLOG_LINES;
-    const uint8_t  start = (g_buslog_total < BUSLOG_LINES) ? 0 : g_buslog_next;
+    out.reserve((size_t)BUSLOG_LINES * (BUSLOG_LINE_LEN + 1));
+    const uint16_t count = g_buslog_total < BUSLOG_LINES ? (uint16_t)g_buslog_total : BUSLOG_LINES;
+    const uint16_t start = (g_buslog_total < BUSLOG_LINES) ? 0 : g_buslog_next;
     for (uint16_t i = 0; i < count; ++i) {
-        const uint8_t idx = (uint8_t)((start + i) % BUSLOG_LINES);
+        const uint16_t idx = (uint16_t)((start + i) % BUSLOG_LINES);
         out += g_buslog[idx];
         out += '\n';
     }
