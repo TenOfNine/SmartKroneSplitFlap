@@ -80,7 +80,7 @@ static constexpr uint32_t BUS_BAUD     = 115200;
  * getakteter Traeger sichtbar flackert. LEDC laeuft unabhaengig davon. */
 static constexpr uint32_t LED_PWM_HZ   = 2000;
 static constexpr uint8_t  LED_PWM_BITS = 8;
-static constexpr uint8_t  LED_PWM_DUTY = 26;   /* ~10 % von 255 */
+static constexpr uint8_t  LED_PWM_DUTY = 13;   /* ~5 % von 255 */
 static constexpr uint8_t  LED_PWM_CHAN = 0;
 static bool s_led_pwm_ok = false;
 

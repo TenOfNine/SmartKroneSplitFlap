@@ -472,12 +472,12 @@ int main(void)
         pin_set(&PORTA, PIN_TRIAC, motion_triac_gate(&g_motion));
         pin_set(&PORTA, PIN_CHAIN_OUT, g_enum.chain_out_active);
         /* LED: Identify = schnelles Blinken (4 Hz), Fehler = langsames
-         * Blinken (1 Hz), sonst Dauerlicht. 10 % Helligkeit durch
-         * softwareseitiges Umschalten (~100-Hz-Traeger, kein Hardware-PWM-
+         * Blinken (1 Hz), sonst Dauerlicht. 5 % Helligkeit durch
+         * softwareseitiges Umschalten (~50-Hz-Traeger, kein Hardware-PWM-
          * Kanal auf diesem Pin belegt). */
         {
-            const uint32_t PWM_PERIOD_MS = 10u;
-            const uint32_t PWM_ON_MS     = 1u;   /* Deckel 10 % */
+            const uint32_t PWM_PERIOD_MS = 20u;
+            const uint32_t PWM_ON_MS     = 1u;   /* Deckel 5 % */
             const uint32_t pwm_phase     = now % PWM_PERIOD_MS;
             uint8_t led;
             if ((int32_t)(g_identify_until_ms - now) > 0) {
