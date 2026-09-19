@@ -91,7 +91,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 10;
+static constexpr uint8_t FW_VERSION_MINOR = 11;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -639,8 +639,8 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 .trow:first-of-type{border-top:0}.trow .tx{flex:1;min-width:0}.trow .tx b{font-weight:600;display:block}.trow .tx span{font-size:12px;color:var(--faint)}
 .collapse{margin-top:12px;padding-left:14px;border-left:2px solid var(--line)}.collapse[hidden]{display:none}
 #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);opacity:0;transition:.2s;background:var(--p3);border:1px solid var(--line);border-radius:8px;padding:10px 18px;font:13px var(--mono);pointer-events:none;z-index:20}
-@media(max-width:820px){.app{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;align-items:center;overflow-x:auto}
-.brand{padding:6px 8px}.nav{flex-direction:row}.side .foot{display:none}.c2,.c3{grid-template-columns:1fr}.c6{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:820px){.app{grid-template-columns:1fr}.side{position:static;height:auto;flex-direction:row;align-items:center}
+.brand{padding:6px 8px;flex:none}.nav{flex-direction:row;flex:1;min-width:0;overflow-x:auto}.side .foot{display:none}.c2,.c3{grid-template-columns:1fr}.c6{grid-template-columns:repeat(3,1fr)}}
 </style></head><body><div class=app>
 <aside class=side>
 <div class=brand><div class=k>KRONE REW</div><div class=s>Zentralsteuerung</div></div>
