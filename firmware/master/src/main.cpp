@@ -181,6 +181,27 @@ static uint32_t reboot_at = 0;
 /* Bus-Transport                                                       */
 /* ================================================================== */
 
+/* Diagnose fuer Issue #16 (Mehrkarten-Instabilitaet, echte Buskollision):
+ * loggt jede awaiting/Retry/Timeout-Transition der busmaster-Bibliothek.
+ * real_now (frisch per millis() an dieser Stelle) vs. now_ms (der von
+ * loop() durchgereichte, ggf. veraltete Zeitstempel) zeigt, ob busmaster_tick()
+ * mit einem Zeitstempel rechnet, der schon vor blockierenden Aufrufen
+ * (web.handleClient(), mqtt.loop()) erfasst wurde. */
+static void busmaster_log_cb(void *, const char *event, uint8_t cmd, uint8_t addr,
+                             uint32_t now_ms, uint32_t sent_ms, uint8_t retries)
+{
+    if (!cfg.debug_enabled) {
+        return;
+    }
+    const uint32_t real_now = millis();
+    Serial.printf("[bus] await %-7s cmd=0x%02X addr=%u now=%lu sent=%lu delta=%ld"
+                 " retries=%u real_now=%lu drift=%ld\n",
+                 event, cmd, addr,
+                 (unsigned long)now_ms, (unsigned long)sent_ms,
+                 (long)(now_ms - sent_ms), retries,
+                 (unsigned long)real_now, (long)(real_now - now_ms));
+}
+
 static void bus_tx(void *, const uint8_t *data, size_t len)
 {
     if (cfg.debug_enabled) {
@@ -681,7 +702,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=trow><label class=switch><input type=checkbox id=cf_mdns_enabled checked><span class=t></span></label>
 <div class=tx><b>mDNS / Bonjour</b><span>Erreichbarkeit unter <code>&lt;node&gt;.local</code>. (Neustart nötig)</span></div></div>
 <div class=trow><label class=switch><input type=checkbox id=cf_debug_enabled checked><span class=t></span></label>
-<div class=tx><b>Bus-Debug</b><span>Rohbytes und CHAIN-Wechsel auf der seriellen Konsole, plus <code>/debug</code> (Bus-Diagnose, z. B. CMD_IDENTIFY an eine noch unadressierte Karte).</span></div></div>
+<div class=tx><b>Bus-Debug</b><span>Rohbytes, CHAIN-Wechsel und Anfrage/Antwort/Timeout-Zustand (<code>awaiting</code>) auf der seriellen Konsole, plus <code>/debug</code> (Bus-Diagnose, z. B. CMD_IDENTIFY an eine noch unadressierte Karte).</span></div></div>
 <p class="hint warn">Die Web-Oberfläche selbst lässt sich hier nicht abschalten.</p>
 <div class="row mt"><button class="btn primary" data-save=iface>Speichern</button></div></div>
 
@@ -2122,6 +2143,7 @@ void setup()
 
     bus_begin();
     busmaster_init(&g_bus, bus_tx, nullptr);
+    busmaster_set_log(&g_bus, busmaster_log_cb, nullptr);
     masterapp_init(&g_app, &g_bus, effective_module_count());
     g_app.sep = cfg.sep;
     g_app.align = align_from(cfg.align);

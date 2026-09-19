@@ -20,6 +20,14 @@ static void send(busmaster_t *bm, uint8_t cmd, uint8_t addr,
     }
 }
 
+static void bm_log(busmaster_t *bm, const char *event, uint8_t cmd, uint8_t addr,
+                   uint32_t now_ms)
+{
+    if (bm->log_fn != NULL) {
+        bm->log_fn(bm->log_ctx, event, cmd, addr, now_ms, bm->sent_ms, bm->retries);
+    }
+}
+
 static void expect(busmaster_t *bm, uint8_t cmd, uint8_t addr, uint32_t now)
 {
     bm->pending_cmd = cmd;
@@ -28,6 +36,7 @@ static void expect(busmaster_t *bm, uint8_t cmd, uint8_t addr, uint32_t now)
     bm->sent_ms = now;
     bm->retries = 0;
     proto_parser_reset(&bm->parser);
+    bm_log(bm, "send", cmd, addr, now);
 }
 
 void busmaster_init(busmaster_t *bm,
@@ -38,6 +47,12 @@ void busmaster_init(busmaster_t *bm,
     bm->tx_ctx = tx_ctx;
     proto_parser_reset(&bm->parser);
     bm->enum_phase = BM_ENUM_IDLE;
+}
+
+void busmaster_set_log(busmaster_t *bm, busmaster_log_fn fn, void *log_ctx)
+{
+    bm->log_fn = fn;
+    bm->log_ctx = log_ctx;
 }
 
 /* --- Kommandos ---------------------------------------------------- */
@@ -188,6 +203,7 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
      * Statusantwort ist 8 Byte lang (unser GET_STATUS ist leer). */
     if (bm->pending_cmd == CMD_ENUM_ASSIGN && f->cmd == CMD_ENUM_ASSIGN &&
         f->payload_len == 0) {
+        bm_log(bm, "match", f->cmd, bm->enum_next_addr, now_ms);
         if (bm->enum_next_addr - 1u < BUSMASTER_MAX_MODULES) {
             bm->mod[bm->enum_next_addr - 1u].online = true;
         }
@@ -232,6 +248,7 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
             m->cfg_known     = true;
         }
     }
+    bm_log(bm, "match", f->cmd, f->addr, now_ms);
     bm->awaiting = false;
 }
 
@@ -263,6 +280,7 @@ void busmaster_tick(busmaster_t *bm, uint32_t now_ms)
     }
 
     if (bm->retries < BUSMASTER_RETRIES) {
+        bm_log(bm, "retry", bm->pending_cmd, bm->pending_addr, now_ms);
         bm->retries++;
         bm->sent_ms = now_ms;
         proto_parser_reset(&bm->parser);
@@ -270,6 +288,7 @@ void busmaster_tick(busmaster_t *bm, uint32_t now_ms)
         return;
     }
 
+    bm_log(bm, "give_up", bm->pending_cmd, bm->pending_addr, now_ms);
     bm->timeouts++;
 
     /* endgueltig kein Empfang: Modul offline markieren */

@@ -54,9 +54,22 @@ typedef enum {
     BM_ENUM_DONE,
 } bm_enum_phase_t;
 
+/* Optionales Diagnose-Log fuer den awaiting/Retry/Timeout-Zustand (Issue #16).
+ * event: "send" (Anfrage raus, awaiting=true), "match" (gueltige Antwort
+ * erhalten, awaiting=false), "retry" (Timeout, erneut gesendet),
+ * "give_up" (Timeout, keine Retries mehr, ggf. offline). now_ms/sent_ms
+ * lassen die tatsaechlich verwendete Zeitbasis pruefen (Verdacht: now_ms
+ * wird in main.cpp vor blockierenden Aufrufen wie web.handleClient()
+ * erfasst und ist beim Erreichen von busmaster_tick() schon veraltet). */
+typedef void (*busmaster_log_fn)(void *log_ctx, const char *event, uint8_t cmd,
+                                 uint8_t addr, uint32_t now_ms, uint32_t sent_ms,
+                                 uint8_t retries);
+
 typedef struct {
     void (*tx)(void *ctx, const uint8_t *data, size_t len);
     void  *tx_ctx;
+    busmaster_log_fn log_fn;   /* NULL = kein Logging (Default) */
+    void            *log_ctx;
 
     uint8_t     module_count;
     bm_module_t mod[BUSMASTER_MAX_MODULES];
@@ -80,6 +93,9 @@ typedef struct {
 
 void busmaster_init(busmaster_t *bm,
                     void (*tx)(void *, const uint8_t *, size_t), void *tx_ctx);
+
+/* Diagnose-Log registrieren/abschalten (fn=NULL). Siehe busmaster_log_fn. */
+void busmaster_set_log(busmaster_t *bm, busmaster_log_fn fn, void *log_ctx);
 
 /* Ein empfangenes Byte verarbeiten (Antwortrahmen). */
 void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms);
