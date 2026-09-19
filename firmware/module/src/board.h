@@ -60,10 +60,11 @@
 /* --- Firmware-Version --------------------------------------------- */
 /* FW_VERSION: 1 Byte, Statusbyte 7 (GET_STATUS) und PING-Antwort -- unveraendert
  * fuer Bestandscode. APP_VERSION_*: 2-Byte-Version fuer CMD_GET_VERSION und die
- * Update-Logik des Masters. Bei jeder ausgelieferten Aenderung MINOR erhoehen. */
+ * Update-Logik des Masters. Bei jeder ausgelieferten Aenderung MINOR erhoehen
+ * und firmware/CHANGELOG.md fortschreiben (siehe dort). */
 #define FW_VERSION        1u
 #define APP_VERSION_MAJOR 1u
-#define APP_VERSION_MINOR 0u
+#define APP_VERSION_MINOR 8u
 
 /* --- kleine Pin-Helfer ------------------------------------------- */
 static inline void pin_high(PORT_t *port, uint8_t bm) { port->OUTSET = bm; }

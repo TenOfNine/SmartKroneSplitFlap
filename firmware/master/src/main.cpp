@@ -85,6 +85,11 @@ static constexpr uint8_t  LED_PWM_CHAN = 0;
 static bool s_led_pwm_ok = false;
 
 static const char FW_BUILD[] = __DATE__ " " __TIME__;
+/* Gemeinsame Version mit der Modul-Firmware (APP_VERSION_* in
+ * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
+ * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
+static constexpr uint8_t FW_VERSION_MAJOR = 1;
+static constexpr uint8_t FW_VERSION_MINOR = 8;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -1078,7 +1083,7 @@ const hpct=ht?Math.round(100*(1-hf/ht)):0;
 const tc=(sys.temp_c!=null&&sys.temp_c>-40&&sys.temp_c<150)?sys.temp_c.toFixed(1)+" °C":"—";
 $("#syskv").innerHTML=`
 <dt>Hostname</dt><dd>${hn}${sys.mdns_enabled?` · <span style=color:var(--dim)>${hn}.local</span>`:""}</dd>
-<dt>Firmware</dt><dd>${sys.fw||"—"}</dd>
+<dt>Firmware</dt><dd>v${sys.fw_version||"?"} <span style=color:var(--dim)>(${sys.fw||"—"})</span></dd>
 <dt>Chip</dt><dd>ESP32-C3 · MAC ${sys.mac||"—"}</dd>
 <dt>Uptime</dt><dd>${dur(sys.uptime_s)}</dd>
 <dt>CPU-Last</dt><dd>${sys.cpu_load??"—"} % <span style=color:var(--faint)>(grob, Idle-Hook)</span></dd>
@@ -1152,7 +1157,7 @@ setTimeout(()=>pollCfg(addr),250);
 async function refresh(){
 try{st=await J("/api/status")}catch(e){}
 try{sys=await J("/api/system")}catch(e){}
-$("#foot").innerHTML=`<span class="dot ${sys.ssid?"ok":"err"}"></span> ${sys.ssid?"verbunden":"kein WLAN"}<br>Uptime ${dur(sys.uptime_s)}<br>FW ${(sys.fw||"").split(" ")[0]}`;
+$("#foot").innerHTML=`<span class="dot ${sys.ssid?"ok":"err"}"></span> ${sys.ssid?"verbunden":"kein WLAN"}<br>Uptime ${dur(sys.uptime_s)}<br>FW v${sys.fw_version||"?"} (${(sys.fw||"").split(" ")[0]})`;
 const on=(st.modules||[]).filter(m=>m.online).length;
 $("#meta").innerHTML=`<div>Module <b>${on}/${(st.modules||[]).length}</b></div>
 <div>WLAN <b>${sys.ssid||"—"}</b> · <b>${sys.rssi??"—"} dBm</b></div>
@@ -1287,6 +1292,8 @@ static void handle_system()
     d["rssi"]           = WiFi.isConnected() ? WiFi.RSSI() : 0;
     d["mac"]            = WiFi.macAddress();
     d["fw"]             = FW_BUILD;
+    { char v[8]; snprintf(v, sizeof(v), "%u.%u", FW_VERSION_MAJOR, FW_VERSION_MINOR);
+      d["fw_version"] = v; }
     d["node_id"]        = cfg.node_id;
     d["time"]           = tbuf;
     d["time_src"]       = tsrc;
