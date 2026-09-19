@@ -471,18 +471,20 @@ int main(void)
         /* Ausgaenge */
         pin_set(&PORTA, PIN_TRIAC, motion_triac_gate(&g_motion));
         pin_set(&PORTA, PIN_CHAIN_OUT, g_enum.chain_out_active);
-        /* LED: Identify = schnelles Blinken, Fehler = langsames Blinken,
-         * sonst Dauerlicht. */
+        /* LED: Identify = schnelles Blinken (4 Hz), Fehler = langsames
+         * Blinken (1 Hz), sonst Dauerlicht. 50 % Helligkeit durch
+         * softwareseitiges Umschalten in jeder zweiten Millisekunde
+         * (500-Hz-Traeger, keine Hardware-PWM auf diesem Pin belegt). */
         {
             uint8_t led;
             if ((int32_t)(g_identify_until_ms - now) > 0) {
-                led = (now >> 6) & 1u;
+                led = (now / 125) & 1u;  /* 4 Hz */
             } else if (g_motion.state == MOTION_ERROR) {
-                led = (now >> 8) & 1u;
+                led = (now / 500) & 1u;  /* 1 Hz */
             } else {
                 led = 1u;
             }
-            pin_set(&PORTA, PIN_LED, led);
+            pin_set(&PORTA, PIN_LED, led && ((now & 1u) == 0));
         }
 
         /* Position nach jedem Stillstand sichern */
