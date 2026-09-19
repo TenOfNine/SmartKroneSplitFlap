@@ -28,6 +28,7 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiManager.h>
+#include <cstdarg>
 #include <time.h>
 
 #include "driver/uart.h"
@@ -181,6 +182,31 @@ static uint32_t reboot_at = 0;
 /* Bus-Transport                                                       */
 /* ================================================================== */
 
+/* Ringpuffer der letzten Bus-Debug-Zeilen, zusaetzlich zur seriellen
+ * Konsole ueber /api/debug/buslog abrufbar (Tab "Bus-Debug" auf /debug) --
+ * praktisch, wenn das Geraet gerade nicht per USB dran haengt (Issue #16). */
+static constexpr uint8_t BUSLOG_LINES    = 40;
+static constexpr uint8_t BUSLOG_LINE_LEN = 100;
+static char     g_buslog[BUSLOG_LINES][BUSLOG_LINE_LEN];
+static uint8_t  g_buslog_next  = 0;
+static uint16_t g_buslog_total = 0;
+
+static void dbg_log(const char *fmt, ...)
+{
+    if (!cfg.debug_enabled) {
+        return;
+    }
+    char line[BUSLOG_LINE_LEN];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(line, sizeof(line), fmt, ap);
+    va_end(ap);
+    Serial.println(line);
+    strlcpy(g_buslog[g_buslog_next], line, sizeof(g_buslog[0]));
+    g_buslog_next = (uint8_t)((g_buslog_next + 1) % BUSLOG_LINES);
+    g_buslog_total++;
+}
+
 /* Diagnose fuer Issue #16 (Mehrkarten-Instabilitaet, echte Buskollision):
  * loggt jede awaiting/Retry/Timeout-Transition der busmaster-Bibliothek.
  * real_now (frisch per millis() an dieser Stelle) vs. now_ms (der von
@@ -190,24 +216,24 @@ static uint32_t reboot_at = 0;
 static void busmaster_log_cb(void *, const char *event, uint8_t cmd, uint8_t addr,
                              uint32_t now_ms, uint32_t sent_ms, uint8_t retries)
 {
-    if (!cfg.debug_enabled) {
-        return;
-    }
     const uint32_t real_now = millis();
-    Serial.printf("[bus] await %-7s cmd=0x%02X addr=%u now=%lu sent=%lu delta=%ld"
-                 " retries=%u real_now=%lu drift=%ld\n",
-                 event, cmd, addr,
-                 (unsigned long)now_ms, (unsigned long)sent_ms,
-                 (long)(now_ms - sent_ms), retries,
-                 (unsigned long)real_now, (long)(real_now - now_ms));
+    dbg_log("[bus] await %-7s cmd=0x%02X addr=%u now=%lu sent=%lu delta=%ld"
+           " retries=%u real_now=%lu drift=%ld",
+           event, cmd, addr,
+           (unsigned long)now_ms, (unsigned long)sent_ms,
+           (long)(now_ms - sent_ms), retries,
+           (unsigned long)real_now, (long)(real_now - now_ms));
 }
 
 static void bus_tx(void *, const uint8_t *data, size_t len)
 {
     if (cfg.debug_enabled) {
-        Serial.printf("[bus] TX %u:", (unsigned)len);
-        for (size_t i = 0; i < len; ++i) { Serial.printf(" %02X", data[i]); }
-        Serial.println();
+        char line[BUSLOG_LINE_LEN];
+        int off = snprintf(line, sizeof(line), "[bus] TX %u:", (unsigned)len);
+        for (size_t i = 0; i < len && off < (int)sizeof(line) - 4; ++i) {
+            off += snprintf(line + off, sizeof(line) - off, " %02X", data[i]);
+        }
+        dbg_log("%s", line);
     }
     uart_write_bytes(RS485_UART, reinterpret_cast<const char *>(data), len);
     uart_wait_tx_done(RS485_UART, pdMS_TO_TICKS(20));
@@ -298,11 +324,16 @@ static uint32_t module_online_mask()
 static void bus_pump(uint32_t now)
 {
     uint8_t b;
+    char rxline[BUSLOG_LINE_LEN];
+    int  rxoff = 0;
     bool any_rx = false;
+    if (cfg.debug_enabled) {
+        rxoff = snprintf(rxline, sizeof(rxline), "[bus] RX:");
+    }
     while (uart_read_bytes(RS485_UART, &b, 1, 0) == 1) {
-        if (cfg.debug_enabled) {
-            if (!any_rx) { Serial.print("[bus] RX:"); any_rx = true; }
-            Serial.printf(" %02X", b);
+        if (cfg.debug_enabled && rxoff < (int)sizeof(rxline) - 4) {
+            any_rx = true;
+            rxoff += snprintf(rxline + rxoff, sizeof(rxline) - rxoff, " %02X", b);
         }
         if (moduleupdate_busy(&g_mu)) {
             if (proto_parser_feed(&g_mu_parser, b) == PARSE_FRAME_OK) {
@@ -314,10 +345,10 @@ static void bus_pump(uint32_t now)
         }
     }
     if (cfg.debug_enabled) {
-        if (any_rx) { Serial.println(); }
+        if (any_rx) { dbg_log("%s", rxline); }
         static bool s_chain_dbg_prev = false;
         if (g_bus.chain_active != s_chain_dbg_prev) {
-            Serial.printf("[bus] CHAIN -> %s\n", g_bus.chain_active ? "HIGH" : "low");
+            dbg_log("[bus] CHAIN -> %s", g_bus.chain_active ? "HIGH" : "low");
             s_chain_dbg_prev = g_bus.chain_active;
         }
     }
@@ -1394,9 +1425,7 @@ static void handle_module_config()
 static void handle_enumerate()
 {
     if (!write_allowed()) return;
-    if (cfg.debug_enabled) {
-        Serial.println("[bus] === Enumeration gestartet ===");
-    }
+    dbg_log("[bus] === Enumeration gestartet ===");
     busmaster_start_enumeration(&g_bus, millis());
     evlog_push(&g_log, millis(), EVLOG_INFO, "bus", "Enumeration (Web) gestartet");
     ok_json();
@@ -1501,6 +1530,19 @@ static const char DEBUG_HTML[] PROGMEM =
     ".then(r=>r.text()).then(t=>document.getElementById('out').textContent=t)\">"
     "CMD_IDENTIFY an Adresse 250 (Service) senden</button></p>"
     "<pre id=\"out\"></pre>"
+    "<h2>Bus-Log</h2>"
+    "<p><button onclick=\"refreshLog()\">Aktualisieren</button> "
+    "<label><input type=\"checkbox\" id=\"autoref\" checked> automatisch (1 s)</label></p>"
+    "<pre id=\"buslog\" style=\"max-height:60vh;overflow:auto;background:#111;color:#0f0;"
+    "padding:0.5rem;font-size:0.85rem\"></pre>"
+    "<script>"
+    "function refreshLog(){fetch('/api/debug/buslog').then(r=>r.text()).then(t=>{"
+    "const el=document.getElementById('buslog');const atEnd="
+    "el.scrollTop+el.clientHeight>=el.scrollHeight-4;el.textContent=t;"
+    "if(atEnd)el.scrollTop=el.scrollHeight;});}"
+    "refreshLog();"
+    "setInterval(()=>{if(document.getElementById('autoref').checked)refreshLog();},1000);"
+    "</script>"
     "</body></html>";
 
 static void handle_debug_page()
@@ -1514,6 +1556,23 @@ static void handle_debug_identify()
     if (!cfg.debug_enabled) { send_json(404, "{\"error\":\"debug_disabled\"}"); return; }
     identify_service_test();
     send_json(200, "{\"ok\":true}");
+}
+
+static void handle_debug_buslog()
+{
+    if (!cfg.debug_enabled) { send_json(404, "{\"error\":\"debug_disabled\"}"); return; }
+    String out;
+    const uint16_t count = g_buslog_total < BUSLOG_LINES ? g_buslog_total : BUSLOG_LINES;
+    const uint8_t  start = (g_buslog_total < BUSLOG_LINES) ? 0 : g_buslog_next;
+    for (uint16_t i = 0; i < count; ++i) {
+        const uint8_t idx = (uint8_t)((start + i) % BUSLOG_LINES);
+        out += g_buslog[idx];
+        out += '\n';
+    }
+    if (count == 0) {
+        out = "(noch keine Eintraege)\n";
+    }
+    web.send(200, "text/plain; charset=utf-8", out);
 }
 
 static void handle_time()
@@ -1876,6 +1935,7 @@ static void web_begin()
     web.on("/api/enumerate", HTTP_POST, guard(handle_enumerate));
     web.on("/debug", guard(handle_debug_page));
     web.on("/api/debug/identify", HTTP_POST, guard(handle_debug_identify));
+    web.on("/api/debug/buslog", HTTP_GET, guard(handle_debug_buslog));
     web.on("/api/module/firmware",      HTTP_GET,  guard(handle_module_firmware));
     web.on("/api/module/update",        HTTP_POST, guard(handle_module_update));
     web.on("/api/module/update/status", HTTP_GET,  guard(handle_module_update_status));
