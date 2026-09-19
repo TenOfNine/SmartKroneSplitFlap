@@ -328,26 +328,20 @@ static void status_led_tick(uint32_t now)
             trouble = true;
         }
     }
-    /* Helligkeit per Software-PWM auf 50 % gedeckelt (kein Hardware-PWM
-     * verwendet): PWM_PERIOD_MS-Traeger (~125 Hz) fuer den Ein/Aus-Anteil,
-     * im Ruhezustand zusaetzlich eine Dreieckswelle ueber BREATHE_PERIOD_MS
-     * fuer sanftes Atmen statt Dauerlicht. */
+    /* Helligkeit per Software-PWM auf 25 % gedeckelt (kein Hardware-PWM
+     * verwendet): ~125-Hz-Traeger fuer den Ein/Aus-Anteil. */
     const uint32_t PWM_PERIOD_MS = 8;
-    const uint32_t PWM_HALF_MS   = PWM_PERIOD_MS / 2;   /* Deckel 50 % */
+    const uint32_t PWM_ON_MS     = PWM_PERIOD_MS / 4;   /* Deckel 25 % */
     const uint32_t pwm_phase     = now % PWM_PERIOD_MS;
-    bool lit;
+    bool on;
     if (WiFi.status() != WL_CONNECTED) {
-        lit = ((now / 125) & 1) && (pwm_phase < PWM_HALF_MS);  /* 4 Hz */
+        on = (now / 125) & 1;  /* 4 Hz */
     } else if (trouble) {
-        lit = ((now / 500) & 1) && (pwm_phase < PWM_HALF_MS);  /* 1 Hz */
+        on = (now / 500) & 1;  /* 1 Hz */
     } else {
-        const uint32_t BREATHE_PERIOD_MS = 2000;
-        const uint32_t half  = BREATHE_PERIOD_MS / 2;
-        const uint32_t phase = now % BREATHE_PERIOD_MS;
-        const uint32_t level = (phase < half) ? phase : (BREATHE_PERIOD_MS - phase);
-        const uint32_t duty  = (level * PWM_HALF_MS) / half;
-        lit = pwm_phase < duty;
+        on = true;
     }
+    const bool lit = on && (pwm_phase < PWM_ON_MS);
     digitalWrite(STATUS_LED, lit ? HIGH : LOW);
 }
 

@@ -472,29 +472,22 @@ int main(void)
         pin_set(&PORTA, PIN_TRIAC, motion_triac_gate(&g_motion));
         pin_set(&PORTA, PIN_CHAIN_OUT, g_enum.chain_out_active);
         /* LED: Identify = schnelles Blinken (4 Hz), Fehler = langsames
-         * Blinken (1 Hz), sonst sanftes Atmen statt Dauerlicht. Helligkeit
-         * per Software-PWM auf 50 % gedeckelt (kein Hardware-PWM-Kanal auf
-         * diesem Pin belegt): PWM_PERIOD_MS-Traeger (~125 Hz) fuer den
-         * Ein/Aus-Anteil, beim Atmen zusaetzlich eine Dreieckswelle ueber
-         * BREATHE_PERIOD_MS fuer die langsame Auf-/Abblende. */
+         * Blinken (1 Hz), sonst Dauerlicht. 25 % Helligkeit durch
+         * softwareseitiges Umschalten (~125-Hz-Traeger, kein Hardware-PWM-
+         * Kanal auf diesem Pin belegt). */
         {
             const uint32_t PWM_PERIOD_MS = 8u;
-            const uint32_t PWM_HALF_MS   = PWM_PERIOD_MS / 2u;   /* Deckel 50 % */
+            const uint32_t PWM_ON_MS     = PWM_PERIOD_MS / 4u;   /* Deckel 25 % */
             const uint32_t pwm_phase     = now % PWM_PERIOD_MS;
             uint8_t led;
             if ((int32_t)(g_identify_until_ms - now) > 0) {
-                led = ((now / 125) & 1u) && (pwm_phase < PWM_HALF_MS);  /* 4 Hz */
+                led = (now / 125) & 1u;  /* 4 Hz */
             } else if (g_motion.state == MOTION_ERROR) {
-                led = ((now / 500) & 1u) && (pwm_phase < PWM_HALF_MS);  /* 1 Hz */
+                led = (now / 500) & 1u;  /* 1 Hz */
             } else {
-                const uint32_t BREATHE_PERIOD_MS = 2000u;
-                const uint32_t half  = BREATHE_PERIOD_MS / 2u;
-                const uint32_t phase = now % BREATHE_PERIOD_MS;
-                const uint32_t level = (phase < half) ? phase : (BREATHE_PERIOD_MS - phase);
-                const uint32_t duty  = (level * PWM_HALF_MS) / half;
-                led = pwm_phase < duty;
+                led = 1u;
             }
-            pin_set(&PORTA, PIN_LED, led);
+            pin_set(&PORTA, PIN_LED, led && (pwm_phase < PWM_ON_MS));
         }
 
         /* Position nach jedem Stillstand sichern */
