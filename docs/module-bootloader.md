@@ -2,10 +2,15 @@
 
 > **Status: experimentell.** Der **Werksflash über den Browser** (Bootloader +
 > App + `BOOTEND`-Fuse, Bench-Punkte 1+2) ist **am Gerät verifiziert**
-> (10.09.2026). Die **Firmware-Verteilung über den Bus** (Punkte 3–8) ist noch
-> **nicht verifiziert** — dafür wird die Master-Hardware gebraucht (bestellt,
-> noch nicht aufgebaut). `pio run -e attiny1616 -t upload` (App @ 0x0000, ohne
-> Bootloader) bleibt bis dahin der abgesicherte Weg für Firmware-Änderungen.
+> (10.09.2026). Die **Firmware-Verteilung über den Bus** (Punkte 3–8):
+> erster realer Test am Gerät (19.09.2026) deckte einen Bug im Bootloader
+> auf (derselbe DI-Pin-Fehler wie in der App vor `f24b861`, eigene
+> USART0-Initialisierung — behoben in `3d65464`, Firmware v1.9). Beide
+> Testkarten blieben dabei im Bootloader hängen (kein Hardwaredefekt,
+> per Browser-Werksflash behebbar). **Nach dem Fix noch nicht erneut
+> end-to-end verifiziert.** `pio run -e attiny1616 -t upload` (App @
+> 0x0000, ohne Bootloader) bleibt bis dahin der abgesicherte Weg für
+> Firmware-Änderungen.
 
 ## Ziel
 
