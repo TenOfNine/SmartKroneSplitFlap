@@ -114,6 +114,7 @@ struct Settings {
     bool     api_write      = true;
     bool     ota_enabled    = true;
     bool     mdns_enabled   = true;
+    bool     debug_enabled  = true;      /* Bus-Log auf der Konsole + /debug-Seite */
 
     /* Zugriffsschutz */
     char     admin_user[24] = "admin";
@@ -172,6 +173,11 @@ static uint32_t reboot_at = 0;
 
 static void bus_tx(void *, const uint8_t *data, size_t len)
 {
+    if (cfg.debug_enabled) {
+        Serial.printf("[bus] TX %u:", (unsigned)len);
+        for (size_t i = 0; i < len; ++i) { Serial.printf(" %02X", data[i]); }
+        Serial.println();
+    }
     uart_write_bytes(RS485_UART, reinterpret_cast<const char *>(data), len);
     uart_wait_tx_done(RS485_UART, pdMS_TO_TICKS(20));
     uart_flush_input(RS485_UART);
@@ -187,8 +193,7 @@ static void bus_begin()
     uc.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
     uart_driver_install(RS485_UART, 512, 0, 0, nullptr, 0);
     uart_param_config(RS485_UART, &uc);
-    uart_set_pin(RS485_UART, RS485_TX_PIN, RS485_RX_PIN, RS485_DE_PIN,
-                 UART_PIN_NO_CHANGE);
+    uart_set_pin(RS485_UART, RS485_TX_PIN, RS485_RX_PIN, RS485_DE_PIN, UART_PIN_NO_CHANGE);
     uart_set_mode(RS485_UART, UART_MODE_RS485_HALF_DUPLEX);
 
     pinMode(CHAIN_PIN, OUTPUT);
@@ -260,7 +265,12 @@ static uint32_t module_online_mask()
 static void bus_pump(uint32_t now)
 {
     uint8_t b;
+    bool any_rx = false;
     while (uart_read_bytes(RS485_UART, &b, 1, 0) == 1) {
+        if (cfg.debug_enabled) {
+            if (!any_rx) { Serial.print("[bus] RX:"); any_rx = true; }
+            Serial.printf(" %02X", b);
+        }
         if (moduleupdate_busy(&g_mu)) {
             if (proto_parser_feed(&g_mu_parser, b) == PARSE_FRAME_OK) {
                 const proto_frame_t *f = &g_mu_parser.frame;
@@ -270,8 +280,38 @@ static void bus_pump(uint32_t now)
             busmaster_on_rx_byte(&g_bus, b, now);
         }
     }
+    if (cfg.debug_enabled) {
+        if (any_rx) { Serial.println(); }
+        static bool s_chain_dbg_prev = false;
+        if (g_bus.chain_active != s_chain_dbg_prev) {
+            Serial.printf("[bus] CHAIN -> %s\n", g_bus.chain_active ? "HIGH" : "low");
+            s_chain_dbg_prev = g_bus.chain_active;
+        }
+    }
     /* CHAIN ist high-aktiv; der 74LVC1G17 hebt 3,3 V -> 5 V nicht invertierend. */
     digitalWrite(CHAIN_PIN, g_bus.chain_active ? HIGH : LOW);
+}
+
+/* Schickt ein Unicast CMD_IDENTIFY (0x40) an die Serviceadresse 250 -- die
+ * Adresse, auf die eine Karte nach einer gescheiterten Enumeration
+ * zurueckfaellt (Spez. 4.5.2). Damit laesst sich pruefen, ob eine Karte
+ * ueberhaupt selbst sendet, unabhaengig vom Timing der Enumeration.
+ * Ueber /debug erreichbar, siehe handle_debug_identify(). */
+static void identify_service_test()
+{
+    if (cfg.debug_enabled) {
+        Serial.println("[bus] === CMD_IDENTIFY an Adresse 250 (Service) ===");
+    }
+    proto_frame_t f{};
+    f.cmd = 0x40; /* CMD_IDENTIFY */
+    f.addr = 250; /* PROTO_ADDR_SERVICE */
+    f.payload[0] = 5; /* 5 s blinken */
+    f.payload_len = 1;
+    uint8_t buf[PROTO_MAX_PAYLOAD + 8];
+    const size_t n = proto_encode(&f, buf, sizeof(buf));
+    if (n > 0) {
+        bus_tx(nullptr, buf, n);
+    }
 }
 
 /* --- Status-LED (D1 an GPIO6) ------------------------------ */
@@ -290,13 +330,15 @@ static void status_led_tick(uint32_t now)
     }
     bool on;
     if (WiFi.status() != WL_CONNECTED) {
-        on = (now / 125) & 1;
+        on = (now / 125) & 1;  /* 4 Hz */
     } else if (trouble) {
-        on = (now / 500) & 1;
+        on = (now / 500) & 1;  /* 1 Hz */
     } else {
         on = true;
     }
-    digitalWrite(STATUS_LED, on ? HIGH : LOW);
+    /* 50 % Helligkeit: nur in jeder zweiten Millisekunde tatsaechlich an. */
+    const bool lit = on && ((now & 1u) == 0);
+    digitalWrite(STATUS_LED, lit ? HIGH : LOW);
 }
 
 /* ================================================================== */
@@ -333,6 +375,7 @@ static void settings_load()
     cfg.api_write    = prefs.getBool("api_write", cfg.api_write);
     cfg.ota_enabled  = prefs.getBool("ota_en", cfg.ota_enabled);
     cfg.mdns_enabled = prefs.getBool("mdns_en", cfg.mdns_enabled);
+    cfg.debug_enabled = prefs.getBool("debug_en", cfg.debug_enabled);
 
     prefs.getString("adm_user", cfg.admin_user, sizeof(cfg.admin_user));
     if (!cfg.admin_user[0]) strlcpy(cfg.admin_user, "admin", sizeof(cfg.admin_user));
@@ -366,6 +409,7 @@ static void settings_save()
     prefs.putBool("api_write", cfg.api_write);
     prefs.putBool("ota_en", cfg.ota_enabled);
     prefs.putBool("mdns_en", cfg.mdns_enabled);
+    prefs.putBool("debug_en", cfg.debug_enabled);
     prefs.putString("adm_user", cfg.admin_user);
     prefs.putString("adm_pass", cfg.admin_pass);
     prefs.putUChar("net_scope", cfg.net_scope);
@@ -622,6 +666,8 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=tx><b>OTA-Update über die Web-UI</b><span>Erlaubt <code>POST /api/update</code> (Abschnitt „Firmware aktualisieren"). Aus = Updates nur per USB.</span></div></div>
 <div class=trow><label class=switch><input type=checkbox id=cf_mdns_enabled checked><span class=t></span></label>
 <div class=tx><b>mDNS / Bonjour</b><span>Erreichbarkeit unter <code>&lt;node&gt;.local</code>. (Neustart nötig)</span></div></div>
+<div class=trow><label class=switch><input type=checkbox id=cf_debug_enabled checked><span class=t></span></label>
+<div class=tx><b>Bus-Debug</b><span>Rohbytes und CHAIN-Wechsel auf der seriellen Konsole, plus <code>/debug</code> (Bus-Diagnose, z. B. CMD_IDENTIFY an eine noch unadressierte Karte).</span></div></div>
 <p class="hint warn">Die Web-Oberfläche selbst lässt sich hier nicht abschalten.</p>
 <div class="row mt"><button class="btn primary" data-save=iface>Speichern</button></div></div>
 
@@ -817,7 +863,7 @@ return `<div class=e><time>+${dur(e.t/1000)}</time>${pill}<div><span class=who>$
 
 // ── Einstellungen ──
 const CF=["mqtt_host","mqtt_port","mqtt_user","mqtt_pass","base_topic","node_id","modules","hms","ntp_server","tz","ip","mask","gw","dns"];
-const CB=["use_static","ntp_enabled","mqtt_enabled","api_write","ota_enabled","mdns_enabled"];
+const CB=["use_static","ntp_enabled","mqtt_enabled","api_write","ota_enabled","mdns_enabled","debug_enabled"];
 // Zeitzonen: [Anzeige, Normalzeit-TZ, TZ mit Sommerzeitregel ("" = Zone ohne DST)]
 const TZ=[
 ["Berlin · Paris · Madrid · Rom · Wien","CET-1","CET-1CEST,M3.5.0,M10.5.0/3"],
@@ -903,6 +949,7 @@ ntp_server:$("#cf_ntp_server").value,tz:tzString(),ntp_enabled:$("#cf_ntp_enable
 sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
 api_write:$("#cf_api_write").checked,ota_enabled:$("#cf_ota_enabled").checked,mdns_enabled:$("#cf_mdns_enabled").checked,
+debug_enabled:$("#cf_debug_enabled").checked,
 net_scope:+$("#cf_net_scope").value,admin_user:$("#cf_admin_user").value||"admin"};
 // admin_pass nur mitschicken, wenn ein neues gesetzt oder "entfernen" gewählt wurde
 if($("#cf_admin_clear").checked)o.admin_pass="";
@@ -1312,6 +1359,9 @@ static void handle_module_config()
 static void handle_enumerate()
 {
     if (!write_allowed()) return;
+    if (cfg.debug_enabled) {
+        Serial.println("[bus] === Enumeration gestartet ===");
+    }
     busmaster_start_enumeration(&g_bus, millis());
     evlog_push(&g_log, millis(), EVLOG_INFO, "bus", "Enumeration (Web) gestartet");
     ok_json();
@@ -1404,6 +1454,31 @@ static void handle_module_update_status()
     char out[768];
     serializeJson(d, out, sizeof(out));
     send_json(200, out);
+}
+
+/* Bus-Debug-Seite: nur erreichbar, wenn cfg.debug_enabled (Einstellungen ->
+ * "Bus-Debug") gesetzt ist -- siehe guard() in web_begin(). */
+static const char DEBUG_HTML[] PROGMEM =
+    "<!doctype html><html><head><meta charset=\"utf-8\">"
+    "<title>Bus-Debug</title></head><body style=\"font-family:sans-serif;padding:2rem\">"
+    "<h1>Bus-Debug</h1>"
+    "<p><button onclick=\"fetch('/api/debug/identify',{method:'POST'})"
+    ".then(r=>r.text()).then(t=>document.getElementById('out').textContent=t)\">"
+    "CMD_IDENTIFY an Adresse 250 (Service) senden</button></p>"
+    "<pre id=\"out\"></pre>"
+    "</body></html>";
+
+static void handle_debug_page()
+{
+    if (!cfg.debug_enabled) { send_json(404, "{\"error\":\"debug_disabled\"}"); return; }
+    web.send_P(200, "text/html", DEBUG_HTML);
+}
+
+static void handle_debug_identify()
+{
+    if (!cfg.debug_enabled) { send_json(404, "{\"error\":\"debug_disabled\"}"); return; }
+    identify_service_test();
+    send_json(200, "{\"ok\":true}");
 }
 
 static void handle_time()
@@ -1517,6 +1592,7 @@ static void apply_config_doc(JsonDocument &doc)
     if (doc["api_write"].is<bool>())          cfg.api_write = doc["api_write"];
     if (doc["ota_enabled"].is<bool>())        cfg.ota_enabled = doc["ota_enabled"];
     if (doc["mdns_enabled"].is<bool>())       cfg.mdns_enabled = doc["mdns_enabled"];
+    if (doc["debug_enabled"].is<bool>())      cfg.debug_enabled = doc["debug_enabled"];
 
     settings_save();
 
@@ -1557,6 +1633,7 @@ static void config_to_json(JsonDocument &d)
     d["api_write"]     = cfg.api_write;
     d["ota_enabled"]   = cfg.ota_enabled;
     d["mdns_enabled"]  = cfg.mdns_enabled;
+    d["debug_enabled"] = cfg.debug_enabled;
     d["admin_user"]    = cfg.admin_user;
     d["admin_set"]     = cfg.admin_pass[0] != 0;   /* Passwort selbst nie ausliefern */
     d["net_scope"]     = cfg.net_scope;
@@ -1762,6 +1839,8 @@ static void web_begin()
     web.on("/api/module",    HTTP_POST, guard(handle_module));
     web.on("/api/module/config", HTTP_GET, guard(handle_module_config));
     web.on("/api/enumerate", HTTP_POST, guard(handle_enumerate));
+    web.on("/debug", guard(handle_debug_page));
+    web.on("/api/debug/identify", HTTP_POST, guard(handle_debug_identify));
     web.on("/api/module/firmware",      HTTP_GET,  guard(handle_module_firmware));
     web.on("/api/module/update",        HTTP_POST, guard(handle_module_update));
     web.on("/api/module/update/status", HTTP_GET,  guard(handle_module_update_status));
