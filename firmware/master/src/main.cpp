@@ -124,6 +124,7 @@ struct Settings {
 
 static uint32_t last_poll_ms;
 static uint8_t  poll_addr = 1;
+static uint8_t  poll_cycle = 0;  /* zaehlt Poll-Ticks unabhaengig von poll_addr/count */
 static uint32_t last_time_ms;
 static uint32_t last_autoscan_ms;
 static uint32_t last_mqtt_try;
@@ -2187,12 +2188,16 @@ void loop()
         const uint8_t count = effective_module_count();
         if (count > 0) {
             /* Ein online-Modul ohne bekannte Firmware-Version einmalig abfragen,
-             * sonst die normale Statusabfrage. */
+             * sonst die normale Statusabfrage. poll_cycle laeuft unabhaengig
+             * von poll_addr/count -- bei wenigen Modulen (count < 4) wuerde
+             * "poll_addr % 4 == 0" sonst nie eintreten und die Versions-
+             * abfrage nie ausgeloest werden. */
+            ++poll_cycle;
             uint8_t vaddr = 0;
             for (uint8_t a = 1; a <= count && a <= BUSMASTER_MAX_MODULES; ++a) {
                 if (g_bus.mod[a - 1].online && !g_bus.mod[a - 1].ver_known) { vaddr = a; break; }
             }
-            if (vaddr && (poll_addr % 4u) == 0u) {
+            if (vaddr && (poll_cycle % 4u) == 0u) {
                 busmaster_poll_version(&g_bus, vaddr, now);
             } else {
                 busmaster_poll_status(&g_bus, poll_addr, now);
