@@ -66,12 +66,17 @@ Nächste sinnvolle Schritte:
   (19.09.2026)** — DI-Pin-Bug gefunden und behoben (siehe Tabelle oben).
   Enumeration, Status-Polling, `CMD_IDENTIFY` einzeln per Logic Analyzer
   verifiziert.
-- **Offen: zwei Daughter Cards gleichzeitig instabil** (Issue
+- **Zwei-Karten-Instabilität behoben** (Issue
   [#16](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/16)) —
-  fällt nach kurzer Zeit auf „offline" zurück, Verdacht auf die
-  Sendeecho-Kollisionserkennung im Modul. Nächster Schritt: Logic-Analyzer-
-  Mitschnitt an der zweiten Karte während eines laufenden Status-Polls.
-  Auf Betreiberwunsch zeitlich verschoben.
+  Root Cause: `web.handleClient()` blockierte `loop()` gelegentlich
+  100–120 ms, wodurch `busmaster` mit einem veralteten Zeitstempel
+  rechnete und der Master real dieselbe Anfrage doppelt sendete (Beweis
+  per Logic Analyzer). Fix `3374dc0`: frischer Zeitstempel für
+  `bus_pump()`/`busmaster_tick()`/Polls. Danach mehrere Minuten Live-Log
+  ohne eine einzige beschädigte Antwort, beide Module durchgehend online.
+  Neues Diagnose-Tooling dabei entstanden: Bus-Log live auf `/debug`
+  (400-Zeilen-Ringpuffer) + Blockier-Zeit-Warnung je `loop()`-Aufruf.
+  Issue bleibt offen, bis sich das über längere Laufzeit bestätigt.
 - **Selbsttest** (Spez. 7.3) über eine volle Umdrehung je Modul mit
   Timing-Auswertung — bislang nur Homing-Broadcast.
 - **Verifikationslauf über `GET_UID`** (Spez. 4.5.4 / A-13): `busmaster` hat noch
