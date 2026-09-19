@@ -22,6 +22,8 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 #include <Preferences.h>
 #include <PubSubClient.h>
 #include <Update.h>
@@ -89,7 +91,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 9;
+static constexpr uint8_t FW_VERSION_MINOR = 10;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -794,6 +796,8 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div id=fwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
 <div class="row mt"><button class="btn primary" id=fwgo disabled>Update starten</button>
 <span id=fwoff class="hint warn" style=margin:0;display:none>In den Schnittstellen deaktiviert</span></div>
+<p class=hint style=margin-top:16px>Oder direkt die neueste Version aus dem Repository laden — spart das manuelle Herunterladen. <b>Funktioniert nur, wenn die Steuerung selbst Internetzugriff hat</b> (nicht nur das Gerät, von dem aus du diese Seite aufrufst) — in einem reinen Heimnetz ohne Internetfreigabe schlägt das fehl.</p>
+<div class="row mt"><button class="btn" id=fwghgo>Von GitHub aktualisieren</button></div>
 </div>
 
 <div class=sect><h3>Modul-Firmware <span class="pill warn" style=font-size:10px>experimentell</span></h3>
@@ -1004,7 +1008,7 @@ $("#mqdot").className="dot "+(sys.mqtt_connected?"ok":sys.mqtt_enabled?"warn":""
 otaUiState();renderSys();loadModFw()}
 function otaUiState(){const on=!!cfg.ota_enabled;
 $("#fwoff").style.display=on?"none":"inline";$("#fwgo").disabled=!on||!_fw;
-$("#fw").disabled=!on}
+$("#fw").disabled=!on;$("#fwghgo").disabled=!on}
 $("#cf_use_static").onchange=e=>$("#ipf").hidden=!e.target.checked;
 $("#cf_mqtt_enabled").onchange=e=>$("#mqf").style.opacity=e.target.checked?1:.4;
 $("#cf_ota_enabled").onchange=e=>{cfg.ota_enabled=e.target.checked;otaUiState()};
@@ -1073,6 +1077,13 @@ x.onload=()=>{if(x.status===200){$("#fwfill").style.width="100%";toast("Update g
 else{$("#fwgo").disabled=false;let m=x.responseText;try{m=JSON.parse(m).error}catch(_){}toast("Update fehlgeschlagen: "+m)}};
 x.onerror=()=>{$("#fwgo").disabled=false;$("#fwbar").style.display="none";toast("Verbindung abgebrochen")};
 x.send(fd)};
+$("#fwghgo").onclick=()=>{
+if(!confirm("Neueste Firmware direkt aus dem GitHub-Repository laden und einspielen? Das dauert je nach Internetverbindung der Steuerung einen Moment."))return;
+$("#fwghgo").disabled=true;const old=$("#fwghgo").textContent;$("#fwghgo").textContent="Lädt …";
+fetch("/api/update/github",{method:"POST"}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
+if(ok&&j.ok){toast("Update geschrieben — Neustart …")}
+else{$("#fwghgo").disabled=false;$("#fwghgo").textContent=old;toast("Update fehlgeschlagen: "+(j.error||"unbekannt"))}
+}).catch(()=>{$("#fwghgo").disabled=false;$("#fwghgo").textContent=old;toast("Verbindung abgebrochen")})};
 
 function kb(b){return Math.round((b||0)/1024)}
 function renderSys(){
@@ -1831,16 +1842,86 @@ static void ota_fail(const char *why)
     evlog_push(&g_log, millis(), EVLOG_ERR, "ota", "abgelehnt: %s", why);
 }
 
+/* Setzt den OTA-Zustand fuer eine neue Uebertragung zurueck. Aufrufer prueft
+ * Zugriff (client_is_local()+auth_ok()) und cfg.ota_enabled vorher selbst,
+ * je nach Quelle (Browser-Upload vs. GitHub-Abruf) unterschiedlich geloggt. */
+static void ota_reset()
+{
+    g_ota_ok = false;
+    g_ota_begun = false;
+    g_ota_hdr_have = 0;
+    g_ota_img_seen = 0;
+    g_ota_err[0] = 0;
+}
+
+/* Verarbeitet n Bytes des .kota-Containers, gleich ob sie vom Browser-Upload
+ * oder einem HTTP-Abruf (GitHub) stammen: Header vervollstaendigen, Signatur
+ * pruefen, dann streamend an Update.write() + SHA-256. */
+static void ota_feed(const uint8_t *p, size_t n)
+{
+    if (g_ota_err[0]) return;
+
+    /* 1) Header vervollstaendigen */
+    if (g_ota_hdr_have < OTA_HEADER_LEN) {
+        const size_t take = (OTA_HEADER_LEN - g_ota_hdr_have < n)
+                                ? OTA_HEADER_LEN - g_ota_hdr_have : n;
+        memcpy(g_ota_hdr + g_ota_hdr_have, p, take);
+        g_ota_hdr_have += take;
+        p += take;
+        n -= take;
+        if (g_ota_hdr_have < OTA_HEADER_LEN) return;
+
+        const ota_hdr_result_t hr = otaverify_parse_header(
+            g_ota_hdr, OTA_HEADER_LEN, ESP.getFreeSketchSpace(), &g_ota_h);
+        if (hr != OTA_HDR_OK) { ota_fail(otaverify_strerror(hr)); return; }
+        if (!ota_sign_verify_header(g_ota_hdr, OTA_SIGNED_LEN, g_ota_h.sig)) {
+            ota_fail("Signatur ungueltig"); return;
+        }
+        if (!Update.begin(g_ota_h.img_len)) { ota_fail(Update.errorString()); return; }
+        g_ota_begun = true;
+        ota_sha256_begin();
+        g_ota_ok = true;
+    }
+
+    /* 2) restliche Bytes = App-Image */
+    if (!g_ota_ok || n == 0) return;
+    if (g_ota_img_seen + n > g_ota_h.img_len) {
+        n = g_ota_h.img_len - g_ota_img_seen;   /* Anhaengsel abschneiden */
+    }
+    if (n == 0) return;
+    ota_sha256_update(p, n);
+    if (Update.write((uint8_t *)p, n) != n) { ota_fail(Update.errorString()); return; }
+    g_ota_img_seen += n;
+}
+
+/* Schliesst eine Uebertragung ab: Hash gegen den Header pruefen, erst dann
+ * Update.end(). Rueckgabe false -> g_ota_err ist gesetzt. */
+static bool ota_finish(const char *source)
+{
+    if (!g_ota_ok) { ota_fail("kein Bild empfangen"); return false; }
+    uint8_t h[OTA_SHA_LEN];
+    ota_sha256_finish(h);
+    if (g_ota_img_seen != g_ota_h.img_len ||
+        memcmp(h, g_ota_h.img_sha256, OTA_SHA_LEN) != 0) {
+        ota_fail("Hash stimmt nicht");
+        return false;
+    }
+    if (!Update.end(true)) {
+        ota_fail(Update.errorString());
+        return false;
+    }
+    g_ota_begun = false;
+    evlog_push(&g_log, millis(), EVLOG_INFO, "ota",
+               "Update geschrieben (%u B, %s), Neustart", (unsigned)g_ota_img_seen, source);
+    return true;
+}
+
 static void handle_update_upload()
 {
     HTTPUpload &up = web.upload();
 
     if (up.status == UPLOAD_FILE_START) {
-        g_ota_ok = false;
-        g_ota_begun = false;
-        g_ota_hdr_have = 0;
-        g_ota_img_seen = 0;
-        g_ota_err[0] = 0;
+        ota_reset();
         if (!client_is_local() || !auth_ok()) { strlcpy(g_ota_err, "kein Zugriff", sizeof(g_ota_err)); return; }
         if (!cfg.ota_enabled)                 { strlcpy(g_ota_err, "ota_disabled", sizeof(g_ota_err)); return; }
         evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Upload: %s", up.filename.c_str());
@@ -1848,59 +1929,12 @@ static void handle_update_upload()
     }
 
     if (up.status == UPLOAD_FILE_WRITE) {
-        if (g_ota_err[0]) return;
-        const uint8_t *p = up.buf;
-        size_t n = up.currentSize;
-
-        /* 1) Header vervollstaendigen */
-        if (g_ota_hdr_have < OTA_HEADER_LEN) {
-            const size_t take = (OTA_HEADER_LEN - g_ota_hdr_have < n)
-                                    ? OTA_HEADER_LEN - g_ota_hdr_have : n;
-            memcpy(g_ota_hdr + g_ota_hdr_have, p, take);
-            g_ota_hdr_have += take;
-            p += take;
-            n -= take;
-            if (g_ota_hdr_have < OTA_HEADER_LEN) return;
-
-            const ota_hdr_result_t hr = otaverify_parse_header(
-                g_ota_hdr, OTA_HEADER_LEN, ESP.getFreeSketchSpace(), &g_ota_h);
-            if (hr != OTA_HDR_OK) { ota_fail(otaverify_strerror(hr)); return; }
-            if (!ota_sign_verify_header(g_ota_hdr, OTA_SIGNED_LEN, g_ota_h.sig)) {
-                ota_fail("Signatur ungueltig"); return;
-            }
-            if (!Update.begin(g_ota_h.img_len)) { ota_fail(Update.errorString()); return; }
-            g_ota_begun = true;
-            ota_sha256_begin();
-            g_ota_ok = true;
-        }
-
-        /* 2) restliche Bytes = App-Image */
-        if (!g_ota_ok || n == 0) return;
-        if (g_ota_img_seen + n > g_ota_h.img_len) {
-            n = g_ota_h.img_len - g_ota_img_seen;   /* Anhaengsel abschneiden */
-        }
-        if (n == 0) return;
-        ota_sha256_update(p, n);
-        if (Update.write((uint8_t *)p, n) != n) { ota_fail(Update.errorString()); return; }
-        g_ota_img_seen += n;
+        ota_feed(up.buf, up.currentSize);
         return;
     }
 
     if (up.status == UPLOAD_FILE_END) {
-        if (!g_ota_ok) return;
-        uint8_t h[OTA_SHA_LEN];
-        ota_sha256_finish(h);
-        if (g_ota_img_seen != g_ota_h.img_len ||
-            memcmp(h, g_ota_h.img_sha256, OTA_SHA_LEN) != 0) {
-            ota_fail("Hash stimmt nicht"); return;
-        }
-        if (Update.end(true)) {
-            g_ota_begun = false;
-            evlog_push(&g_log, millis(), EVLOG_INFO, "ota",
-                       "Update geschrieben (%u B), Neustart", (unsigned)g_ota_img_seen);
-        } else {
-            ota_fail(Update.errorString());
-        }
+        ota_finish("Browser-Upload");
         return;
     }
 
@@ -1926,6 +1960,81 @@ static void handle_update_done()
                               : (Update.hasError() ? Update.errorString() : "kein gueltiges Image"));
         send_json(500, m);
     }
+}
+
+/* /api/update/github -- laedt das neueste committete .kota direkt aus dem
+ * Repository (raw.githubusercontent.com, main-Branch) und spielt es genauso
+ * ein wie der Browser-Upload (ota_feed()/ota_finish() -- gleiche Signatur-
+ * und Hash-Pruefung). Braucht Internetzugriff der Steuerung selbst, nicht
+ * nur des Geraets, von dem aus die Web-UI aufgerufen wird -- daher der
+ * Hinweistext in den Einstellungen. TLS-Zertifikat wird nicht geprueft
+ * (setInsecure()): unnoetig, der Inhalt ist ohnehin ECDSA-signiert und wird
+ * unabhaengig von der Transportverschluesselung verifiziert. */
+static const char GITHUB_KOTA_URL[] =
+    "https://raw.githubusercontent.com/TenOfNine/SmartKroneSplitFlap/main/"
+    "firmware/master/prebuilt/krone-master-esp32c3.kota";
+
+static void handle_update_github()
+{
+    if (!cfg.ota_enabled) { send_json(403, "{\"error\":\"ota_disabled\"}"); return; }
+    if (!WiFi.isConnected()) { send_json(503, "{\"error\":\"kein WLAN\"}"); return; }
+
+    ota_reset();
+    evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "GitHub-Abruf gestartet");
+
+    WiFiClientSecure client;
+    client.setInsecure();
+    HTTPClient http;
+    http.setTimeout(15000);
+    if (!http.begin(client, GITHUB_KOTA_URL)) {
+        send_json(502, "{\"error\":\"Verbindung zu GitHub fehlgeschlagen\"}");
+        return;
+    }
+    const int code = http.GET();
+    if (code != HTTP_CODE_OK) {
+        char m[96];
+        snprintf(m, sizeof(m), "{\"error\":\"GitHub antwortete mit %d\"}", code);
+        http.end();
+        send_json(502, m);
+        return;
+    }
+
+    const int total = http.getSize();
+    int received = 0;
+    uint8_t buf[512];
+    WiFiClient *stream = http.getStreamPtr();
+    uint32_t last_data = millis();
+    while (http.connected() && g_ota_err[0] == 0 && (total < 0 || received < total)) {
+        const size_t avail = stream->available();
+        if (avail > 0) {
+            const size_t n = stream->readBytes(buf, avail > sizeof(buf) ? sizeof(buf) : avail);
+            if (n > 0) {
+                ota_feed(buf, n);
+                received += (int)n;
+                last_data = millis();
+            }
+        } else {
+            if (millis() - last_data > 10000) { ota_fail("Zeitüberschreitung beim Laden"); break; }
+            delay(1);
+        }
+    }
+    http.end();
+
+    if (g_ota_err[0]) {
+        char m[96];
+        snprintf(m, sizeof(m), "{\"error\":\"%s\"}", g_ota_err);
+        send_json(500, m);
+        return;
+    }
+    if (!ota_finish("GitHub")) {
+        char m[96];
+        snprintf(m, sizeof(m), "{\"error\":\"%s\"}", g_ota_err);
+        send_json(500, m);
+        return;
+    }
+    send_json(200, "{\"ok\":true,\"note\":\"reboot\"}");
+    want_reboot = true;
+    reboot_at = millis() + 1200;
 }
 
 static void web_begin()
@@ -1960,6 +2069,7 @@ static void web_begin()
     /* Der Upload-Handler prueft Herkunft/Anmeldung selbst (laeuft vor der
      * Antwort); der Antwort-Handler zusaetzlich ueber guard(). */
     web.on("/api/update",    HTTP_POST, guard(handle_update_done), handle_update_upload);
+    web.on("/api/update/github", HTTP_POST, guard(handle_update_github));
     web.begin();
 }
 
