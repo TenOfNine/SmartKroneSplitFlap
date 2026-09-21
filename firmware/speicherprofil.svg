@@ -1,0 +1,117 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 703" width="860" height="703" font-family="system-ui,-apple-system,'Segoe UI',sans-serif">
+<defs>
+<pattern id="hatch" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+<rect width="8" height="8" fill="#131519"/><line x1="0" y1="0" x2="0" y2="8" stroke="#1a1e24" stroke-width="4"/>
+</pattern>
+</defs>
+<rect width="860" height="703" fill="#0b0c0e"/>
+<text x="20" y="30" font-size="19" font-weight="700" fill="#eef0f2">Firmware-Speicherprofil</text>
+<text x="20" y="49" font-size="12.5" fill="#9aa1ab">Flash-Speicherverbrauch nach Bereich, gemessen am gelinkten Firmware-Abbild · Stand 2026-09-21, nahe Commit `afe15e8`</text>
+<line x1="20" y1="60" x2="840" y2="60" stroke="#252a31"/>
+<text x="20" y="92" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700" fill="#eef0f2">Master · ESP32-C3 Super Mini</text>
+<text x="840" y="92" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">OTA-Partition 1.310.720 B</text>
+<text x="20" y="117" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">90.6 % belegt · 123.710 B frei von 1.310.720 B</text>
+<rect x="20" y="124" width="820" height="26" rx="6" fill="#131519" stroke="#1c2025"/>
+<rect x="20.0" y="124" width="169.7" height="26" fill="#5b8def"/>
+<rect x="189.7" y="124" width="105.3" height="26" fill="#b07cf0"/>
+<rect x="295.0" y="124" width="75.2" height="26" fill="#35b3a3"/>
+<rect x="370.3" y="124" width="64.7" height="26" fill="#f2b03d"/>
+<rect x="435.0" y="124" width="59.1" height="26" fill="#7d8590"/>
+<rect x="494.1" y="124" width="59.0" height="26" fill="#565d67"/>
+<rect x="553.1" y="124" width="53.4" height="26" fill="#e8735c"/>
+<rect x="606.5" y="124" width="41.1" height="26" fill="#4fc0e8"/>
+<rect x="647.6" y="124" width="115.0" height="26" fill="#8a92a6"/>
+<rect x="762.6" y="124" width="77.4" height="26" fill="url(#hatch)"/>
+<rect x="20" y="124" width="820" height="26" rx="6" fill="none" stroke="#1c2025"/>
+<rect x="20" y="156" width="11" height="11" rx="2" fill="#5b8def"/>
+<text x="38" y="166" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">WLAN-Funkstack (net80211/pp/phy/wpa)</text>
+<text x="740" y="166" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">271.273 B</text>
+<text x="840" y="166" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">20.7 %</text>
+<rect x="20" y="177" width="11" height="11" rx="2" fill="#b07cf0"/>
+<text x="38" y="187" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">mbedTLS/Crypto (TLS + Signaturpruefung)</text>
+<text x="740" y="187" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">168.325 B</text>
+<text x="840" y="187" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">12.8 %</text>
+<rect x="20" y="198" width="11" height="11" rx="2" fill="#35b3a3"/>
+<text x="38" y="208" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lwIP (TCP/IP-Stack)</text>
+<text x="740" y="208" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">120.272 B</text>
+<text x="840" y="208" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">9.2 %</text>
+<rect x="20" y="219" width="11" height="11" rx="2" fill="#f2b03d"/>
+<text x="38" y="229" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">main.cpp -- eigener Code</text>
+<text x="740" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">103.444 B</text>
+<text x="840" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">7.9 %</text>
+<rect x="20" y="240" width="11" height="11" rx="2" fill="#7d8590"/>
+<text x="38" y="250" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstiges Framework</text>
+<text x="740" y="250" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">94.510 B</text>
+<text x="840" y="250" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">7.2 %</text>
+<rect x="20" y="261" width="11" height="11" rx="2" fill="#565d67"/>
+<text x="38" y="271" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">ESP-IDF-Kern/HAL</text>
+<text x="740" y="271" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">94.249 B</text>
+<text x="840" y="271" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">7.2 %</text>
+<rect x="20" y="282" width="11" height="11" rx="2" fill="#e8735c"/>
+<text x="38" y="292" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstige ESP32-Sektionen (IRAM, Header, Alignment)</text>
+<text x="740" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">85.400 B</text>
+<text x="840" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">6.5 %</text>
+<rect x="20" y="303" width="11" height="11" rx="2" fill="#4fc0e8"/>
+<text x="38" y="313" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">WiFiManager (Captive Portal)</text>
+<text x="740" y="313" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">65.689 B</text>
+<text x="840" y="313" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">5.0 %</text>
+<rect x="20" y="324" width="11" height="11" rx="2" fill="#8a92a6"/>
+<text x="38" y="334" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">weitere Systemkomponenten</text>
+<text x="740" y="334" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">183.848 B</text>
+<text x="840" y="334" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">14.0 %</text>
+<rect x="20" y="345" width="11" height="11" rx="2" fill="none" stroke="#666e79" stroke-dasharray="2,2"/>
+<text x="38" y="355" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#666e79">frei</text>
+<text x="740" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">123.710 B</text>
+<text x="840" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">9.4 %</text>
+<line x1="20" y1="390" x2="840" y2="390" stroke="#252a31"/>
+<text x="20" y="420" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700" fill="#eef0f2">Modul · ATtiny1616</text>
+<text x="840" y="420" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">App-Sektion ab 0x0C00, 16.384 B</text>
+<text x="20" y="445" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">34.2 % belegt · 10.778 B frei von 16.384 B</text>
+<rect x="20" y="452" width="820" height="26" rx="6" fill="#131519" stroke="#1c2025"/>
+<rect x="20.0" y="452" width="93.4" height="26" fill="#f2b03d"/>
+<rect x="113.4" y="452" width="67.1" height="26" fill="#5b8def"/>
+<rect x="180.5" y="452" width="37.3" height="26" fill="#b07cf0"/>
+<rect x="217.8" y="452" width="20.8" height="26" fill="#35b3a3"/>
+<rect x="238.6" y="452" width="19.5" height="26" fill="#7d8590"/>
+<rect x="258.1" y="452" width="17.9" height="26" fill="#565d67"/>
+<rect x="276.0" y="452" width="15.7" height="26" fill="#e8735c"/>
+<rect x="291.8" y="452" width="8.8" height="26" fill="#4fc0e8"/>
+<rect x="300.6" y="452" width="539.4" height="26" fill="url(#hatch)"/>
+<rect x="20" y="452" width="820" height="26" rx="6" fill="none" stroke="#1c2025"/>
+<rect x="20" y="484" width="11" height="11" rx="2" fill="#f2b03d"/>
+<text x="38" y="494" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">main.c -- eigener Code</text>
+<text x="740" y="494" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">1.866 B</text>
+<text x="840" y="494" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">11.4 %</text>
+<rect x="20" y="505" width="11" height="11" rx="2" fill="#5b8def"/>
+<text x="38" y="515" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lib/motion (Motor-/Blattsteuerung)</text>
+<text x="740" y="515" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">1.340 B</text>
+<text x="840" y="515" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">8.2 %</text>
+<rect x="20" y="526" width="11" height="11" rx="2" fill="#b07cf0"/>
+<text x="38" y="536" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lib/protocol (Rahmen/CRC)</text>
+<text x="740" y="536" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">746 B</text>
+<text x="840" y="536" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">4.6 %</text>
+<rect x="20" y="547" width="11" height="11" rx="2" fill="#35b3a3"/>
+<text x="38" y="557" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lib/enumeration (Adressvergabe)</text>
+<text x="740" y="557" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">416 B</text>
+<text x="840" y="557" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">2.5 %</text>
+<rect x="20" y="568" width="11" height="11" rx="2" fill="#7d8590"/>
+<text x="38" y="578" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">Interrupt-Vektoren (ISR)</text>
+<text x="740" y="578" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">390 B</text>
+<text x="840" y="578" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">2.4 %</text>
+<rect x="20" y="589" width="11" height="11" rx="2" fill="#565d67"/>
+<text x="38" y="599" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">avr-libc (Laufzeitbibliothek)</text>
+<text x="740" y="599" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">358 B</text>
+<text x="840" y="599" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">2.2 %</text>
+<rect x="20" y="610" width="11" height="11" rx="2" fill="#e8735c"/>
+<text x="38" y="620" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">Programmstart (Vektortabelle, avr-libc-Start)</text>
+<text x="740" y="620" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">314 B</text>
+<text x="840" y="620" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">1.9 %</text>
+<rect x="20" y="631" width="11" height="11" rx="2" fill="#4fc0e8"/>
+<text x="38" y="641" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lib/config</text>
+<text x="740" y="641" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">176 B</text>
+<text x="840" y="641" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">1.1 %</text>
+<rect x="20" y="652" width="11" height="11" rx="2" fill="none" stroke="#666e79" stroke-dasharray="2,2"/>
+<text x="38" y="662" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#666e79">frei</text>
+<text x="740" y="662" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">10.778 B</text>
+<text x="840" y="662" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">65.8 %</text>
+</svg>
