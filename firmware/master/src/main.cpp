@@ -91,7 +91,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 11;
+static constexpr uint8_t FW_VERSION_MINOR = 12;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -284,6 +284,7 @@ static const uint8_t *g_module_img = nullptr;
 static uint32_t g_module_img_len  = 0;
 static uint16_t g_module_img_crc  = 0;
 static uint32_t g_mu_last_tick    = 0;
+static uint8_t  g_mu_prev_cur     = 0;   /* fuer den ver_known-Reset nach Abschluss */
 
 static void module_fw_verify()
 {
@@ -2378,6 +2379,19 @@ void loop()
         }
     } else {
         busmaster_tick(&g_bus, bus_now);
+    }
+    /* g_bus.mod[].ver_known bleibt sonst fuer immer auf dem zuerst gelernten
+     * Stand stehen (busmaster.h: "0 = unbekannt", danach nie zurueckgesetzt
+     * ausser bei Enumeration) -- ohne diesen Reset zeigt die UI nach einem
+     * erfolgreichen Bus-Update weiter die alte Version, weil der normale
+     * Versions-Poll (unten, poll_cycle) ein bereits bekanntes Modul nie
+     * erneut abfragt. Adresse wechselt in g_mu.cur, sobald eine Karte fertig
+     * ist (Erfolg oder Fehlschlag) -- in beiden Faellen neu abfragen. */
+    if (g_mu.cur != g_mu_prev_cur) {
+        if (g_mu_prev_cur >= 1 && g_mu_prev_cur <= BUSMASTER_MAX_MODULES) {
+            g_bus.mod[g_mu_prev_cur - 1].ver_known = false;
+        }
+        g_mu_prev_cur = g_mu.cur;
     }
     status_led_tick(now);
     cpu_load_tick(now);
