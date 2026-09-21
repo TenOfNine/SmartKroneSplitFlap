@@ -91,7 +91,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 13;
+static constexpr uint8_t FW_VERSION_MINOR = 14;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -804,11 +804,13 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 </div>
 
 <div class=sect><h3>Modul-Firmware <span class="pill warn" style=font-size:10px>experimentell</span></h3>
-<p class=hint>Verteilt die mitgelieferte Daughter-Card-Firmware über den Bus. Setzt einen residenten Bootloader auf den Modulen voraus (Werksflash über den <a href="https://tenofnine.github.io/SmartKroneSplitFlap/" target=_blank>Web-Flasher</a>, Tab „Daughter Card"). <b>Am Gerät noch nicht verifiziert.</b></p>
+<p class=hint>Verteilt die mitgelieferte Daughter-Card-Firmware über den Bus. Setzt einen residenten Bootloader auf den Modulen voraus (Werksflash über den <a href="https://tenofnine.github.io/SmartKroneSplitFlap/" target=_blank>Web-Flasher</a>, Tab „Daughter Card"). Erste vollständige Übertragung am Gerät bestätigt (21.09.2026) — <b>der Wiederherstellungsweg für hängen gebliebene Karten noch nicht.</b> Bricht die Übertragung mitten in „Alle aktualisieren" ab, antwortet die Karte danach nicht mehr auf normale Abfragen und gilt als offline — „Offline erneut versuchen" holt sie zurück, statt sie per Browser-Werksflash neu aufsetzen zu müssen.</p>
 <dl class=kv id=modfwmeta style=margin-top:6px></dl>
 <table class=mtab style=margin-top:10px><thead><tr><th>Adr</th><th>installiert</th><th>Status</th></tr></thead><tbody id=modfwrows></tbody></table>
 <div class="row mt"><button class=btn id=modfwall>Alle aktualisieren</button>
-<button class="btn primary" id=modfwsel disabled>Veraltete aktualisieren</button></div>
+<button class="btn primary" id=modfwsel disabled>Veraltete aktualisieren</button>
+<button class=btn id=modfwoff disabled>Offline erneut versuchen</button></div>
+<p class=hint style=margin-top:8px>„Alle aktualisieren" versucht nur gerade erreichbare Module. Eine Karte, die nach einem abgebrochenen Update im Bootloader hängt, antwortet auf normale Abfragen nicht und gilt daher als offline — <b>„Offline erneut versuchen"</b> spielt genau diesen Karten die Firmware trotzdem erneut ein.</p>
 <div id=modfwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden"><div id=modfwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
 <p class=hint id=modfwlog style=margin-top:8px></p>
 </div>
@@ -1122,12 +1124,16 @@ const rows=(_modfw.modules||[]).map(m=>{const s=MSTAT[m.status]||["?","mute"];
 return `<tr><td class=mono>${m.addr}</td><td class=mono>${verStr(m.ver)}</td><td><span class="pill ${s[1]}">${s[0]}</span>${m.has_bl?"":" <span class='pill mute'>kein BL</span>"}</td></tr>`}).join("");
 $("#modfwrows").innerHTML=rows||`<tr><td colspan=3 class=hint>keine Module</td></tr>`;
 const nOld=(_modfw.modules||[]).filter(m=>m.status==="outdated").length;
-$("#modfwsel").disabled=!_modfw.ok||nOld===0;
+const nOff=(_modfw.modules||[]).filter(m=>m.status==="offline").length;
+$("#modfwsel").disabled=!_modfw.ok||nOld===0||_modfwBusy;
 $("#modfwsel").textContent=nOld?`Veraltete aktualisieren (${nOld})`:"Veraltete aktualisieren";
+$("#modfwoff").disabled=!_modfw.ok||nOff===0||_modfwBusy;
+$("#modfwoff").textContent=nOff?`Offline erneut versuchen (${nOff})`:"Offline erneut versuchen";
 $("#modfwall").disabled=!_modfw.ok||_modfwBusy;
 }
 $("#modfwall").onclick=()=>startModFw({all:true},"alle erreichbaren Module");
 $("#modfwsel").onclick=()=>startModFw({addr:_modfw.modules.filter(m=>m.status==="outdated").map(m=>m.addr)},"veraltete Module");
+$("#modfwoff").onclick=()=>startModFw({addr:_modfw.modules.filter(m=>m.status==="offline").map(m=>m.addr)},"offline gemeldete Module (erneuter Versuch)");
 async function startModFw(body,what){
 if(!confirm(`Firmware auf ${what} über den Bus einspielen? Die betroffenen Module sind je einige Sekunden eingefroren.`))return;
 try{await P("/api/module/update",body)}catch(e){return toast("Start fehlgeschlagen")}
@@ -1507,9 +1513,11 @@ static void handle_module_update()
 
     uint32_t mask = 0;
     const uint32_t online = module_online_mask();
+    bool explicit_addr = false;
     if (doc["all"].as<bool>()) {
         mask = online;
     } else if (doc["addr"].is<JsonArray>()) {
+        explicit_addr = true;
         for (JsonVariant v : doc["addr"].as<JsonArray>()) {
             const uint8_t a = v.as<uint8_t>();
             if (a >= 1 && a <= MU_MAX_ADDR) mask |= (1u << (a - 1u));
@@ -1517,7 +1525,14 @@ static void handle_module_update()
     }
     if (mask == 0) { send_json(400, "{\"error\":\"no_targets\"}"); return; }
 
-    moduleupdate_enqueue(&g_mu, mask, online);
+    /* "Alle aktualisieren" filtert bewusst auf online (kein sinnloses
+     * Anrennen gegen unbestueckte Adressen). Explizit angefragte Adressen
+     * (z.B. "Offline erneut versuchen") sollen dagegen IMMER versucht
+     * werden -- sonst kann eine Karte, die nach einem abgebrochenen
+     * Bus-Update im Bootloader haengt (dort ohne CMD_GET_STATUS-Antwort,
+     * daher "offline"), nie wieder erreicht werden: online=false verhindert
+     * genau den Update-Versuch, der sie zurueckholen wuerde. */
+    moduleupdate_enqueue(&g_mu, mask, explicit_addr ? (online | mask) : online);
     evlog_push(&g_log, millis(), EVLOG_WARN, "modfw",
                "Update angestossen (Maske 0x%lx)", (unsigned long)mask);
     ok_json();

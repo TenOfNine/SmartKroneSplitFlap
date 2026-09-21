@@ -5,12 +5,24 @@
 > (10.09.2026). Die **Firmware-Verteilung über den Bus** (Punkte 3–8):
 > erster realer Test am Gerät (19.09.2026) deckte einen Bug im Bootloader
 > auf (derselbe DI-Pin-Fehler wie in der App vor `f24b861`, eigene
-> USART0-Initialisierung — behoben in `3d65464`, Firmware v1.9). Beide
-> Testkarten blieben dabei im Bootloader hängen (kein Hardwaredefekt,
-> per Browser-Werksflash behebbar). **Nach dem Fix noch nicht erneut
-> end-to-end verifiziert.** `pio run -e attiny1616 -t upload` (App @
-> 0x0000, ohne Bootloader) bleibt bis dahin der abgesicherte Weg für
-> Firmware-Änderungen.
+> USART0-Initialisierung — behoben in `3d65464`, Firmware v1.9).
+>
+> **21.09.2026 — erste vollständige End-zu-Ende-Übertragung am Gerät
+> bestätigt** (Adresse 1, `FW_BEGIN`→`FW_DATA`→`FW_END`→`GET_VERSION`
+> ohne einen einzigen Retry, neue Version per `GET_VERSION` bestätigt).
+> Dabei zeigte sich aber ein zweiter, eigenständiger Bug: eine Karte, die
+> mitten in `FW_DATA`/`FW_END` hängen bleibt (App bereits ungültig
+> markiert, Bootloader wartet laut Design korrekt auf ein neues
+> `FW_BEGIN`), beantwortet `CMD_GET_STATUS` nicht mehr und gilt dem
+> Master daher als „offline". **„Alle aktualisieren"/„Veraltete
+> aktualisieren" filtern aber beide auf online** — eine so hängen
+> gebliebene Karte konnte dadurch nie wieder erreicht werden, nur noch
+> per Browser-Werksflash. Fix (firmware v1.14): neuer Button „Offline
+> erneut versuchen" + `handle_module_update()` lässt explizit angefragte
+> Adressen immer zu, unabhängig vom Online-Status (siehe
+> `firmware/CHANGELOG.md`). `pio run -e attiny1616 -t upload` (App @
+> 0x0000, ohne Bootloader) bleibt der abgesicherte Weg, wenn eine Karte
+> dennoch per Browser-Werksflash zurückgeholt werden muss.
 
 ## Ziel
 
