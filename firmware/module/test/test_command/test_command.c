@@ -40,6 +40,11 @@ static void test_broadcast_only_commands(void)
     TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_SET_ALL, PROTO_ADDR_BROADCAST, 10));
     TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_SET_ALL, PROTO_ADDR_BROADCAST, 1));
     TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_SET_ALL, 4, 10));
+
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_LED_SYNC, PROTO_ADDR_BROADCAST, 0));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_LED_SYNC, 3, 0));    /* nur Broadcast */
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_LED_SYNC, PROTO_ADDR_BROADCAST, 1));
+    TEST_ASSERT_FALSE(proto_cmd_lookup(CMD_LED_SYNC)->has_response);
 }
 
 static void test_both_addressing(void)

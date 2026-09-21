@@ -89,6 +89,8 @@ typedef struct {
 
     uint32_t         crc_errors;     /* CRC-Fehler auf dem Bus seit Start */
     uint32_t         timeouts;       /* ausgebliebene Antworten (nach Retries) */
+
+    uint32_t         led_sync_ms;    /* now_ms beim letzten CMD_LED_SYNC-Broadcast */
 } busmaster_t;
 
 void busmaster_init(busmaster_t *bm,
@@ -114,6 +116,13 @@ void busmaster_poll_version(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
 
 /* CMD_GET_CONFIG an ein Modul; die Antwort fuellt mod[addr-1].cfg_*. */
 void busmaster_poll_config(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
+
+/* Broadcast: alle Karten (und ueber led_sync_ms auch der Master selbst)
+ * nullen ihre Status-LED-Blinkphase auf diesen Zeitpunkt, damit sie im
+ * gleichen Takt blinken. Keine Antwort. Faellt in einen laufenden
+ * Antwort-Wechsel (bm->awaiting) nicht ein -- gibt dann false zurueck,
+ * der Aufrufer versucht es beim naechsten Tick erneut. */
+bool busmaster_led_sync(busmaster_t *bm, uint32_t now_ms);
 
 /* HOME / STOP; addr 0 = Broadcast. */
 void busmaster_home(busmaster_t *bm, uint8_t addr);

@@ -279,6 +279,7 @@ static enum_fsm_t      g_enum;
 static motion_t        g_motion;
 static motion_state_t  g_prev_state;
 static uint32_t        g_identify_until_ms;
+static uint32_t        g_led_sync_ms;   /* now-Bezugspunkt fuer synchrones Blinken */
 
 static void ack(uint8_t cmd, uint8_t own_addr)
 {
@@ -369,6 +370,13 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
         if (unicast) {
             ack(CMD_IDENTIFY, own);
         }
+        break;
+    case CMD_LED_SYNC:
+        /* Blinkphase auf den Empfangszeitpunkt nullen -- der Master sendet
+         * das periodisch als Broadcast, damit alle Karten (und der Master
+         * selbst) im gleichen Takt blinken statt jede seit dem eigenen
+         * Boot-Zeitpunkt zu zaehlen. */
+        g_led_sync_ms = now;
         break;
     case CMD_GET_UID: {
         uint8_t uid[10];
@@ -474,16 +482,20 @@ int main(void)
         /* LED: Identify = schnelles Blinken (4 Hz), Fehler = langsames
          * Blinken (1 Hz), sonst Dauerlicht. 5 % Helligkeit durch
          * softwareseitiges Umschalten (~50-Hz-Traeger, kein Hardware-PWM-
-         * Kanal auf diesem Pin belegt). */
+         * Kanal auf diesem Pin belegt). Die Blinkphase (nicht der PWM-
+         * Helligkeits-Traeger) laeuft relativ zu g_led_sync_ms, das per
+         * CMD_LED_SYNC-Broadcast vom Master periodisch genullt wird --
+         * sonst blinkt jede Karte seit ihrem eigenen Boot-Zeitpunkt phasenversetzt. */
         {
             const uint32_t PWM_PERIOD_MS = 20u;
             const uint32_t PWM_ON_MS     = 1u;   /* Deckel 5 % */
             const uint32_t pwm_phase     = now % PWM_PERIOD_MS;
+            const uint32_t sync_now      = now - g_led_sync_ms;
             uint8_t led;
             if ((int32_t)(g_identify_until_ms - now) > 0) {
-                led = (now / 125) & 1u;  /* 4 Hz */
+                led = (sync_now / 125) & 1u;  /* 4 Hz */
             } else if (g_motion.state == MOTION_ERROR) {
-                led = (now / 500) & 1u;  /* 1 Hz */
+                led = (sync_now / 500) & 1u;  /* 1 Hz */
             } else {
                 led = 1u;
             }

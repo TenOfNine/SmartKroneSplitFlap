@@ -91,7 +91,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 12;
+static constexpr uint8_t FW_VERSION_MINOR = 13;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -145,6 +145,7 @@ static uint8_t  poll_cycle = 0;  /* zaehlt Poll-Ticks unabhaengig von poll_addr/
 static uint32_t last_time_ms;
 static uint32_t last_autoscan_ms;
 static uint32_t last_mqtt_try;
+static uint32_t last_led_sync_ms;  /* nur bei Erfolg fortgeschrieben, siehe loop() */
 
 /* --- grobe CPU-Last ueber den FreeRTOS-Idle-Hook -------------------- */
 static volatile uint32_t g_idle_ticks = 0;
@@ -403,11 +404,12 @@ static void status_led_tick(uint32_t now)
             trouble = true;
         }
     }
+    const uint32_t sync_now = now - g_bus.led_sync_ms;
     bool on;
     if (WiFi.status() != WL_CONNECTED) {
-        on = (now / 125) & 1;  /* 4 Hz */
+        on = (sync_now / 125) & 1;  /* 4 Hz */
     } else if (trouble) {
-        on = (now / 500) & 1;  /* 1 Hz */
+        on = (sync_now / 500) & 1;  /* 1 Hz */
     } else {
         on = true;
     }
@@ -2429,6 +2431,19 @@ void loop()
     }
 
     masterapp_tick(&g_app, now);
+
+    /* Alle Karten (und der Master selbst ueber g_bus.led_sync_ms) im
+     * gleichen Takt blinken lassen, statt seit dem jeweils eigenen
+     * Boot-Zeitpunkt -- busmaster_led_sync() liefert false, wenn der Bus
+     * gerade mit einer Antwort beschaeftigt ist (bm->awaiting); dann wird
+     * es beim naechsten Tick erneut versucht, last_led_sync_ms bleibt
+     * absichtlich stehen. */
+    if (!moduleupdate_busy(&g_mu) && !busmaster_enum_busy(&g_bus) &&
+        now - last_led_sync_ms >= 1000) {
+        if (busmaster_led_sync(&g_bus, bus_now)) {
+            last_led_sync_ms = now;
+        }
+    }
 
     if (!moduleupdate_busy(&g_mu) && !busmaster_enum_busy(&g_bus) && !g_bus.awaiting &&
         now - last_poll_ms >= 100) {

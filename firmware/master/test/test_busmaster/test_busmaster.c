@@ -94,6 +94,33 @@ static void test_show_emits_set_all_and_go(void)
     TEST_ASSERT_EQUAL_HEX8(CMD_GO, f.cmd);
 }
 
+/* --- LED-Sync-Broadcast ------------------------------------------ */
+
+static void test_led_sync_sends_broadcast(void)
+{
+    const bool sent = busmaster_led_sync(&bm, 4200);
+    TEST_ASSERT_TRUE(sent);
+
+    TEST_ASSERT_EQUAL_size_t(1, frame_count());
+    proto_frame_t f;
+    TEST_ASSERT_TRUE(nth_frame(0, &f));
+    TEST_ASSERT_EQUAL_HEX8(CMD_LED_SYNC, f.cmd);
+    TEST_ASSERT_EQUAL_HEX8(PROTO_ADDR_BROADCAST, f.addr);
+    TEST_ASSERT_EQUAL_UINT8(0, f.payload_len);
+    TEST_ASSERT_EQUAL_UINT32(4200, bm.led_sync_ms);
+}
+
+static void test_led_sync_skipped_while_awaiting(void)
+{
+    busmaster_poll_status(&bm, 2, 100);   /* setzt bm.awaiting */
+    g_txlen = 0;
+
+    const bool sent = busmaster_led_sync(&bm, 200);
+    TEST_ASSERT_FALSE(sent);
+    TEST_ASSERT_EQUAL_size_t(0, frame_count());
+    TEST_ASSERT_EQUAL_UINT32(0, bm.led_sync_ms);
+}
+
 /* --- Statusabfrage --------------------------------------------- */
 
 static void test_poll_status_updates_table(void)
@@ -229,6 +256,8 @@ int main(void)
 {
     UNITY_BEGIN();
     RUN_TEST(test_show_emits_set_all_and_go);
+    RUN_TEST(test_led_sync_sends_broadcast);
+    RUN_TEST(test_led_sync_skipped_while_awaiting);
     RUN_TEST(test_poll_status_updates_table);
     RUN_TEST(test_own_echo_does_not_swallow_response);
     RUN_TEST(test_status_timeout_retries_then_offline);

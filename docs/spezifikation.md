@@ -374,6 +374,7 @@ CRC16/MODBUS wurde gewählt, damit Standardwerkzeuge und Logic-Analyzer-Dekoder 
 | 0x30 | SET_CONFIG | einzeln | 4 B, siehe 6.3 | ACK |
 | 0x31 | GET_CONFIG | einzeln | — | 4 B |
 | 0x40 | IDENTIFY | einzeln | 1 B Dauer in s | ACK |
+| 0x41 | LED_SYNC | Broadcast | — | keine |
 | 0x50 | ENUM_RESET | Broadcast | — | keine |
 | 0x51 | ENUM_ASSIGN | Broadcast | 1 B neue Adresse | ACK nur von der Karte mit aktivem CHAIN_IN |
 | 0x52 | ENUM_DONE | Broadcast | — | keine |
@@ -390,6 +391,8 @@ Bootloader beantwortet die App nur `GET_VERSION` (Flag Bit 0 = 0) und
 `ENTER_BOOTLOADER` (= einfacher Neustart).
 
 **Das zentrale Muster für Display-Updates** ist `SET_ALL` gefolgt von `GO`. Der Broadcast enthält die Zielwerte aller Module in einem Rahmen, jedes Modul entnimmt das Byte an der Stelle seiner eigenen Adresse und puffert es. Erst `GO` löst die Bewegung aus, sodass alle Module synchron starten.
+
+`LED_SYNC` sendet der Master periodisch (~1 s) als Broadcast, damit die Status-LED-Blinkphase (Identify 4 Hz, Fehler 1 Hz) auf allen Karten und dem Master synchron läuft, statt seit dem jeweils eigenen Boot-Zeitpunkt zu zählen. Reine Kosmetik, kein Einfluss auf Mechanik oder Timing-kritische Abläufe.
 
 Bei 10 Modulen umfasst `SET_ALL` 18 Byte, `GO` 8 Byte. Ein komplettes Update belegt den Bus damit für rund 2,3 ms.
 
@@ -871,3 +874,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.24 | 12.09.2026 | Kapitel 7.5: **Einstellungen der Web-UI thematisch gruppiert** — sieben aufklappbare Blöcke (`<details>`, Standard zugeklappt) statt einer langen Liste von elf Abschnitten: Netzwerk (WLAN, IP-Adresse, Zeit), Sicherheit (Schnittstellen, Zugriffsschutz), Integration (MQTT/HA), Anzeige, Firmware (Master-Update, Modul-Firmware), Modul-Konfiguration, System. Reine Gliederung, keine Felder/IDs/REST-Endpunkte geändert. Keine Firmware-Logik-Änderung. |
 | 0.23 | 12.09.2026 | Kapitel 6.3/7.5: **Modul-Konfiguration (Blattzahl/Blatt-Offset/Abschaltvorhalt/Flags) über die Web-UI setzbar.** Bisher gab es dafür nur `busctl.py config` am Master vorbei; `busmaster` beherrscht jetzt zusätzlich `CMD_GET_CONFIG` (`busmaster_poll_config`, spiegelt `busmaster_poll_version`), neue Felder `cfg_*`/`cfg_known` in `bm_module_t`. Neuer Endpunkt `GET /api/module/config?addr=N` (liest den zuletzt empfangenen Stand), `POST /api/module` um die Aktionen `get_config`/`set_config` erweitert. *Einstellungen › Modul-Konfiguration*: Adresse eingeben, „Lesen" holt den aktuellen Stand der Karte, Felder editieren, „Speichern" schreibt per `SET_CONFIG`. Macht O-6 (Blatt-Offset-Kalibrierung, Teststufe 4 nach 10.1) ohne `busctl.py`/Host-Zugriff durchführbar. `pio test -e native` Master 58. Keine Hardware-Änderung. |
 | 0.22 | 11.09.2026 | Kapitel 5.7: **Browser-UPDI-Werksflasher der Daughter Card am Gerät verifiziert** (10.09.2026) — Chip-Erase, Geräte-ID-Prüfung, Fuse- und Seitenschreiben (`BOOTEND = 0x0C`) sowie die Bootloader→App-Übergabe (IVSEL/Vektortabelle) laufen auf echter Hardware. Grund für den vorherigen Fehlschlag („Timeout: 1/66 B") war eine fehlende `CTRLA.RSD`-Blockschreibsequenz in `updi.js` (Commit `59710f8`, bereits vor dieser Verifikation behoben). Die **Firmware-Verteilung über den Bus selbst** (Kommandos 0x54–0x58, `docs/module-bootloader.md` Bench-Punkte 3–9) bleibt offen, bis die bestellte Master-Hardware aufgebaut ist. Keine Code-Änderung, reine Statuskorrektur in README/Spezifikation/Backlog/`module-bootloader.md`. |
+| 0.27 | 21.09.2026 | Kapitel 5.4: neues Kommando `LED_SYNC` (0x41, Broadcast, kein Payload). Der Master sendet es periodisch (~1 s); Module und Master nullen darauf ihre Status-LED-Blinkphase, damit alle LEDs im gleichen Takt blinken statt seit dem jeweils eigenen Boot-Zeitpunkt zu laufen. Reine Kosmetik, keine Auswirkung auf Mechanik, Bus-Timing oder Sicherheitsabschaltungen. Firmware v1.13 (`firmware/CHANGELOG.md`). |

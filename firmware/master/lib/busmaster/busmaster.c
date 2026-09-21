@@ -96,6 +96,16 @@ void busmaster_poll_config(busmaster_t *bm, uint8_t addr, uint32_t now_ms)
     expect(bm, CMD_GET_CONFIG, addr, now_ms);
 }
 
+bool busmaster_led_sync(busmaster_t *bm, uint32_t now_ms)
+{
+    if (bm->awaiting) {
+        return false;
+    }
+    send(bm, CMD_LED_SYNC, PROTO_ADDR_BROADCAST, NULL, 0);
+    bm->led_sync_ms = now_ms;
+    return true;
+}
+
 void busmaster_home(busmaster_t *bm, uint8_t addr)
 {
     send(bm, CMD_HOME, addr, NULL, 0);

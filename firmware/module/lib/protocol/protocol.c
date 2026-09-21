@@ -19,6 +19,7 @@ static const proto_cmd_info_t k_cmd_table[] = {
     { CMD_SET_CONFIG,  "SET_CONFIG",  ADDRESSING_UNICAST,   4,  true  },
     { CMD_GET_CONFIG,  "GET_CONFIG",  ADDRESSING_UNICAST,   0,  true  },
     { CMD_IDENTIFY,    "IDENTIFY",    ADDRESSING_UNICAST,   1,  true  },
+    { CMD_LED_SYNC,    "LED_SYNC",    ADDRESSING_BROADCAST, 0,  false },
     { CMD_ENUM_RESET,  "ENUM_RESET",  ADDRESSING_BROADCAST, 0,  false },
     { CMD_ENUM_ASSIGN, "ENUM_ASSIGN", ADDRESSING_BROADCAST, 1,  true  },
     { CMD_ENUM_DONE,   "ENUM_DONE",   ADDRESSING_BROADCAST, 0,  false },

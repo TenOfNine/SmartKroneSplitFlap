@@ -60,6 +60,7 @@ typedef enum {
     CMD_SET_CONFIG = 0x30,
     CMD_GET_CONFIG = 0x31,
     CMD_IDENTIFY   = 0x40,
+    CMD_LED_SYNC   = 0x41,  /* Broadcast, kein Payload: Status-LED-Blinkphase auf Empfang nullen */
     CMD_ENUM_RESET  = 0x50,
     CMD_ENUM_ASSIGN = 0x51,
     CMD_ENUM_DONE   = 0x52,
