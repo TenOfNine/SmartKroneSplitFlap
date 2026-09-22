@@ -159,8 +159,20 @@ REST: `GET /api/module/firmware`, `POST /api/module/update` (`{"all":true}` oder
 ## Werksflash über den Browser
 
 `firmware/master/prebuilt/updi.js`, Tab *Daughter Card*: Chip-Erase → Bootloader
-+ `-boot`-App → `BOOTEND = 0x0C`. Geräte-ID-Prüfung (`1E 94 21`). Der Fuse-Write
-folgt der `pymcuprog`-v0-Sequenz (ADDR + DATA + `WFU`).
++ `-boot`-App → `BOOTEND = 0x0C` → `BODCFG = 0xE5`. Geräte-ID-Prüfung (`1E 94 21`).
+Der Fuse-Write folgt der `pymcuprog`-v0-Sequenz (ADDR + DATA + `WFU`), inklusive
+Rücklese-Prüfung.
+
+**BODCFG (21.09.2026):** Bisher nirgends konfiguriert (Werksvorgabe `0x00` =
+Brown-out-Detection komplett aus) — Verdacht nach einem Fall, in dem eine Karte
+nach längerer Stromlosigkeit ohne erkennbaren Grund softwareseitig nicht mehr
+ansprechbar war. `0xE5` = `LVL=BODLEVEL7` (4,2 V, höchste verfügbare Stufe;
+Datenblatt DS40002204A S. 2 nennt für 20 MHz 4,5–5,5 V, mehr als 4,2 V bietet
+der Chip nicht) + `ACTIVE=ENABLED` + `SLEEP=ENABLED` (beide kontinuierlich,
+Kapitel 17.5.1/17.5.2). Zusätzlich neue Diagnose-Log-Zeilen: `updi.js` liest
+EEPROM-Byte 8 (Bootloader-Marker „App gültig") direkt nach dem Chip-Erase und
+nochmal unmittelbar vor dem Neustart aus — damit sichtbar wird, falls ein
+alter Marker aus einem abgebrochenen Bus-Update den Chip-Erase überlebt.
 
 Der Seitenpuffer wird wie in SerialUPDI (megaTinyCore) mit **`CTRLA.RSD = 1`**
 (Response Signature Disable) beschrieben: ohne RSD schickt das Modul nach jedem

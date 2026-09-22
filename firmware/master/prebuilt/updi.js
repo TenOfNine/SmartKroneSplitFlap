@@ -65,9 +65,26 @@
 
   const SIGROW_DEVICEID = 0x1100;
   const FUSE_BASE = 0x1280;
-  const FUSE_BODCFG = FUSE_BASE + 0x01;    // Fuse 1 -- nur ausgelesen, nicht geschrieben
+  const FUSE_BODCFG = FUSE_BASE + 0x01;    // Fuse 1
   const FUSE_BOOTEND = FUSE_BASE + 0x08;   // Fuse 8
   const BOOTEND_VALUE = 0x0c;              // 0x0C * 256 = App ab 0x0C00
+
+  // BODCFG-Soll-Wert, siehe ATtiny1614/1616/1617-Datenblatt (Microchip
+  // DS40002204A) Kapitel 17.5.1 "Control A" (ACTIVE/SLEEP) und 17.5.2
+  // "Control B" (LVL) -- die drei Felder liegen im FUSE-Byte an ANDEREN
+  // Bitpositionen als in den gleichnamigen Laufzeitregistern:
+  //   Bits 1:0  SLEEP    01 = Enabled (kontinuierlich)
+  //   Bits 3:2  ACTIVE   01 = Enabled (kontinuierlich)
+  //   Bit  4    SAMPFREQ irrelevant, da nicht Sampled-Modus
+  //   Bits 7:5  LVL      111 = BODLEVEL7 = 4,2 V (hoechste verfuegbare
+  //                      Stufe; das Datenblatt (Seite 2, "Speed Grades")
+  //                      nennt fuer 20 MHz 4,5-5,5 V -- 4,2 V ist die
+  //                      naechstliegende Stufe darunter, mehr bietet der
+  //                      Chip nicht (nur 1,8/2,6/4,2 V moeglich)).
+  // Kein Fuse fuer Vorgänger-Firmware noetig: BOD ist reine Absicherung
+  // gegen einen unsauberen Stromauf-/-abfall, kein Verhaltensunterschied
+  // im Normalbetrieb bei stabiler 5-V-Versorgung.
+  const BODCFG_VALUE = (0x07 << 5) | (0x01 << 2) | (0x01 << 0); // 0xE5
   const FLASH_BASE = 0x8000;
   const FLASH_PAGE = 64;
   const FLASH_SIZE = 0x4000; // 16 KiB
@@ -516,15 +533,6 @@
         );
       }
 
-      // Diagnose: aktuellen BODCFG-Wert (Brown-Out-Detection) nur auslesen,
-      // NICHT schreiben -- das Projekt konfiguriert diese Fuse bisher
-      // nirgends, der Chip laeuft also mit seinem Werks-/Vorzustand. Erst
-      // wenn klar ist, was da tatsaechlich drinsteht, entscheidet sich, ob
-      // ein expliziter Soll-Wert (gegen das ATtiny1616-Datenblatt geprueft,
-      // CLAUDE.md Regel 1) ueberhaupt noetig ist.
-      const bodcfg = await u.lds8(FUSE_BODCFG);
-      log(`BODCFG (nur gelesen, nicht gesetzt): 0x${hex2(bodcfg)}`);
-
       // Diagnose: EEPROM-Byte 8 ("App gueltig"-Marker des Bootloaders,
       // firmware/bootloader/src/main.c) direkt nach dem Chip-Erase auslesen.
       // 0xFF = wirklich geloescht (vom Bootloader als "ok" behandelt), jeder
@@ -543,6 +551,16 @@
         await nvm.writeFuse(FUSE_BOOTEND, BOOTEND_VALUE);
         const chk = await nvm.readFuse(FUSE_BOOTEND);
         if (chk !== BOOTEND_VALUE) throw new Error(`BOOTEND-Fuse nicht gesetzt (0x${hex2(chk)}).`);
+
+        // Brown-out-Detection: bisher nirgends konfiguriert (Werksvorgabe
+        // 0x00 = komplett aus). Setzt LVL=BODLEVEL7 (4,2 V, hoechste
+        // verfuegbare Stufe) + ACTIVE/SLEEP=Enabled (kontinuierlich) --
+        // siehe Herleitung bei BODCFG_VALUE oben.
+        const curBod = await u.lds8(FUSE_BODCFG);
+        log(`BODCFG ist 0x${hex2(curBod)} -> setze 0x${hex2(BODCFG_VALUE)} …`);
+        await nvm.writeFuse(FUSE_BODCFG, BODCFG_VALUE);
+        const chkBod = await u.lds8(FUSE_BODCFG);
+        if (chkBod !== BODCFG_VALUE) throw new Error(`BODCFG-Fuse nicht gesetzt (0x${hex2(chkBod)}).`);
       }
 
       log("Schreibe Flash …");
