@@ -70,6 +70,11 @@
   const FLASH_BASE = 0x8000;
   const FLASH_PAGE = 64;
   const FLASH_SIZE = 0x4000; // 16 KiB
+  // EEPROM-Basisadresse im UPDI-Datenraum (tinyAVR-0/1/2 einheitlich, wie
+  // SIGROW/FUSES oben). EE_APP_VALID = firmware/bootloader/src/main.c
+  // (dort dasselbe Byte 8: 0x00 = Update laeuft, 0xFF/0xA5 = App gueltig).
+  const EEPROM_BASE = 0x1400;
+  const EE_APP_VALID = 8;
 
   const ATTINY1616_ID = [0x1e, 0x94, 0x21]; // laut pymcuprog DFP + avrdude.conf
 
@@ -510,6 +515,18 @@
         );
       }
 
+      // Diagnose: EEPROM-Byte 8 ("App gueltig"-Marker des Bootloaders,
+      // firmware/bootloader/src/main.c) direkt nach dem Chip-Erase auslesen.
+      // 0xFF = wirklich geloescht (vom Bootloader als "ok" behandelt), jeder
+      // andere Wert -- vor allem 0x00 ("Update laeuft") -- bedeutet, der
+      // Chip-Erase hat das EEPROM NICHT zurueckgesetzt; ein alter Marker
+      // aus einem frueheren, abgebrochenen Bus-Update wuerde dann trotz
+      // frisch und korrekt geschriebenem Flash den Bootloader weiter im
+      // Update-Wartemodus haengen lassen ("Verify gruen, Karte trotzdem tot").
+      const eeAfterErase = await u.lds8(EEPROM_BASE + EE_APP_VALID);
+      log(`EEPROM[8] nach Chip-Erase: 0x${hex2(eeAfterErase)}` +
+          (eeAfterErase === 0xff ? " (geloescht, ok)" : " (!) nicht geloescht"));
+
       if (factory) {
         const cur = await nvm.readFuse(FUSE_BOOTEND);
         log(`BOOTEND ist 0x${hex2(cur)} -> setze 0x${hex2(BOOTEND_VALUE)} …`);
@@ -522,6 +539,13 @@
       await nvm.writeFlash(image, progress);
       log("Verifiziere …");
       await nvm.verifyFlash(image);
+
+      // Diagnose: derselbe Marker unmittelbar vor dem Reset -- das ist der
+      // Stand, den der Bootloader beim naechsten Start tatsaechlich liest.
+      const eeFinal = await u.lds8(EEPROM_BASE + EE_APP_VALID);
+      log(`EEPROM[8] vor dem Neustart: 0x${hex2(eeFinal)}` +
+          (eeFinal !== 0x00 ? " (App gilt als gueltig)" : " (!) App gilt als UNGUELTIG -- Karte bleibt im Bootloader"));
+
       await nvm.done();
       log("Fertig. Die Karte startet neu.");
     } finally {
