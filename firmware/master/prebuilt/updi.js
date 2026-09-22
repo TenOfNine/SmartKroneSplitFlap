@@ -65,6 +65,7 @@
 
   const SIGROW_DEVICEID = 0x1100;
   const FUSE_BASE = 0x1280;
+  const FUSE_BODCFG = FUSE_BASE + 0x01;    // Fuse 1 -- nur ausgelesen, nicht geschrieben
   const FUSE_BOOTEND = FUSE_BASE + 0x08;   // Fuse 8
   const BOOTEND_VALUE = 0x0c;              // 0x0C * 256 = App ab 0x0C00
   const FLASH_BASE = 0x8000;
@@ -514,6 +515,15 @@
           `kein ATtiny1616 (erwartet ${ATTINY1616_ID.map(hex2).join(" ")}). Abbruch.`
         );
       }
+
+      // Diagnose: aktuellen BODCFG-Wert (Brown-Out-Detection) nur auslesen,
+      // NICHT schreiben -- das Projekt konfiguriert diese Fuse bisher
+      // nirgends, der Chip laeuft also mit seinem Werks-/Vorzustand. Erst
+      // wenn klar ist, was da tatsaechlich drinsteht, entscheidet sich, ob
+      // ein expliziter Soll-Wert (gegen das ATtiny1616-Datenblatt geprueft,
+      // CLAUDE.md Regel 1) ueberhaupt noetig ist.
+      const bodcfg = await u.lds8(FUSE_BODCFG);
+      log(`BODCFG (nur gelesen, nicht gesetzt): 0x${hex2(bodcfg)}`);
 
       // Diagnose: EEPROM-Byte 8 ("App gueltig"-Marker des Bootloaders,
       // firmware/bootloader/src/main.c) direkt nach dem Chip-Erase auslesen.
