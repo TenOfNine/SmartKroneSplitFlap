@@ -6,22 +6,22 @@
 </defs>
 <rect width="860" height="703" fill="#0b0c0e"/>
 <text x="20" y="30" font-size="19" font-weight="700" fill="#eef0f2">Firmware-Speicherprofil</text>
-<text x="20" y="49" font-size="12.5" fill="#9aa1ab">Flash-Speicherverbrauch nach Bereich, gemessen am gelinkten Firmware-Abbild · Stand 2026-09-21, nahe Commit `3a72acf`</text>
+<text x="20" y="49" font-size="12.5" fill="#9aa1ab">Flash-Speicherverbrauch nach Bereich, gemessen am gelinkten Firmware-Abbild · Stand 2026-09-25, nahe Commit `1e26e7e`</text>
 <line x1="20" y1="60" x2="840" y2="60" stroke="#252a31"/>
 <text x="20" y="92" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700" fill="#eef0f2">Master · ESP32-C3 Super Mini</text>
 <text x="840" y="92" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">OTA-Partition 1.310.720 B</text>
-<text x="20" y="117" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">90.7 % belegt · 122.276 B frei von 1.310.720 B</text>
+<text x="20" y="117" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">90.7 % belegt · 122.132 B frei von 1.310.720 B</text>
 <rect x="20" y="124" width="820" height="26" rx="6" fill="#131519" stroke="#1c2025"/>
 <rect x="20.0" y="124" width="169.7" height="26" fill="#5b8def"/>
 <rect x="189.7" y="124" width="105.3" height="26" fill="#b07cf0"/>
 <rect x="295.0" y="124" width="75.2" height="26" fill="#35b3a3"/>
-<rect x="370.3" y="124" width="65.6" height="26" fill="#f2b03d"/>
-<rect x="435.8" y="124" width="59.1" height="26" fill="#7d8590"/>
-<rect x="495.0" y="124" width="59.0" height="26" fill="#565d67"/>
-<rect x="553.9" y="124" width="53.4" height="26" fill="#e8735c"/>
+<rect x="370.3" y="124" width="65.7" height="26" fill="#f2b03d"/>
+<rect x="435.9" y="124" width="59.1" height="26" fill="#7d8590"/>
+<rect x="495.1" y="124" width="59.0" height="26" fill="#565d67"/>
+<rect x="554.0" y="124" width="53.4" height="26" fill="#e8735c"/>
 <rect x="607.4" y="124" width="41.1" height="26" fill="#4fc0e8"/>
-<rect x="648.4" y="124" width="115.1" height="26" fill="#8a92a6"/>
-<rect x="763.5" y="124" width="76.5" height="26" fill="url(#hatch)"/>
+<rect x="648.5" y="124" width="115.1" height="26" fill="#8a92a6"/>
+<rect x="763.6" y="124" width="76.4" height="26" fill="url(#hatch)"/>
 <rect x="20" y="124" width="820" height="26" rx="6" fill="none" stroke="#1c2025"/>
 <rect x="20" y="156" width="11" height="11" rx="2" fill="#5b8def"/>
 <text x="38" y="166" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">WLAN-Funkstack (net80211/pp/phy/wpa)</text>
@@ -37,7 +37,7 @@
 <text x="840" y="208" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">9.2 %</text>
 <rect x="20" y="219" width="11" height="11" rx="2" fill="#f2b03d"/>
 <text x="38" y="229" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">main.cpp -- eigener Code</text>
-<text x="740" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">104.819 B</text>
+<text x="740" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">104.967 B</text>
 <text x="840" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">8.0 %</text>
 <rect x="20" y="240" width="11" height="11" rx="2" fill="#7d8590"/>
 <text x="38" y="250" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstiges Framework</text>
@@ -49,7 +49,7 @@
 <text x="840" y="271" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">7.2 %</text>
 <rect x="20" y="282" width="11" height="11" rx="2" fill="#e8735c"/>
 <text x="38" y="292" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstige ESP32-Sektionen (IRAM, Header, Alignment)</text>
-<text x="740" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">85.401 B</text>
+<text x="740" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">85.397 B</text>
 <text x="840" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">6.5 %</text>
 <rect x="20" y="303" width="11" height="11" rx="2" fill="#4fc0e8"/>
 <text x="38" y="313" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">WiFiManager (Captive Portal)</text>
@@ -61,7 +61,7 @@
 <text x="840" y="334" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">14.0 %</text>
 <rect x="20" y="345" width="11" height="11" rx="2" fill="none" stroke="#666e79" stroke-dasharray="2,2"/>
 <text x="38" y="355" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#666e79">frei</text>
-<text x="740" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">122.276 B</text>
+<text x="740" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">122.132 B</text>
 <text x="840" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">9.3 %</text>
 <line x1="20" y1="390" x2="840" y2="390" stroke="#252a31"/>
 <text x="20" y="420" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700" fill="#eef0f2">Modul · ATtiny1616</text>

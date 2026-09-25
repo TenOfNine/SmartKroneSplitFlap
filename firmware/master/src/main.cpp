@@ -91,7 +91,7 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 14;
+static constexpr uint8_t FW_VERSION_MINOR = 15;
 
 /* --- Zustand -------------------------------------------------------- */
 
@@ -875,13 +875,15 @@ if(v==="log")pollLog();if(v==="set")loadCfg()}
 $("#nav").onclick=e=>{const b=e.target.closest("button");if(b)show(b.dataset.v)};
 
 // ── Übersicht ──
+let textPending=false;   // Text-Button gewaehlt, aber noch nicht per "Senden" bestaetigt
 $("#modeseg").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 $$("#modeseg button").forEach(x=>x.classList.toggle("on",x===b));
 $("#textrow").style.display=b.dataset.m==="text"?"flex":"none";
-if(b.dataset.m!=="text")sendMode(b.dataset.m)};
+textPending=b.dataset.m==="text";
+if(!textPending)sendMode(b.dataset.m)};
 $("#alignseg").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 $$("#alignseg button").forEach(x=>x.classList.toggle("on",x===b))};
-$("#sendbtn").onclick=()=>{P("/api/text",{text:$("#txt").value});toast("Text gesendet")};
+$("#sendbtn").onclick=()=>{P("/api/text",{text:$("#txt").value});textPending=false;toast("Text gesendet")};
 function sendMode(m){P("/api/mode",{mode:m,sep:cfg.sep||".",align:+($("#alignseg .on")?.dataset.a||1)});toast("Modus: "+m)}
 $("#quick").onclick=e=>{const b=e.target.closest("button");if(!b)return;const q=b.dataset.q;
 if(q==="home"){P("/api/home",{});toast("HOME an alle")}
@@ -1186,7 +1188,7 @@ $("#meta").innerHTML=`<div>Module <b>${on}/${(st.modules||[]).length}</b></div>
 if(VIEW==="dash")renderDash();
 if(VIEW==="mods")renderMods();
 if(VIEW==="set")renderSys();
-if(st.modules&&$("#modeseg .on").dataset.m!==st.mode){
+if(st.modules&&!textPending&&$("#modeseg .on").dataset.m!==st.mode){
 $$("#modeseg button").forEach(x=>x.classList.toggle("on",x.dataset.m===st.mode));
 $("#textrow").style.display=st.mode==="text"?"flex":"none";}
 }

@@ -1,6 +1,6 @@
 # Vorgebaute Master-Firmware (ESP32-C3 Super Mini)
 
-Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `3a72acf`, 2026-09-21). Bei jeder Firmware-Aenderung neu ausfuehren.
+Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt gebaut nahe Commit `1e26e7e`, 2026-09-25). Bei jeder Firmware-Aenderung neu ausfuehren.
 
 | Datei | Zweck |
 |---|---|
@@ -9,8 +9,8 @@ Erzeugt von `tools/build_master_firmware.py` aus `firmware/master/` (zuletzt geb
 | `krone-master-esp32c3.kota` | **signierter** App-Container fuer das **OTA-Update aus der Web-UI** (Einstellungen > Firmware aktualisieren). Header mit SHA-256 + ECDSA-P-256-Signatur; das Modul lehnt fremde/manipulierte Dateien ab. Siehe `docs/firmware-signing.md`. |
 | `manifest.json` | Manifest fuer [ESP Web Tools](https://esphome.github.io/esp-web-tools/) |
 
-SHA-256 `factory.bin`: `3b501c5ddf53658221185075237b544d3b1f1160de1586731d3af9f3c55473bb`  
-SHA-256 `kota`: `fefd5dff6959d6310e69aec1171cde4d4131ddaf9a5e921a0c014eafa77accc2`
+SHA-256 `factory.bin`: `331d3378e95e20fc4c7bf9f248c08b85ff56c1804810f8a09d9ec7ac4a0284ea`  
+SHA-256 `kota`: `6c18155468f81c76b110fbbaa6038f71c721456ebf536c85e5fa3573eb3a9605`
 
 ## Erst-Flash (USB)
 
