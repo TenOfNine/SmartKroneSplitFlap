@@ -93,7 +93,10 @@ bei mehr als zwei Karten sind offen (siehe unten).
   (J1-M): mechanische Kodierung der J1-Drehlage weiterhin offen.
 - O-2, O-5, O-6 (Messungen an der Anzeigenplatine) weiterhin nicht
   gemessen — alles davon bleibt konfigurierbarer Parameter.
-- Ringkerntrafo/42-V~-Netzteil noch nicht aufgebaut.
+- Ringkerntrafo (Sedlbauer RSO 825028, 100 VA, 2 × 18 V) bestellt; Netzseite
+  (Sicherung 0,8 A T, NTC, Varistor 275 V~, Sekundärsicherung 3,15 A T) in
+  Spez. 8.1 festgelegt, **Aufbau steht aus**. Offen: NTC-Wert und
+  Sicherungsbauform vor dem Kauf bestätigen.
 - Restliche Daughter Cards für das Zielbild von zehn Modulen noch nicht
   angeschlossen (aktuell vier).
 - Selbsttest (Spez. 7.3) über eine volle Umdrehung je Modul mit
