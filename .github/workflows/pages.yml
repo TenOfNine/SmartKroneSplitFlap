@@ -7,6 +7,11 @@ name: Pages – ESP Web Flasher
 #   Modul  : krone-daughtercard-{attiny1616,attiny1616-boot,bootloader}.hex
 #   demo/  : statische Master-Web-UI mit Beispieldaten (tools/build_webui_demo.py),
 #            https://tenofnine.github.io/SmartKroneSplitFlap/demo/
+#   releases/<tag>/ + releases.json : jedes GitHub-Release (Tag vMAJOR.MINOR)
+#            mit seinen Prebuilts, fuer die Versionsauswahl im Webflasher. Die
+#            Dateien kommen per `git show <tag>:<pfad>` aus dem Tag selbst; die
+#            Release-Assets auf github.com sind fuer den Browser nicht abrufbar
+#            (kein CORS).
 # Die .kota bleibt aussen vor -- die laeuft ueber die Geraete-Web-UI, nicht ueber
 # diese Seite.
 #
@@ -22,6 +27,8 @@ on:
       - 'tools/build_webui_demo.py'
       - 'tools/webui_demo_shim.html'
       - '.github/workflows/pages.yml'
+  release:
+    types: [published, edited, deleted]
   workflow_dispatch:
 
 permissions:
@@ -41,8 +48,13 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0   # Tags der Release-Staende
 
       - name: Publish-Verzeichnis zusammenstellen
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           sha=$(git rev-parse --short HEAD)
           d=$(git log -1 --format=%cd --date=short)
@@ -62,6 +74,44 @@ jobs:
 
           # Statische Master-Web-UI mit Beispieldaten (aus main.cpp erzeugt)
           python3 tools/build_webui_demo.py -o _site/demo/index.html
+
+          # Release-Staende (Versionsauswahl im Webflasher)
+          mkdir -p _site/releases
+          echo '[]' > _site/releases.json
+          gh release list --limit 100 --exclude-drafts \
+              --json tagName,publishedAt,isPrerelease \
+              --jq '.[] | select(.tagName | test("^v[0-9]+\\.[0-9]+$")) | [.tagName, .publishedAt, .isPrerelease] | @tsv' |
+          while IFS=$'\t' read -r tag date pre; do
+            if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+              echo "Tag $tag fehlt im Repository -- uebersprungen"; continue
+            fi
+            rd="_site/releases/$tag"
+            mkdir -p "$rd"
+            for f in firmware/master/prebuilt/manifest.json \
+                     firmware/master/prebuilt/krone-master-esp32c3.factory.bin \
+                     firmware/module/prebuilt/krone-daughtercard-attiny1616.hex \
+                     firmware/module/prebuilt/krone-daughtercard-attiny1616-boot.hex \
+                     firmware/module/prebuilt/krone-daughtercard-bootloader.hex; do
+              b=$(basename "$f")
+              git show "$tag:$f" > "$rd/$b" 2>/dev/null || rm -f "$rd/$b"
+            done
+            master=false; module=false
+            if [ -f "$rd/manifest.json" ] && [ -f "$rd/krone-master-esp32c3.factory.bin" ]; then
+              jq --arg v "$tag" '.version = $v' "$rd/manifest.json" > "$rd/m.tmp" && mv "$rd/m.tmp" "$rd/manifest.json"
+              master=true
+            fi
+            if [ -f "$rd/krone-daughtercard-bootloader.hex" ] && [ -f "$rd/krone-daughtercard-attiny1616-boot.hex" ]; then
+              module=true
+            fi
+            jq --arg t "$tag" --arg d "${date%%T*}" --argjson p "$pre" \
+               --argjson ma "$master" --argjson mo "$module" \
+               '. + [{tag: $t, date: $d, prerelease: $p, master: $ma, module: $mo, path: ("releases/" + $t + "/")}]' \
+               _site/releases.json > _site/r.tmp && mv _site/r.tmp _site/releases.json
+          done
+          # neueste Version zuerst
+          jq 'sort_by(.tag | ltrimstr("v") | split(".") | map(tonumber)) | reverse' \
+             _site/releases.json > _site/r.tmp && mv _site/r.tmp _site/releases.json
+          cat _site/releases.json
 
           ls -lR _site
 

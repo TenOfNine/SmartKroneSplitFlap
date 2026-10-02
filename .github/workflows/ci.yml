@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write   # fuer den Release-Job
+  actions: write    # Release-Job stoesst den Pages-Workflow an
 
 jobs:
   host-tests:
@@ -155,10 +156,37 @@ jobs:
           else
             echo "kein .kicad_pcb -- Gerber-Export uebersprungen"
           fi
+      - name: Release-Notizen aus firmware/CHANGELOG.md
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          {
+            echo "## Firmware $v"
+            echo
+            grep -E "^\| ${v//./\\.} \|" firmware/CHANGELOG.md | awk -F'|' '{print $4}' | sed 's/^ *//'
+            echo
+            echo "**Flashen:** Webflasher https://tenofnine.github.io/SmartKroneSplitFlap/ (Version oben auswählen)."
+            echo "Master-Update über die Web-UI: \`krone-master-esp32c3.kota\`; Module über den Bus (im Master eingebettet) oder per Werksflash."
+          } > release-notes.md
+          cat release-notes.md
       - uses: softprops/action-gh-release@v2
         with:
+          name: Firmware ${{ github.ref_name }}
+          body_path: release-notes.md
           files: |
+            firmware/master/prebuilt/krone-master-esp32c3.factory.bin
+            firmware/master/prebuilt/krone-master-esp32c3.kota
+            firmware/master/prebuilt/manifest.json
+            firmware/module/prebuilt/krone-daughtercard-attiny1616.hex
+            firmware/module/prebuilt/krone-daughtercard-attiny1616-boot.hex
+            firmware/module/prebuilt/krone-daughtercard-bootloader.hex
+            firmware/module/prebuilt/krone-daughtercard-attiny1616.mota
+            firmware/CHANGELOG.md
             daughtercard.pdf
             daughtercard-gerber.zip
           fail_on_unmatched_files: false
-          generate_release_notes: true
+      - name: Webflasher neu veroeffentlichen (Versionsauswahl)
+        # Mit GITHUB_TOKEN erzeugte Releases loesen keine anderen Workflows aus;
+        # workflow_dispatch ist die dokumentierte Ausnahme.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --ref main

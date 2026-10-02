@@ -23,8 +23,10 @@ entwickelt und ausgeliefert.
   „Modul-Firmware" je Karte an, sobald die Version abgefragt wurde.
 
 **Pflicht bei jeder Firmware-Änderung:** Zeile unten anhängen und die
-beiden `*VERSION_MINOR`-Konstanten hochzählen (siehe CLAUDE.md
-Arbeitsweise).
+beiden `*VERSION_MINOR`-Konstanten hochzählen, alle Prebuilts neu erzeugen und
+danach mit `python tools/make_release.py` das Release-Tag `vMAJOR.MINOR`
+anlegen und pushen – daraus entsteht das GitHub-Release, das der Webflasher
+zur Auswahl anbietet (siehe CLAUDE.md Arbeitsweise).
 
 ## Historie
 

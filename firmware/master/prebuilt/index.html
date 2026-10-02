@@ -140,6 +140,42 @@
   }
   .panel[hidden] { display: none; }
 
+  /* Versionsauswahl: jedes GitHub-Release (Tag vX.Y) ist unter releases/<tag>/
+     gespiegelt, "main" ist der aktuelle Entwicklungsstand. */
+  .release {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1rem;
+    margin: 0 0 1.4rem;
+  }
+  .release__lbl {
+    font: 500 11px/1 "IBM Plex Mono", ui-monospace, monospace;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-dim);
+  }
+  .release select {
+    appearance: none;
+    min-width: min(100%, 18rem);
+    max-width: 100%;
+    background: var(--surface) linear-gradient(45deg, transparent 50%, var(--ink-dim) 50%) no-repeat right 1.1rem center / 6px 6px;
+    color: var(--ink);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: .55rem 2.2rem .55rem .8rem;
+    font: 500 14px/1.2 "IBM Plex Mono", ui-monospace, monospace;
+    cursor: pointer;
+  }
+  .release select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .release__note {
+    flex-basis: 100%;
+    margin: 0;
+    font: 400 13px/1.5 "IBM Plex Sans", sans-serif;
+    color: var(--ink-dim);
+  }
+  .release__note b { color: var(--ink); }
+
   .card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -324,6 +360,14 @@
 
   <div class="seam"></div>
 
+  <div class="release">
+    <label class="release__lbl" for="rel-sel">Firmware-Stand</label>
+    <select id="rel-sel">
+      <option value="">Entwicklungsstand (main)</option>
+    </select>
+    <p class="release__note" id="rel-note">Releases werden geladen&hellip;</p>
+  </div>
+
   <div class="tabs" role="tablist">
     <button class="tab" id="tab-master" role="tab" aria-selected="true" aria-controls="panel-master">Master</button>
     <button class="tab" id="tab-module" role="tab" aria-selected="false" aria-controls="panel-module">
@@ -334,7 +378,7 @@
   <!-- ============ MASTER ============ -->
   <section class="panel" id="panel-master" role="tabpanel" aria-labelledby="tab-master">
     <div class="card card--flash">
-      <esp-web-install-button manifest="./manifest.json">
+      <esp-web-install-button id="esp-install" manifest="./manifest.json">
         <button class="flash-btn" slot="activate">Modul verbinden &amp; flashen</button>
         <span slot="unsupported" class="note note--warn">
           Dieser Browser kann kein Web Serial. Nutze <b>Chrome</b> oder <b>Edge</b>
@@ -484,17 +528,81 @@
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js"></script>
 <script src="./updi.js"></script>
 <script>
-  // ---- Manifest-Version / Master-Dateiname -------------------------
-  fetch("./manifest.json", { cache: "no-cache" })
-    .then((r) => r.json())
-    .then((m) => {
-      const part = (m.builds && m.builds[0] && m.builds[0].parts && m.builds[0].parts[0]) || {};
-      const chip = (m.builds && m.builds[0] && m.builds[0].chipFamily) || "ESP32-C3";
-      document.getElementById("meta").innerHTML =
-        "Ziel: <b>" + chip + "</b> &middot; <b>" + (part.path || "?") + "</b>";
-      if (m.version) document.getElementById("version").textContent = "Version " + m.version;
-    })
-    .catch(() => {});
+  // ---- Firmware-Stand: Releases (releases.json) oder main ----------
+  // base = Verzeichnis mit manifest.json + Images; "./" = Entwicklungsstand.
+  let base = "./";
+  const relSel = document.getElementById("rel-sel");
+  const relNote = document.getElementById("rel-note");
+  let releases = [];
+
+  function esc(v) {
+    return String(v == null ? "" : v).replace(/[&<>"']/g, (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+
+  function loadMaster() {
+    document.getElementById("esp-install").setAttribute("manifest", base + "manifest.json");
+    document.getElementById("meta").innerHTML = "Ziel: <b>ESP32-C3</b> &middot; Image wird geladen&hellip;";
+    fetch(base + "manifest.json", { cache: "no-cache" })
+      .then((r) => { if (!r.ok) throw r.status; return r.json(); })
+      .then((m) => {
+        const part = (m.builds && m.builds[0] && m.builds[0].parts && m.builds[0].parts[0]) || {};
+        const chip = (m.builds && m.builds[0] && m.builds[0].chipFamily) || "ESP32-C3";
+        document.getElementById("meta").innerHTML =
+          "Ziel: <b>" + esc(chip) + "</b> &middot; <b>" + esc(part.path || "?") + "</b>";
+        if (m.version) document.getElementById("version").textContent = "Version " + m.version;
+      })
+      .catch(() => {
+        document.getElementById("meta").textContent = "Für diesen Stand gibt es kein Master-Image.";
+      });
+  }
+
+  function applyRelease(tag) {
+    const r = releases.find((x) => x.tag === tag);
+    base = r ? "./" + r.path : "./";
+    if (r) {
+      relNote.innerHTML = "Release <b>" + esc(r.tag) + "</b> vom " + esc(r.date) +
+        (r.prerelease ? " (Vorabversion)" : "") +
+        " &middot; <a href=\"https://github.com/TenOfNine/SmartKroneSplitFlap/releases/tag/" +
+        encodeURIComponent(r.tag) + "\">Änderungen</a>" +
+        (!r.master ? " &middot; ohne Master-Image" : "") +
+        (!r.module ? " &middot; ohne Daughter-Card-Images" : "");
+    } else {
+      relNote.innerHTML = "Aktueller Stand des <b>main</b>-Zweigs – kann neuer und weniger erprobt sein als das letzte Release.";
+    }
+    const u = new URL(location.href);
+    if (r) u.searchParams.set("v", r.tag); else u.searchParams.set("v", "main");
+    history.replaceState(null, "", u.pathname + u.search + location.hash);
+    loadMaster();
+    if (typeof loadModule === "function") loadModule();
+  }
+
+  relSel.addEventListener("change", () => applyRelease(relSel.value));
+
+  fetch("./releases.json", { cache: "no-cache" })
+    .then((r) => (r.ok ? r.json() : []))
+    .catch(() => [])
+    .then((list) => {
+      releases = Array.isArray(list) ? list : [];
+      for (const r of releases) {
+        const o = document.createElement("option");
+        o.value = r.tag;
+        o.textContent = r.tag + " · " + r.date + (r.prerelease ? " · Vorabversion" : "");
+        relSel.appendChild(o);
+      }
+      const want = new URL(location.href).searchParams.get("v");
+      let tag = "";
+      if (want && want !== "main" && releases.some((x) => x.tag === want)) tag = want;
+      else if (!want && releases.length) tag = (releases.find((x) => !x.prerelease) || releases[0]).tag;
+      relSel.value = tag;
+      if (!releases.length) {
+        relSel.disabled = true;
+      }
+      applyRelease(tag);
+      if (!releases.length) {
+        relNote.innerHTML = "Noch kein Release veröffentlicht – angeboten wird der Entwicklungsstand (<b>main</b>).";
+      }
+    });
 
   // ---- Tabs -------------------------------------------------------
   const tabs = [
@@ -520,21 +628,28 @@
   const goBtn = document.getElementById("mod-go");
   const _hex = {};
 
-  Promise.all([
-    fetch("./krone-daughtercard-bootloader.hex", { cache: "no-cache" }).then((r) => r.text()),
-    fetch("./krone-daughtercard-attiny1616-boot.hex", { cache: "no-cache" }).then((r) => r.text()),
-  ])
-    .then(([bl, app]) => {
-      _hex.bl = bl;
-      _hex.app = app;
-      const b = window.KroneUpdi.parseIntelHex(bl).length;
-      const a = window.KroneUpdi.parseIntelHex(app).length;
-      document.getElementById("mod-meta").innerHTML =
-        "Ziel: <b>ATtiny1616</b> &middot; Bootloader <b>" + b + " B</b> + App <b>" + a + " B</b>";
-    })
-    .catch(() => {
-      document.getElementById("mod-meta").textContent = "Images nicht gefunden.";
-    });
+  function loadModule() {
+    const from = base;
+    _hex.bl = _hex.app = null;
+    goBtn.disabled = true;
+    document.getElementById("mod-meta").innerHTML = "Ziel: <b>ATtiny1616</b> &middot; Images werden geladen&hellip;";
+    const get = (f) => fetch(from + f, { cache: "no-cache" }).then((r) => { if (!r.ok) throw r.status; return r.text(); });
+    Promise.all([get("krone-daughtercard-bootloader.hex"), get("krone-daughtercard-attiny1616-boot.hex")])
+      .then(([bl, app]) => {
+        if (from !== base) return;   /* inzwischen anderer Stand gewaehlt */
+        _hex.bl = bl;
+        _hex.app = app;
+        const b = window.KroneUpdi.parseIntelHex(bl).length;
+        const a = window.KroneUpdi.parseIntelHex(app).length;
+        document.getElementById("mod-meta").innerHTML =
+          "Ziel: <b>ATtiny1616</b> &middot; Bootloader <b>" + b + " B</b> + App <b>" + a + " B</b>";
+        goBtn.disabled = false;
+      })
+      .catch(() => {
+        if (from !== base) return;
+        document.getElementById("mod-meta").textContent = "Für diesen Stand gibt es keine Daughter-Card-Images.";
+      });
+  }
 
   function line(msg, cls) {
     const span = document.createElement("span");
