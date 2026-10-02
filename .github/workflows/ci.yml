@@ -25,7 +25,7 @@ jobs:
           path: ~/.platformio
           key: pio-native-${{ hashFiles('firmware/**/platformio.ini') }}
           restore-keys: pio-native-
-      - run: pip install --upgrade platformio
+      - run: pip install platformio==6.1.19   # gepinnt wie lokal (#43)
       - name: Modul-Bibliotheken (pio test -e native)
         run: pio test -e native -d firmware/module
       - name: Master-Bibliotheken (pio test -e native)
@@ -52,7 +52,7 @@ jobs:
           path: ~/.platformio
           key: pio-build-${{ hashFiles('firmware/**/platformio.ini') }}
           restore-keys: pio-build-
-      - run: pip install --upgrade platformio
+      - run: pip install platformio==6.1.19   # gepinnt wie lokal (#43)
       - name: Modul-Firmware (ATtiny1616)
         run: pio run -e attiny1616 -d firmware/module
       - name: Flash-Verbrauch < 8 KB
@@ -63,6 +63,14 @@ jobs:
         run: |
           pio run -e bootloader -d firmware/bootloader
           python tools/check_flash.py firmware/bootloader/.pio/build/bootloader/firmware.elf 3072
+      - name: Modul-Prebuilts passen zur Quelle (#43)
+        run: |
+          # Modul-Builds sind deterministisch; ein vergessener Neubau der
+          # Prebuilts (Auslieferung ueber main) faellt hier auf.
+          diff <(tr -d '\r' < firmware/module/.pio/build/attiny1616/firmware.hex) firmware/module/prebuilt/krone-daughtercard-attiny1616.hex
+          diff <(tr -d '\r' < firmware/module/.pio/build/attiny1616_boot/firmware.hex) firmware/module/prebuilt/krone-daughtercard-attiny1616-boot.hex
+          diff <(tr -d '\r' < firmware/bootloader/.pio/build/bootloader/firmware.hex) firmware/module/prebuilt/krone-daughtercard-bootloader.hex
+        shell: bash
       - name: Master-Firmware (ESP32-C3)
         run: pio run -e esp32c3 -d firmware/master
       - name: Prebuilt-Container gegen den einkompilierten Public Key pruefen
