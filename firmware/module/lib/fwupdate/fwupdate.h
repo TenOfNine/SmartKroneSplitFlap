@@ -8,6 +8,11 @@
  * Hardwareunabhaengig, auf dem Host testbar. Der Bootloader (firmware/bootloader)
  * nutzt es mit einem Callback, der die Seite ueber NVMCTRL in den Flash schreibt.
  *
+ * Wiederaufsetzbar: Wiederholt der Master nach einem verlorenen ACK genau das
+ * zuletzt angenommene Bruchstueck (gleicher Offset, gleiche Laenge), wird es
+ * ohne erneutes Schreiben mit FWUPDATE_OK beantwortet. Ein Schreibfehler bleibt
+ * dagegen bis zum naechsten fwupdate_begin() bestehen.
+ *
  * Kein dynamischer Speicher, kein Registerzugriff.
  */
 #ifndef KRONE_FWUPDATE_H
@@ -47,12 +52,15 @@ typedef struct {
     uint8_t  page[FWUPDATE_PAGE];
     uint32_t page_base;      /* Byte-Adresse der Seite im Puffer */
     uint8_t  page_fill;      /* gueltige Bytes ab page_base */
+    uint8_t  last_len;       /* Laenge des zuletzt angenommenen Bruchstuecks, 0 = keins */
+    uint8_t  failed;         /* bleibender Fehler (FWUPDATE_ERR_WRITE), 0 = keiner */
 } fwupdate_t;
 
 void fwupdate_begin(fwupdate_t *fu, fwupdate_write_page_fn write_page, void *ctx,
                     uint32_t total_len, uint16_t expect_crc);
 
-/* Ein CMD_FW_DATA-Bruchstueck einarbeiten. */
+/* Ein CMD_FW_DATA-Bruchstueck einarbeiten. Die exakte Wiederholung des zuletzt
+ * angenommenen Bruchstuecks liefert FWUPDATE_OK, ohne erneut zu schreiben. */
 fwupdate_result_t fwupdate_chunk(fwupdate_t *fu, uint32_t offset,
                                  const uint8_t *data, uint8_t len);
 

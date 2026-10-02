@@ -8,8 +8,12 @@
 /* Zeiten (ms) */
 #define T_ACK        1500u   /* Wartezeit auf ein ACK                 */
 #define T_BOOT        800u   /* Modul-Reset in den Bootloader         */
-#define T_APP        1200u   /* Modul-Reset in die neue App           */
-#define MAX_RETRIES     3u
+/* Modul-Reset in die neue App. Laenger als das Startfenster des Bootloaders
+ * (FWBOOT_WINDOW_MS = 2500 in module/lib/fwupdate/fwboot.h), sonst beendet das
+ * erste GET_VERSION nur das Fenster und geht verloren. */
+#define T_APP        3000u
+#define MAX_RETRIES     3u   /* Wiederholungen je Schritt (Timeout oder NAK) */
+#define MAX_RESTARTS    1u   /* Neubeginne der Uebertragung ab ENTER_BOOTLOADER */
 
 #define ACK_OK 0x01u
 #define VER_FLAG_APP_VALID 0x02u   /* == PROTO_VER_FLAG_APP_VALID */
@@ -72,15 +76,24 @@ static void go(moduleupdate_t *mu, mu_phase_t p, uint32_t now)
     mu->retries = 0;
 }
 
+/* Uebertragung fuer cur (neu) beginnen. */
+static void start_attempt(moduleupdate_t *mu, uint32_t now)
+{
+    mu->off = 0;
+    mu->end_tries = 0;
+    mu->end_unacked = false;
+    go(mu, MU_P_ENTER, now);
+}
+
 static void pick_next(moduleupdate_t *mu, uint32_t now)
 {
     for (uint8_t a = 1; a <= MU_MAX_ADDR; ++a) {
         if (mu->queue & (1u << (a - 1u))) {
             mu->queue &= ~(1u << (a - 1u));
             mu->cur = a;
-            mu->off = 0;
+            mu->restarts = 0;
             mu->result[a] = MU_RES_RUNNING;
-            go(mu, MU_P_ENTER, now);
+            start_attempt(mu, now);
             return;
         }
     }
@@ -101,6 +114,27 @@ static void done_current(moduleupdate_t *mu, bool ok, uint32_t now)
 static bool retry_exhausted(moduleupdate_t *mu)
 {
     return (++mu->retries > MAX_RETRIES);
+}
+
+/* Schritt endgueltig gescheitert: einmal ganz neu beginnen, dann FAILED. */
+static void attempt_failed(moduleupdate_t *mu, uint32_t now)
+{
+    if (mu->restarts < MAX_RESTARTS) {
+        mu->restarts++;
+        start_attempt(mu, now);
+    } else {
+        done_current(mu, false, now);
+    }
+}
+
+/* NAK: zaehlt wie ein Timeout; Wiederholung im naechsten Tick. */
+static void on_nak(moduleupdate_t *mu, uint32_t now)
+{
+    if (retry_exhausted(mu)) {
+        attempt_failed(mu, now);
+    } else {
+        mu->awaiting = false;
+    }
 }
 
 static void send_begin(moduleupdate_t *mu, uint32_t now)
@@ -158,7 +192,7 @@ void moduleupdate_tick(moduleupdate_t *mu, uint32_t now)
         if (!mu->awaiting) {
             send_begin(mu, now);
         } else if (age >= T_ACK) {
-            if (retry_exhausted(mu)) { done_current(mu, false, now); }
+            if (retry_exhausted(mu)) { attempt_failed(mu, now); }
             else { send_begin(mu, now); }
         }
         break;
@@ -167,20 +201,21 @@ void moduleupdate_tick(moduleupdate_t *mu, uint32_t now)
         if (!mu->awaiting) {
             send_data(mu, now);
         } else if (age >= T_ACK) {
-            if (retry_exhausted(mu)) { done_current(mu, false, now); }
+            if (retry_exhausted(mu)) { attempt_failed(mu, now); }
             else { send_data(mu, now); }
         }
         break;
 
     case MU_P_END:
-        if (!mu->awaiting || age >= T_ACK) {
-            if (mu->awaiting && retry_exhausted(mu)) {
-                done_current(mu, false, now);
-            } else {
-                send(mu, CMD_FW_END, mu->cur, NULL, 0);
-                mu->awaiting = true;
-                mu->t_phase = now;
-            }
+        if (!mu->awaiting) {
+            send(mu, CMD_FW_END, mu->cur, NULL, 0);
+            mu->awaiting = true;
+            mu->t_phase = now;
+        } else if (age >= T_ACK) {
+            /* ACK fehlt: FW_END kann angekommen sein (Modul startet neu) oder
+             * nicht (Bootloader wartet noch). GET_VERSION nach T_APP klaert es. */
+            mu->end_unacked = true;
+            go(mu, MU_P_WAIT_APP, now);
         }
         break;
 
@@ -220,7 +255,7 @@ void moduleupdate_on_frame(moduleupdate_t *mu, uint8_t cmd, uint8_t addr,
     case MU_P_BEGIN:
         if (cmd == CMD_FW_BEGIN) {
             if (ok) { go(mu, MU_P_DATA, now); }
-            else    { mu->awaiting = false; }
+            else    { on_nak(mu, now); }
         }
         break;
 
@@ -235,15 +270,15 @@ void moduleupdate_on_frame(moduleupdate_t *mu, uint8_t cmd, uint8_t addr,
                     go(mu, MU_P_END, now);
                 }
             } else {
-                mu->awaiting = false;
+                on_nak(mu, now);
             }
         }
         break;
 
     case MU_P_END:
         if (cmd == CMD_FW_END) {
-            if (ok) { go(mu, MU_P_WAIT_APP, now); }
-            else    { mu->awaiting = false; }
+            if (ok) { mu->end_unacked = false; go(mu, MU_P_WAIT_APP, now); }
+            else    { on_nak(mu, now); }
         }
         break;
 
@@ -251,7 +286,15 @@ void moduleupdate_on_frame(moduleupdate_t *mu, uint8_t cmd, uint8_t addr,
         if (cmd == CMD_GET_VERSION && len >= 4u) {
             const uint16_t ver = (uint16_t)(payload[1] << 8) | payload[2];
             const bool app_ok = (payload[3] & VER_FLAG_APP_VALID) != 0u;
-            done_current(mu, app_ok && (mu->target_ver == 0u || ver == mu->target_ver), now);
+            if (app_ok && (mu->target_ver == 0u || ver == mu->target_ver)) {
+                done_current(mu, true, now);
+            } else if (app_ok) {
+                done_current(mu, false, now);   /* andere App-Version laeuft */
+            } else if (mu->end_unacked && ++mu->end_tries <= MAX_RETRIES) {
+                go(mu, MU_P_END, now);          /* FW_END kam nicht an: nochmal */
+            } else {
+                attempt_failed(mu, now);        /* Bootloader ohne gueltige App */
+            }
         }
         break;
 

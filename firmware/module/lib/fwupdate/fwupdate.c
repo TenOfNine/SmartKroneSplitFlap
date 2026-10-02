@@ -37,12 +37,24 @@ static bool flush_page(fwupdate_t *fu)
     memset(fu->page, 0xFF, sizeof(fu->page));
     fu->page_base += FWUPDATE_PAGE;
     fu->page_fill = 0u;
+    if (!ok) {
+        fu->failed = FWUPDATE_ERR_WRITE;   /* Abbild unvollstaendig: bis zum Neubeginn */
+    }
     return ok;
 }
 
 fwupdate_result_t fwupdate_chunk(fwupdate_t *fu, uint32_t offset,
                                  const uint8_t *data, uint8_t len)
 {
+    if (fu->failed) {
+        return (fwupdate_result_t)fu->failed;
+    }
+    /* Wiederholung des zuletzt angenommenen Bruchstuecks (ACK verloren):
+     * Daten stecken schon in Seite und CRC, nur erneut bestaetigen. */
+    if (fu->last_len != 0u && len == fu->last_len &&
+        (uint32_t)offset + len == fu->received) {
+        return FWUPDATE_OK;
+    }
     if (offset != fu->received) {
         return FWUPDATE_ERR_ORDER;   /* nur streng aufsteigend, kein Nachreichen */
     }
@@ -52,13 +64,16 @@ fwupdate_result_t fwupdate_chunk(fwupdate_t *fu, uint32_t offset,
 
     fu->crc = crc16_step(fu->crc, data, len);
     fu->received += len;
+    if (len != 0u) {
+        fu->last_len = len;   /* leeres Bruchstueck ist kein Duplikat-Bezug */
+    }
 
     for (uint8_t i = 0; i < len; ++i) {
         const uint32_t abs = offset + i;
         const uint32_t base = abs - (abs % FWUPDATE_PAGE);
         if (fu->page_fill != 0u && base != fu->page_base) {
             if (!flush_page(fu)) {
-                return FWUPDATE_ERR_WRITE;
+                break;
             }
         }
         if (fu->page_fill == 0u) {
@@ -68,16 +83,16 @@ fwupdate_result_t fwupdate_chunk(fwupdate_t *fu, uint32_t offset,
         fu->page_fill = (uint8_t)((abs % FWUPDATE_PAGE) + 1u);
         if (fu->page_fill == FWUPDATE_PAGE) {
             if (!flush_page(fu)) {
-                return FWUPDATE_ERR_WRITE;
+                break;
             }
         }
     }
-    return FWUPDATE_OK;
+    return fu->failed ? (fwupdate_result_t)fu->failed : FWUPDATE_OK;
 }
 
 fwupdate_result_t fwupdate_finish(fwupdate_t *fu)
 {
-    if (!flush_page(fu)) {
+    if (fu->failed || !flush_page(fu)) {
         return FWUPDATE_ERR_WRITE;
     }
     if (fu->received != fu->total_len) {

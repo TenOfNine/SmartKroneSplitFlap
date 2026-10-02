@@ -6,12 +6,21 @@
  *   ENTER_BOOTLOADER -> (Reset) -> FW_BEGIN -> FW_DATA... -> FW_END -> (Reset)
  *   -> GET_VERSION zur Bestaetigung.
  *
- * Hardwareunabhaengig, gegen einen simulierten Bus host-testbar (wie busmaster).
+ * Fehlerbehandlung: Jeder Schritt wird nach Timeout oder NAK hoechstens
+ * MAX_RETRIES-mal wiederholt. Scheitert ein Schritt endgueltig, beginnt die
+ * Uebertragung einmal neu ab ENTER_BOOTLOADER (der Bootloader nimmt FW_BEGIN
+ * jederzeit als Neubeginn an), danach FAILED. Bleibt das FW_END-ACK aus, wird
+ * der Erfolg per GET_VERSION festgestellt (erwartete Version + APP_VALID);
+ * meldet der Bootloader noch eine ungueltige App, geht FW_END erneut raus.
+ *
+ * Hardwareunabhaengig, gegen einen simulierten Bus host-testbar (wie busmaster;
+ * test_moduleupdate nutzt die echte Bootloader-Logik aus lib/fwupdate/fwboot).
  * Der Aufrufer stellt eine Sende-Funktion bereit, fuettert Antwortrahmen ein und
  * ruft moduleupdate_tick() mit einer Millisekunden-Uhr.
  *
- * EXPERIMENTELL -- der zugehoerige Modul-Bootloader ist am Geraet noch nicht
- * verifiziert. Siehe docs/module-bootloader.md.
+ * Am Geraet verifiziert seit Firmware v1.9 (Ende-zu-Ende-Update 21.09.2026);
+ * Wiederholungs- und Neubeginn-Logik nur auf dem Host getestet. Siehe
+ * docs/module-bootloader.md.
  */
 #ifndef KRONE_MODULEUPDATE_H
 #define KRONE_MODULEUPDATE_H
@@ -61,7 +70,10 @@ typedef struct {
     uint8_t  cur;                 /* laufende Adresse, 0 = keine */
     mu_phase_t phase;
     uint32_t off;                 /* gesendete Bytes fuer cur */
-    uint8_t  retries;
+    uint8_t  retries;             /* Wiederholungen des laufenden Schritts (Timeout/NAK) */
+    uint8_t  restarts;            /* Neubeginne ab ENTER_BOOTLOADER fuer cur */
+    uint8_t  end_tries;           /* FW_END ohne ACK, per GET_VERSION nachgefragt */
+    bool     end_unacked;         /* FW_END-ACK fehlt: CONFIRM entscheidet ueber Erfolg */
     uint32_t t_phase;             /* millis bei Phasenbeginn */
     bool     awaiting;            /* auf ACK warten */
 
