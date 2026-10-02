@@ -46,6 +46,22 @@ bool config_validate(module_config_t *cfg)
 {
     bool ok = true;
 
+    if ((cfg->flags & (uint8_t)~CONFIG_FLAGS_KNOWN_MASK) != 0u) {
+        /* Nie definierte Flag-Bits gesetzt: geloeschtes oder fremdes EEPROM.
+         * Dann sind auch die uebrigen Felder nicht vertrauenswuerdig
+         * (0xFF ergaebe Vorhalt 60, T_enum 60). Nur eine gueltige Busadresse
+         * bleibt, damit die Karte ohne Neu-Enumeration erreichbar ist. */
+        const uint8_t addr = cfg->bus_address;
+        config_defaults(cfg);
+        if (addr >= 1u && addr <= 250u) {
+            cfg->bus_address = addr;
+        }
+        ok = false;
+    }
+    if ((cfg->flags & (uint8_t)~CONFIG_FLAGS_VALID_MASK) != 0u) {
+        cfg->flags &= CONFIG_FLAGS_VALID_MASK;   /* Bit 2 reserviert, #18 */
+        ok = false;
+    }
     if (cfg->blattzahl != 40 && cfg->blattzahl != 64 && cfg->blattzahl != 80) {
         cfg->blattzahl = 40;
         ok = false;
@@ -55,7 +71,7 @@ bool config_validate(module_config_t *cfg)
         ok = false;
     }
     if (cfg->abschaltvorhalt_ms > 60) {
-        cfg->abschaltvorhalt_ms = 60;
+        cfg->abschaltvorhalt_ms = 0;   /* Vorgabe statt Obergrenze */
         ok = false;
     }
     if (cfg->bus_address > 250) {

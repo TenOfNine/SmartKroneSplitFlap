@@ -46,13 +46,22 @@
 
 /* --- Zeitverhalten Bus (Spezifikation 5.6) ------------------------- */
 #define RESPONSE_DELAY_US 200u   /* Mindest-Antwortverzug nach Rahmenende */
+/* Inter-Byte-Timeout des Empfangs: ein Rahmen laeuft bei 115200 Bd ohne
+ * Pause durch (87 us je Byte). Mehr als 2 ms ohne Folgebyte -> Rahmen
+ * verwerfen (Vergleich in ganzen ms, wirksam nach 2..3 ms). */
+#define RX_FRAME_GAP_MS   2u
+/* Nach TXC hoechstens so lange auf das Echo des letzten Bytes warten
+ * (~2 Zeichenzeiten); danach gehen Empfangsbytes wieder an den Parser. */
+#define ECHO_TAIL_STEPS   20u
+#define ECHO_TAIL_STEP_US 10u
 
 /* --- Watchdog (Spezifikation 6.4, Zeitbasis ~1 s) ------------------ */
 #define WDT_PERIOD_SETTING WDT_PERIOD_1KCLK_gc
 
 /* --- EEPROM-Aufteilung -------------------------------------------- */
-/* Byte 0..5  Konfiguration (config.h / Spezifikation 6.3)
- * Byte 16..47  Positions-Ringpuffer: 16 Paare (seq, blatt), Verschleissschutz */
+/* Byte 0..5    Konfiguration (config.h / Spezifikation 6.3)
+ * Byte 8       App-gueltig-Marker des Bootloaders (firmware/bootloader)
+ * Byte 16..47  Positions-Ringpuffer: 16 Paare (seq, pos), lib/posring */
 #define EE_CONFIG_ADDR    0u
 #define EE_POS_RING_ADDR   16u
 #define EE_POS_RING_SLOTS  16u

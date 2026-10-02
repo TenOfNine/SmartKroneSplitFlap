@@ -29,6 +29,7 @@ void enum_fsm_init(enum_fsm_t *fsm, uint8_t eeprom_address, uint8_t t_enum_secon
     fsm->want_eeprom_write = false;
     fsm->want_ack = false;
     fsm->is_service_addr = false;
+    fsm->collision_wait = false;
 
     if (eeprom_addr_valid(eeprom_address)) {
         fsm->state = ENUM_ADDRESSED;
@@ -52,6 +53,7 @@ static void apply_fallback(enum_fsm_t *fsm)
     }
     fsm->state = ENUM_ADDRESSED;
     fsm->elapsed_ms = 0;
+    fsm->collision_wait = false;
 }
 
 static void on_enum_reset(enum_fsm_t *fsm)
@@ -60,6 +62,7 @@ static void on_enum_reset(enum_fsm_t *fsm)
     fsm->address = 0;             /* nicht mehr auf die bisherige Adresse antworten */
     fsm->is_service_addr = false;
     fsm->chain_out_active = false;
+    fsm->collision_wait = false;
     fsm->elapsed_ms = 0;
     /* last_error und Mechanik bleiben unberuehrt. */
 }
@@ -82,13 +85,26 @@ static void on_enum_assign(enum_fsm_t *fsm, const uint8_t *payload,
         return;
     }
 
+    /* Adresse uebernehmen und bestaetigen. EEPROM und CHAIN_OUT erst nach
+     * fehlerfreiem Echo des ACK (enum_fsm_on_ack_sent, #20). */
     fsm->address = new_addr;
     fsm->is_service_addr = false;
-    fsm->eeprom_address = new_addr;
-    fsm->want_eeprom_write = true;
-    fsm->chain_out_active = true;   /* gibt die naechste Karte frei */
     fsm->want_ack = true;
     fsm->state = ENUM_ADDRESSED;
+}
+
+void enum_fsm_on_ack_sent(enum_fsm_t *fsm, bool echo_ok)
+{
+    if (!fsm->want_ack || fsm->state != ENUM_ADDRESSED) {
+        return;  /* keine offene Zuweisung */
+    }
+    if (!echo_ok) {
+        enum_fsm_on_echo_mismatch(fsm);
+        return;
+    }
+    fsm->eeprom_address = fsm->address;
+    fsm->want_eeprom_write = true;
+    fsm->chain_out_active = true;    /* gibt die naechste Karte frei */
     fsm->last_error = ENUM_ERR_NONE; /* eine frische Zuweisung loest eine Kollision auf */
 }
 
@@ -118,7 +134,9 @@ void enum_fsm_on_frame(enum_fsm_t *fsm, uint8_t cmd, uint8_t addr,
 
 void enum_fsm_on_tick(enum_fsm_t *fsm, uint16_t dt_ms)
 {
-    if (fsm->state != ENUM_ENUMERATING) {
+    const bool waiting = (fsm->state == ENUM_ENUMERATING) ||
+                         (fsm->state == ENUM_UNADDRESSED && fsm->collision_wait);
+    if (!waiting) {
         return;
     }
     /* Saettigend addieren, damit ein grosser dt nicht ueberlaeuft. */
@@ -139,8 +157,19 @@ void enum_fsm_on_echo_mismatch(enum_fsm_t *fsm)
     fsm->chain_out_active = false;
     fsm->last_error = ENUM_ERR_COLLISION;
     fsm->state = ENUM_UNADDRESSED;
-    /* EEPROM-Adresse bleibt stehen; die Aufloesung erfolgt ueber eine neue
-     * Enumeration, die EEPROM-Byte 4 ohnehin ueberschreibt. */
+    /* EEPROM-Adresse bleibt stehen. Aufloesung ueber eine neue Enumeration;
+     * bleibt sie aus, Rueckfall nach T_enum (on_tick), damit die Karte nicht
+     * dauerhaft taub bleibt. Die Pause trennt doppelt vergebene Adressen
+     * zeitlich, statt sofort erneut zu kollidieren. */
+    fsm->collision_wait = true;
+    fsm->elapsed_ms = 0;
+}
+
+uint8_t enum_fsm_take_error(enum_fsm_t *fsm)
+{
+    const uint8_t e = fsm->last_error;
+    fsm->last_error = ENUM_ERR_NONE;
+    return e;
 }
 
 uint8_t enum_fsm_address(const enum_fsm_t *fsm)

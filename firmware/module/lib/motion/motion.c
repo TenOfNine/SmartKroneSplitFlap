@@ -1,14 +1,14 @@
 /* Siehe motion.h und docs/spezifikation.md Kapitel 6. */
 #include "motion.h"
 
-/* Verbleibende Blaetter bis zum Ziel, nur vorwaerts (Faktenblatt). */
+/* Verbleibende Blaetter bis zum aktiven Ziel, nur vorwaerts (Faktenblatt). */
 static uint8_t remaining(const motion_t *m)
 {
-    if (m->current == 0 || m->target == 0) {
+    if (m->current == 0 || m->active_target == 0) {
         return 0;
     }
     const uint8_t z = m->blattzahl;
-    return (uint8_t)((m->target + z - m->current) % z);
+    return (uint8_t)((m->active_target + z - m->current) % z);
 }
 
 /* Ist-Blatt eins weiterschalten (1-basiert, umlaufend). */
@@ -32,6 +32,7 @@ static void fail(motion_t *m, uint8_t code, uint32_t now)
     m->error = code;
     m->motor_on = false;
     m->gate_cut_early = false;
+    m->go_pending = false;
     enter(m, MOTION_ERROR, now);
 }
 
@@ -50,17 +51,56 @@ static void start_homing(motion_t *m, uint32_t now)
     enter(m, MOTION_HOMING, now);
 }
 
+/* Fahrt zum gepufferten Ziel starten; nur aus IDLE aufrufen. */
+static void start_move(motion_t *m, uint32_t now)
+{
+    if (!m->synced) {
+        m->error = MOTION_ERR_UNSYNCED;   /* 0x04: Position verloren */
+        return;
+    }
+    m->active_target = m->target;
+    if (m->active_target == 0 || remaining(m) == 0) {
+        return;  /* schon am Ziel */
+    }
+    m->retries = 0;
+    m->gate_cut_early = false;
+    m->motor_on = true;
+    m->motor_since_ms = now;
+    m->last_blatt_ms = now;
+    enter(m, MOTION_MOVING, now);
+}
+
+/* Regulaerer Uebergang nach IDLE; ein vorgemerktes GO startet sofort (#25). */
+static void enter_idle(motion_t *m, uint32_t now)
+{
+    const bool was_moving = (m->state == MOTION_MOVING);
+    const uint32_t motor_since = m->motor_since_ms;
+
+    m->motor_on = false;
+    enter(m, MOTION_IDLE, now);
+    if (m->go_pending) {
+        m->go_pending = false;
+        start_move(m, now);
+        if (was_moving && m->state == MOTION_MOVING) {
+            /* Fahrt schliesst ohne Pause an: die Laufzeitueberwachung zaehlt
+             * durch (0x05 gilt fuer "> 4 s durchgehend", Spez. 6.4). */
+            m->motor_since_ms = motor_since;
+        }
+    }
+}
+
 void motion_init(motion_t *m, const module_config_t *cfg,
                  uint8_t stored_position, uint32_t now_ms)
 {
     m->blattzahl = cfg->blattzahl;
     m->blatt_offset = cfg->blatt_offset;
     m->abschaltvorhalt_ms = cfg->abschaltvorhalt_ms;
-    m->triac_invert = config_flag(cfg, CONFIG_FLAG_TRIAC_INVERT);
     m->position_save = config_flag(cfg, CONFIG_FLAG_POSITION_SAVE);
 
     m->current = 0;
     m->target = 0;
+    m->active_target = 0;
+    m->go_pending = false;
     m->synced = false;
     m->error = MOTION_ERR_NONE;
     m->detected_blattzahl = 0;
@@ -86,6 +126,28 @@ void motion_init(motion_t *m, const module_config_t *cfg,
     }
 }
 
+void motion_apply_config(motion_t *m, const module_config_t *cfg, uint32_t now_ms)
+{
+    m->abschaltvorhalt_ms = cfg->abschaltvorhalt_ms;
+    m->position_save = config_flag(cfg, CONFIG_FLAG_POSITION_SAVE);
+
+    if (cfg->blattzahl == m->blattzahl && cfg->blatt_offset == m->blatt_offset) {
+        return;
+    }
+    /* Blattzaehlung passt nicht mehr zur Geometrie: anhalten, nicht selbst
+     * anlaufen, Neusynchronisation ueber HOME anfordern (0x04). */
+    m->blattzahl = cfg->blattzahl;
+    m->blatt_offset = cfg->blatt_offset;
+    m->go_pending = false;
+    m->counting = false;
+    m->synced = false;
+    m->current = 0;
+    m->target = 0;
+    m->active_target = 0;
+    m->error = MOTION_ERR_UNSYNCED;
+    enter(m, MOTION_IDLE, now_ms);   /* schaltet den Motor ab */
+}
+
 /* Gemeinsame Entprellung fuer beide Impulseingaenge. */
 static bool debounced(uint32_t now, uint32_t last)
 {
@@ -107,7 +169,7 @@ bool motion_on_blatt_pulse(motion_t *m, uint32_t now_ms)
         advance_current(m);
         m->retries = 0;
         if (remaining(m) == 0) {
-            enter(m, MOTION_IDLE, now_ms);  /* Ziel erreicht */
+            enter_idle(m, now_ms);  /* Ziel erreicht */
         }
     }
     return true;
@@ -138,8 +200,7 @@ bool motion_on_leer_pulse(motion_t *m, uint32_t now_ms)
             m->state_since_ms = now_ms;
             return true;
         }
-        m->motor_on = false;
-        enter(m, MOTION_IDLE, now_ms);
+        enter_idle(m, now_ms);
         return true;
     }
 
@@ -151,8 +212,7 @@ bool motion_on_leer_pulse(motion_t *m, uint32_t now_ms)
         fail(m, MOTION_ERR_BLATTZAHL, now_ms);
         return true;
     }
-    m->motor_on = false;
-    enter(m, MOTION_IDLE, now_ms);
+    enter_idle(m, now_ms);
     return true;
 }
 
@@ -161,54 +221,52 @@ bool motion_set_target(motion_t *m, uint8_t blatt)
     if (blatt < 1 || blatt > m->blattzahl) {
         return false;
     }
-    m->target = blatt;
+    m->target = blatt;   /* nur puffern; die laufende Fahrt behaelt ihr Ziel */
     return true;
 }
 
 void motion_go(motion_t *m, uint32_t now_ms)
 {
-    if (m->state == MOTION_ERROR) {
-        /* Diagramm 6.1: GO / SET fuehrt aus ERROR zurueck. */
+    switch (m->state) {
+    case MOTION_ERROR:
+        /* Diagramm 6.1: GO fuehrt aus ERROR zurueck, ohne sofortige Fahrt. */
         m->error = MOTION_ERR_NONE;
         if (m->synced) {
             enter(m, MOTION_IDLE, now_ms);
         } else {
             start_homing(m, now_ms);
         }
-        return;
+        break;
+    case MOTION_MOVING:
+    case MOTION_HOMING:
+        m->go_pending = true;   /* nach Erreichen von IDLE ausfuehren */
+        break;
+    case MOTION_IDLE:
+    default:
+        start_move(m, now_ms);
+        break;
     }
-    if (m->state != MOTION_IDLE) {
-        return;
-    }
-    if (!m->synced) {
-        m->error = MOTION_ERR_UNSYNCED;   /* 0x04: Position verloren */
-        return;
-    }
-    if (m->target == 0 || remaining(m) == 0) {
-        return;  /* schon am Ziel */
-    }
-    m->retries = 0;
-    m->gate_cut_early = false;
-    m->motor_on = true;
-    m->motor_since_ms = now_ms;
-    m->last_blatt_ms = now_ms;
-    enter(m, MOTION_MOVING, now_ms);
 }
 
 void motion_stop(motion_t *m, uint32_t now_ms)
 {
+    m->go_pending = false;
+    m->motor_on = false;
     if (m->state == MOTION_MOVING || m->state == MOTION_HOMING) {
-        m->motor_on = false;
         enter(m, MOTION_IDLE, now_ms);
-    } else {
-        m->motor_on = false;
     }
 }
 
 void motion_home(motion_t *m, uint32_t now_ms)
 {
     m->error = MOTION_ERR_NONE;
+    m->go_pending = false;
     start_homing(m, now_ms);
+}
+
+void motion_enter_error(motion_t *m, uint8_t code, uint32_t now_ms)
+{
+    fail(m, code, now_ms);
 }
 
 void motion_tick(motion_t *m, uint32_t now_ms)
@@ -220,8 +278,7 @@ void motion_tick(motion_t *m, uint32_t now_ms)
                 /* Schon synchronisiert, nur die Blattzahlerkennung ist nicht
                  * fertig geworden -> mit der konfigurierten Blattzahl arbeiten. */
                 m->counting = false;
-                m->motor_on = false;
-                enter(m, MOTION_IDLE, now_ms);
+                enter_idle(m, now_ms);
             } else {
                 fail(m, MOTION_ERR_NO_LEER, now_ms);   /* 0x02 */
             }
@@ -252,12 +309,13 @@ void motion_tick(motion_t *m, uint32_t now_ms)
                 m->gate_cut_early = true;
             }
         }
-        /* Kommt der letzte Impuls nach dem Vorhalt nicht, gilt das Ziel als
-         * erreicht (der Rotor ist ausgelaufen). */
+        /* Kommt der letzte Impuls nach dem Vorhalt nicht, gilt das aktive Ziel
+         * als erreicht (der Rotor ist ausgelaufen). Ein inzwischen gepuffertes
+         * neues Ziel aendert daran nichts (#25). */
         if (m->gate_cut_early &&
             (uint32_t)(now_ms - m->last_blatt_ms) >= 3u * MOTION_TIME_PER_BLATT_MS) {
-            m->current = m->target;
-            enter(m, MOTION_IDLE, now_ms);
+            m->current = m->active_target;
+            enter_idle(m, now_ms);
         }
         break;
     }
@@ -271,7 +329,9 @@ void motion_tick(motion_t *m, uint32_t now_ms)
 
 bool motion_triac_gate(const motion_t *m)
 {
-    return m->motor_on ^ m->triac_invert;
+    /* Laut Netzliste gilt in beiden Bestueckungszweigen PA7 high = Motor an;
+     * keine Invertierung (#18). In IDLE und ERROR ist motor_on immer false. */
+    return m->motor_on;
 }
 
 uint8_t motion_state_code(const motion_t *m)

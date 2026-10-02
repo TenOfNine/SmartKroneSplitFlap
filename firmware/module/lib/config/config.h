@@ -25,10 +25,23 @@ extern "C" {
 
 #define CONFIG_SIZE 6u
 
+/* Byte-Index der Busadresse im Abbild (Enumeration schreibt nur dieses Byte). */
+#define CONFIG_BYTE_BUS_ADDRESS 4u
+
 /* Flags in Byte 3. */
 #define CONFIG_FLAG_POSITION_SAVE 0x01u  /* Bit 0: Position nach Stillstand ins EEPROM */
 #define CONFIG_FLAG_AUTOHOME      0x02u  /* Bit 1: beim Start selbsttaetig homen */
-#define CONFIG_FLAG_TRIAC_INVERT  0x04u  /* Bit 2: Ausgangspolaritaet PA7 invertieren */
+/* Bit 2: reserviert. Frueher "Triac-Polaritaet invertieren"; laut Netzliste
+ * (schaltplan-daughtercard.md 5.4) gilt in beiden Bestueckungszweigen
+ * PA7 high = Motor an, eine invertierte Variante gibt es nicht. Das Bit wird
+ * ignoriert und beim Pruefen geloescht (#18). */
+#define CONFIG_FLAG_RESERVED_BIT2 0x04u
+
+/* Bits, die gesetzt sein duerfen. */
+#define CONFIG_FLAGS_VALID_MASK (CONFIG_FLAG_POSITION_SAVE | CONFIG_FLAG_AUTOHOME)
+/* Bits, die je definiert waren. Steht etwas ausserhalb (z. B. 0xFF eines
+ * geloeschten EEPROMs), gilt das ganze Abbild als ungueltig. */
+#define CONFIG_FLAGS_KNOWN_MASK (CONFIG_FLAGS_VALID_MASK | CONFIG_FLAG_RESERVED_BIT2)
 
 #define CONFIG_FLAGS_DEFAULT (CONFIG_FLAG_POSITION_SAVE | CONFIG_FLAG_AUTOHOME)
 
@@ -53,14 +66,30 @@ void config_to_bytes(const module_config_t *cfg, uint8_t *bytes);
 /*
  * Prueft und korrigiert alle Felder auf ihren zulaessigen Bereich.
  * Rueckgabe: true, wenn nichts korrigiert werden musste.
- * Ungueltige Blattzahl -> 40. Bus-/T_enum-/Offset-/Vorhalt-Werte werden
- * in den gueltigen Bereich geklemmt.
+ *   Flags mit Bits ausserhalb 0x07 (geloeschtes EEPROM)
+ *                          -> alle Felder auf Vorgabe, eine gueltige
+ *                             Busadresse (1..250) bleibt erhalten
+ *   Flags                  -> immer auf 0x03 maskiert (Bit 2 reserviert)
+ *   ungueltige Blattzahl   -> 40
+ *   Offset >= Blattzahl    -> 0
+ *   Vorhalt > 60           -> 0 (Vorgabe)
+ *   Busadresse > 250       -> 0
+ *   T_enum                 -> auf 1..60 geklemmt
  */
 bool config_validate(module_config_t *cfg);
 
 static inline bool config_flag(const module_config_t *cfg, uint8_t mask)
 {
     return (cfg->flags & mask) != 0u;
+}
+
+/* Positionsspeicherung wirksam: Bit 0 an UND Autohoming aus. Mit Autohoming
+ * wird die gespeicherte Position beim Start nie genutzt, Schreiben waere nur
+ * Verschleiss (#24). */
+static inline bool config_position_store_active(const module_config_t *cfg)
+{
+    return config_flag(cfg, CONFIG_FLAG_POSITION_SAVE) &&
+           !config_flag(cfg, CONFIG_FLAG_AUTOHOME);
 }
 
 #ifdef __cplusplus

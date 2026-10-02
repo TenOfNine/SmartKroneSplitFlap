@@ -41,12 +41,13 @@ typedef struct {
     bool     is_service_addr; /* address == 250 durch Rueckfall, nicht durch Zuweisung */
     uint8_t  eeprom_address;  /* Spiegel EEPROM-Byte 4; 0 = nie enumeriert */
     uint16_t t_enum_ms;       /* Timeout in ms, aus EEPROM-Byte 5 */
-    uint16_t elapsed_ms;      /* seit dem letzten ENUM_RESET */
+    uint16_t elapsed_ms;      /* seit ENUM_RESET bzw. seit der Kollision */
     bool     chain_out_active;
-    uint8_t  last_error;
+    bool     collision_wait;  /* UNADDRESSED nach Kollision, Rueckfall nach T_enum */
+    uint8_t  last_error;      /* 0x06 bis zur Meldung ueber enum_fsm_take_error */
 
     /* Ausgaben: nach jedem Schritt pruefen, ausfuehren, dann quittieren. */
-    bool     want_eeprom_write; /* address nach EEPROM-Byte 4 schreiben */
+    bool     want_eeprom_write; /* eeprom_address nach EEPROM-Byte 4 schreiben */
     bool     want_ack;          /* ENUM_ASSIGN mit einem ACK bestaetigen */
 } enum_fsm_t;
 
@@ -65,21 +66,40 @@ void enum_fsm_init(enum_fsm_t *fsm, uint8_t eeprom_address, uint8_t t_enum_secon
  * Verarbeitet einen empfangenen, CRC-geprueften Rahmen.
  *   chain_in_active   Pegel der CHAIN_IN-Leitung im Moment des Empfangs
  * Nicht-Enumerationskommandos aendern den Zustand nicht.
+ *
+ * ENUM_ASSIGN fuer diese Karte: Zustand ADDRESSED unter der neuen Adresse und
+ * want_ack. EEPROM-Schreiben und CHAIN_OUT folgen erst, wenn der Aufrufer das
+ * ACK fehlerfrei gesendet hat (enum_fsm_on_ack_sent).
  */
 void enum_fsm_on_frame(enum_fsm_t *fsm, uint8_t cmd, uint8_t addr,
                        const uint8_t *payload, uint8_t payload_len,
                        bool chain_in_active);
 
-/* Zeitfortschritt in Millisekunden. Loest bei Ablauf von T_enum den Rueckfall aus. */
+/*
+ * Ergebnis der ENUM_ASSIGN-Bestaetigung (#20).
+ *   echo_ok = true   Zuweisung festschreiben: eeprom_address, want_eeprom_write,
+ *                    CHAIN_OUT aktiv (Spez. 4.5.1 Schritt 3).
+ *   echo_ok = false  Kollision wie enum_fsm_on_echo_mismatch; EEPROM und
+ *                    CHAIN_OUT bleiben unberuehrt.
+ */
+void enum_fsm_on_ack_sent(enum_fsm_t *fsm, bool echo_ok);
+
+/* Zeitfortschritt in Millisekunden. Loest bei Ablauf von T_enum den Rueckfall
+ * aus (in ENUMERATING und nach einer Kollision). */
 void enum_fsm_on_tick(enum_fsm_t *fsm, uint16_t dt_ms);
 
 /*
  * Meldet, dass ein zurueckgelesenes Sendebyte vom gesendeten abweicht
  * (Kollision, Abschnitt 4.5.3). Verwirft die Laufzeitadresse, Zustand
- * UNADDRESSED, Fehlercode 0x06. Die Mechanik bleibt unberuehrt (nicht Sache
- * dieses Automaten).
+ * UNADDRESSED, Fehlercode 0x06. Kommt binnen T_enum keine Enumeration, faellt
+ * die Karte wie nach 4.5.2 auf ihre EEPROM-Adresse (bzw. 250) zurueck, statt
+ * dauerhaft taub zu bleiben (#20). Die Mechanik bleibt unberuehrt.
  */
 void enum_fsm_on_echo_mismatch(enum_fsm_t *fsm);
+
+/* Gemerkten Fehlercode (0x06 oder 0) liefern und zuruecksetzen; fuer
+ * Statusbyte 3, wenn kein Motorfehler ansteht (#28). */
+uint8_t enum_fsm_take_error(enum_fsm_t *fsm);
 
 /* Aktuelle Busadresse (0 = keine). */
 uint8_t enum_fsm_address(const enum_fsm_t *fsm);

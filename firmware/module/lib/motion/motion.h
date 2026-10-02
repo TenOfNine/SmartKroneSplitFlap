@@ -10,6 +10,7 @@
  *   6.2  Ablauf: Homing, Blattzahlerkennung, MOVING, Abschaltvorhalt
  *   6.4  Fehlercodes 0x01..0x05
  *   4.3  Auswertende Flanke fallend, 20 ms Sperrzeit
+ *   5.4  SET/SET_ALL puffern das Ziel, erst GO loest die Bewegung aus
  *   Faktenblatt: 60 ms je Blatt, Weg = (Ziel - Ist) mod Blattzahl, nur vorwaerts
  */
 #ifndef KRONE_MOTION_H
@@ -53,11 +54,12 @@ typedef struct {
     uint8_t  blattzahl;
     uint8_t  blatt_offset;
     uint8_t  abschaltvorhalt_ms;
-    bool     triac_invert;
     bool     position_save;
 
     uint8_t  current;             /* Ist-Blatt 1..blattzahl; 0 = unbekannt */
-    uint8_t  target;              /* gepuffertes Ziel-Blatt 1..blattzahl */
+    uint8_t  target;              /* gepuffertes Ziel (SET/SET_ALL, Statusbyte 1) */
+    uint8_t  active_target;       /* Ziel der laufenden Fahrt, von GO uebernommen */
+    bool     go_pending;          /* GO in MOVING/HOMING, wird in IDLE ausgefuehrt */
     bool     synced;
     uint8_t  error;
     uint8_t  detected_blattzahl;  /* 0 = noch nicht erkannt */
@@ -72,7 +74,7 @@ typedef struct {
     bool     counting;            /* Blattzahlerkennung laeuft */
     uint8_t  count_value;
     bool     seen_first_leer;
-    bool     motor_on;            /* logischer Gate-Wunsch, vor Invertierung */
+    bool     motor_on;            /* Gate-Pegel PA7 (high = Motor an) */
     bool     gate_cut_early;      /* Abschaltvorhalt hat das Gate abgeschaltet */
 } motion_t;
 
@@ -84,29 +86,42 @@ typedef struct {
 void motion_init(motion_t *m, const module_config_t *cfg,
                  uint8_t stored_position, uint32_t now_ms);
 
+/*
+ * SET_CONFIG zur Laufzeit (#23). Vorhalt und Positionsspeicherung gelten
+ * sofort. Aendern sich Blattzahl oder Offset, stimmt die Blattzaehlung nicht
+ * mehr: Motor aus, IDLE, nicht synchronisiert, Fehler 0x04. Die Karte laeuft
+ * nicht selbsttaetig an; HOME synchronisiert neu.
+ */
+void motion_apply_config(motion_t *m, const module_config_t *cfg, uint32_t now_ms);
+
 /* Entprellte fallende Flanke am Blatt-Impuls. Rueckgabe: true, wenn angenommen. */
 bool motion_on_blatt_pulse(motion_t *m, uint32_t now_ms);
 
 /* Entprellte fallende Flanke am Leerbild-Impuls. Rueckgabe: true, wenn angenommen. */
 bool motion_on_leer_pulse(motion_t *m, uint32_t now_ms);
 
-/* SET / SET_ALL: Ziel puffern (1..blattzahl). Rueckgabe: true bei gueltigem Wert. */
+/* SET / SET_ALL: Ziel puffern (1..blattzahl). Aendert eine laufende Fahrt
+ * nicht. Rueckgabe: true bei gueltigem Wert. */
 bool motion_set_target(motion_t *m, uint8_t blatt);
 
-/* GO: Bewegung zum gepufferten Ziel starten. Loest im Fehlerzustand die
- * Rueckkehr nach IDLE aus (Diagramm 6.1: ERROR --GO/SET--> IDLE). */
+/* GO: in IDLE Fahrt zum gepufferten Ziel starten. In MOVING/HOMING wird das GO
+ * vorgemerkt und beim Erreichen von IDLE ausgefuehrt. Im Fehlerzustand nur
+ * Rueckkehr nach IDLE bzw. Homing, keine Fahrt (Diagramm 6.1: ERROR --GO--> IDLE). */
 void motion_go(motion_t *m, uint32_t now_ms);
 
-/* STOP: Motor aus, MOVING -> IDLE. */
+/* STOP: Motor aus, MOVING/HOMING -> IDLE, vorgemerktes GO verworfen. */
 void motion_stop(motion_t *m, uint32_t now_ms);
 
-/* HOME: erzwungenes Homing. */
+/* HOME: erzwungenes Homing, vorgemerktes GO verworfen. */
 void motion_home(motion_t *m, uint32_t now_ms);
+
+/* Sofort in ERROR mit Motor aus, z. B. nach einem Watchdog-Reset (#19). */
+void motion_enter_error(motion_t *m, uint8_t code, uint32_t now_ms);
 
 /* Zeitfortschritt: Timeouts, Laufzeitueberwachung, Abschaltvorhalt. */
 void motion_tick(motion_t *m, uint32_t now_ms);
 
-/* Elektrischer Pegel fuer PA7 (Triac-Gate), inkl. Invertierung nach Flag Bit 2. */
+/* Pegel fuer PA7 (Triac-Gate). High = Motor an, in jeder Bestueckung (#18). */
 bool motion_triac_gate(const motion_t *m);
 
 /* Zustandscode fuer Statusbyte 2 (0 Idle, 1 Homing, 2 Moving, 3 Fehler). */
