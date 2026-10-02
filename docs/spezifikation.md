@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.22 |
-| Datum | 11.09.2026 |
+| Version | 0.29 |
+| Datum | 02.10.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -233,7 +233,7 @@ Die Angabe der Originaldoku ist in sich unstimmig, da der Strom mit steigender S
 
 Bestückt wird jeweils nur ein Zweig. Vorgabe ist die Quelle mit R_S = 4,7 kΩ und VDRV = 15 V, was rund 3 mA ergibt und damit im Zündbereich des L201E3 liegt. Zeigt die Messung, dass 5 V genügen, wird JP1 gesetzt und R_S auf 1,2 kΩ reduziert.
 
-Die Wahl wird zusätzlich in Flag-Bit 2 der EEPROM-Konfiguration hinterlegt, damit die Firmware die Ausgangspolarität an PA7 passend invertiert.
+In beiden Zweigen gilt laut Netzliste (`docs/schaltplan-daughtercard.md` 5.4/Kap. 6): **PA7 high = Motor an.** Eine Invertierung in der Firmware ist daher nicht vorgesehen; das früher dafür reservierte Flag-Bit 2 ist entfallen (v0.29, Issue #18) – ein gesetztes Bit 2 hätte den Motor in IDLE/ERROR dauerhaft bestromt.
 
 **Rückfallebene:** Der L201E3 zündet mit rund 3 mA in allen vier Quadranten. Sollte sich die Originalstufe als unbrauchbar erweisen, kann das Gate direkt über einen Optotriac-Treiber (MOC3052 oder MOC3063) bedient werden. Das erfordert einen Eingriff auf der Anzeigenplatine und ist nicht der bevorzugte Weg.
 
@@ -245,7 +245,7 @@ Die Busadresse wird ausschließlich über die CHAIN-Leitung vergeben. Ein DIP-Sc
 
 1. Master sendet `ENUM_RESET` als Broadcast. Alle Karten wechseln in den Zustand ENUMERATING, antworten nicht mehr auf ihre bisherige Adresse und ziehen CHAIN_OUT inaktiv.
 2. Master aktiviert die CHAIN-Leitung zur ersten Karte.
-3. Master sendet `ENUM_ASSIGN` mit der nächsten freien Adresse. Nur die Karte mit aktivem CHAIN_IN und ohne Laufzeitadresse übernimmt sie, bestätigt, schreibt sie ins EEPROM und aktiviert CHAIN_OUT.
+3. Master sendet `ENUM_ASSIGN` mit der nächsten freien Adresse. Nur die Karte mit aktivem CHAIN_IN und ohne Laufzeitadresse übernimmt sie und bestätigt. Erst wenn das Sendeecho des ACK fehlerfrei war, schreibt sie die Adresse ins EEPROM und aktiviert CHAIN_OUT. Bleibt das ACK beim Master aus, prüft er per `PING` an die vergebene Adresse, ob sie übernommen wurde, bevor er `ENUM_ASSIGN` wiederholt (sonst würde die nächste Karte dieselbe Adresse erhalten).
 4. Schritt 3 wiederholt sich, bis keine Bestätigung mehr kommt.
 5. Master sendet `ENUM_DONE` als Broadcast. Alle Karten, die noch in ENUMERATING sind, verlassen den Zustand unverzüglich.
 
@@ -270,11 +270,11 @@ T_enum beträgt 10 s, parametrierbar von 1 bis 60 s. Wird `ENUM_DONE` empfangen,
 
 #### 4.5.3 Kollisionserkennung
 
-Da /RE fest auf GND liegt, liest jede Karte ihre eigene Sendung zurück. Weicht ein zurückgelesenes Byte vom gesendeten ab, liegt eine Kollision vor. Die Karte bricht die Sendung ab, verwirft ihre Laufzeitadresse, geht in den Zustand UNADDRESSED und setzt ein Fehlerbit. Eine doppelt vergebene Adresse meldet sich damit selbst, statt sporadisch verfälschte Antworten zu erzeugen.
+Da /RE fest auf GND liegt, liest jede Karte ihre eigene Sendung zurück. Weicht ein zurückgelesenes Byte vom gesendeten ab, liegt eine Kollision vor. Die Karte bricht die Sendung ab, verwirft ihre Laufzeitadresse, geht in den Zustand UNADDRESSED und merkt sich den Fehlercode 0x06. Eine doppelt vergebene Adresse meldet sich damit selbst, statt sporadisch verfälschte Antworten zu erzeugen. Damit eine einzelne Störung (etwa eine Kollision mit einer Master-Wiederholung) die Karte nicht dauerhaft taub macht, fällt sie nach T_enum ohne neue Enumeration auf ihre EEPROM-Adresse zurück (wie 4.5.2) und meldet 0x06 einmalig in Byte 3 der nächsten Statusantwort; der Master warnt in Log und Web-UI.
 
 #### 4.5.4 Verifikationslauf
 
-Nach jeder Enumeration fragt der Master über `GET_UID` die Seriennummer jeder Adresse ab. Der ATtiny stellt sie im SIGROW-Bereich bereit. Doppelte oder zwischen zwei Durchläufen wechselnde Seriennummern zeigen eine misslungene Enumeration an und werden in der Web-UI gemeldet.
+Nach jeder Enumeration fragt der Master über `GET_UID` die Seriennummer jeder Adresse ab. Der ATtiny stellt sie im SIGROW-Bereich bereit. Doppelte oder zwischen zwei Durchläufen wechselnde Seriennummern zeigen eine misslungene Enumeration an und werden in Log und Web-UI gemeldet. Zusätzlich fragt der Master die Serviceadresse 250 periodisch per `PING` ab und warnt, wenn dort eine Karte antwortet (4.5.2).
 
 ### 4.6 Stückliste je Daughter Card
 
@@ -390,7 +390,7 @@ CRC16/MODBUS wurde gewählt, damit Standardwerkzeuge und Logic-Analyzer-Dekoder 
 Bootloader beantwortet die App nur `GET_VERSION` (Flag Bit 0 = 0) und
 `ENTER_BOOTLOADER` (= einfacher Neustart).
 
-**Das zentrale Muster für Display-Updates** ist `SET_ALL` gefolgt von `GO`. Der Broadcast enthält die Zielwerte aller Module in einem Rahmen, jedes Modul entnimmt das Byte an der Stelle seiner eigenen Adresse und puffert es. Erst `GO` löst die Bewegung aus, sodass alle Module synchron starten.
+**Das zentrale Muster für Display-Updates** ist `SET_ALL` gefolgt von `GO`. Der Broadcast enthält die Zielwerte aller Module in einem Rahmen, jedes Modul entnimmt das Byte an der Stelle seiner eigenen Adresse und puffert es. Erst `GO` löst die Bewegung aus, sodass alle Module synchron starten. `SET`/`SET_ALL` ändern nur das gepufferte Ziel, nie eine laufende Fahrt. Ein `GO` während einer Fahrt oder eines Homings wird vorgemerkt und beim Erreichen von IDLE ausgeführt. `SET_CONFIG` wirkt sofort; ändern sich Blattzahl oder Offset, geht das Modul mit Motor aus in IDLE, meldet 0x04 und braucht ein `HOME`. Das Flags-Byte kennt nur Bit 0 und Bit 1.
 
 `LED_SYNC` sendet der Master periodisch (~1 s) als Broadcast, damit die Status-LED-Blinkphase (Identify 4 Hz, Fehler 1 Hz) auf allen Karten und dem Master synchron läuft, statt seit dem jeweils eigenen Boot-Zeitpunkt zu zählen. Reine Kosmetik, kein Einfluss auf Mechanik oder Timing-kritische Abläufe.
 
@@ -401,9 +401,9 @@ Bei 10 Modulen umfasst `SET_ALL` 18 Byte, `GO` 8 Byte. Ein komplettes Update bel
 | Byte | Inhalt |
 |---|---|
 | 0 | Ist-Blatt (1–40, 0 = unbekannt) |
-| 1 | Ziel-Blatt |
+| 1 | Ziel-Blatt (gepuffert) |
 | 2 | Zustand: 0 Idle, 1 Homing, 2 Moving, 3 Fehler |
-| 3 | Fehlercode, siehe 6.4 |
+| 3 | Fehlercode, siehe 6.4 (0x06 einmalig nach einer Kollision, wenn kein Motorfehler ansteht) |
 | 4 | erkannte Blattzahl |
 | 5–6 | Zähler korrigierter Positionierversuche, 16 Bit |
 | 7 | Firmware-Version |
@@ -414,10 +414,12 @@ Bei 10 Modulen umfasst `SET_ALL` 18 Byte, `GO` 8 Byte. Ein komplettes Update bel
 |---|---|
 | Antwortverzug Slave, min. | 200 µs nach Rahmenende |
 | Antwortverzug Slave, max. | 3 ms |
-| Timeout Master | 5 ms |
+| Timeout Master | 5 ms ab Ende der eigenen Anfrage (Sendeende, nicht Beginn des Schleifendurchlaufs) |
 | Guard-Zeit nach DE-Abschaltung | 100 µs |
 | Status-Polling | rundlaufend, ein Modul je 100 ms |
-| Wiederholungen bei Timeout | 2, danach Modul als offline markiert |
+| Wiederholungen bei Timeout | 2, danach Modul als offline markiert; eine Wiederholung wird erst nach ≥ 1 ms Busruhe und ohne angefangenen Rahmen gesendet |
+| Sendedisziplin Master | Alle Kommandos über eine Warteschlange; gesendet wird nur ohne ausstehende Antwort und außerhalb der Enumeration |
+| Inter-Byte-Timeout Modul | 2 ms: ein angefangener Rahmen ohne Folgebyte wird verworfen |
 
 ### 5.7 Firmware-Verteilung über den Bus (experimentell)
 
@@ -432,7 +434,13 @@ Master trägt die signierte Modul-App als Blob in seiner eigenen Firmware
 (dieselbe ECDSA-P-256-Kette wie das Master-OTA, `docs/firmware-signing.md`) und
 ist der Vertrauensanker; der Bootloader prüft nur die CRC16 des Images. Ein
 abgebrochener Transfer lässt die App als ungültig markiert — der Bootloader
-bleibt im Update-Modus, der Master wiederholt. Der Bootloader kann von App-Code
+bleibt im Update-Modus und startet die App bis zu einem erfolgreichen `FW_END`
+in keinem Pfad (auch nicht nach Busstille). Die Übertragung ist
+wiederaufsetzbar: die Wiederholung des zuletzt angenommenen Chunks wird
+quittiert, `FW_BEGIN` startet jederzeit neu; der Master wiederholt je Schritt
+bis zu dreimal und beginnt danach einmal neu, ein verlorenes `FW_END`-ACK prüft
+er per `GET_VERSION`. Bootloader-Version 2 (Byte 4 der `GET_VERSION`-Antwort des
+Bootloaders); Änderungen am Bootloader erreichen Karten nur per Werksflash. Der Bootloader kann von App-Code
 nicht überschrieben werden.
 
 Der Bootloader schaltet den Triac-Treiberpin nie aktiv → der Motor kann während
@@ -481,7 +489,7 @@ Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 
 **Abschaltvorhalt.** Der Triac löscht erst beim nächsten Stromnulldurchgang, bis zu 10 ms nach Wegnahme des Gate-Signals. Dazu kommt mechanischer Nachlauf. Der Vorhalt wird als Parameter in Millisekunden geführt und einmalig empirisch ermittelt.
 
-**Positionsspeicherung.** Nach jedem Stillstand wird die erreichte Position ins EEPROM geschrieben, damit die Anzeige nach einem Netzausfall nicht zwingend homen muss. Zum Schutz vor Verschleiß wird ein Ringpuffer über 16 EEPROM-Zellen verwendet.
+**Positionsspeicherung.** Ist sie aktiv und Autohoming aus, wird nach jedem Stillstand die erreichte Position ins EEPROM geschrieben, damit die Anzeige nach einem Netzausfall nicht homen muss (mit Autohoming wird die gespeicherte Position nie genutzt und daher nicht geschrieben). Bei Beginn einer Fahrt oder eines Homings wird ein Ungültig-Eintrag geschrieben, damit ein Netzausfall während der Bewegung zum Homing führt. Zum Schutz vor Verschleiß dient ein Ringpuffer über 16 Slots (Folgenummer 0–254, 0xFF wird nie geschrieben, Position vor Folgenummer). Alle EEPROM-Schreibvorgänge laufen über eine nicht blockierende Warteschlange.
 
 ### 6.3 Konfigurationsparameter (EEPROM)
 
@@ -490,9 +498,11 @@ Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 | 0 | Blattzahl | 40, 64, 80 | 40 |
 | 1 | Blatt-Offset | 0–79 | ⚠️ zu ermitteln |
 | 2 | Abschaltvorhalt in ms | 0–60 | ⚠️ zu ermitteln |
-| 3 | Flags: Bit 0 Positionsspeicherung, Bit 1 Autohoming beim Start, Bit 2 Triac-Polarität | — | 0x03 |
+| 3 | Flags: Bit 0 Positionsspeicherung, Bit 1 Autohoming beim Start; Bit 2–7 reserviert (0) | — | 0x03 |
 | 4 | Zuletzt zugewiesene Busadresse | 0 = keine, 1–250 | 0 |
 | 5 | T_enum in Sekunden | 1–60 | 10 |
+
+Enthält das Flags-Byte Bits außerhalb 0x07 (z. B. 0xFF eines gelöschten EEPROMs), gilt das Abbild als ungültig: Blattzahl, Offset, Vorhalt, Flags und T_enum werden auf die Vorgaben gesetzt, eine gültige Busadresse bleibt erhalten. Bit 2 wird immer gelöscht, ein Vorhalt über 60 ms auf 0 gesetzt; korrigierte Werte schreibt die Firmware zurück.
 
 ### 6.4 Fehlerbehandlung
 
@@ -503,11 +513,11 @@ Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 | 0x03 | Erkannte Blattzahl unplausibel | Motor aus, Fehler |
 | 0x04 | Position verloren, nicht synchronisiert | Homing anfordern |
 | 0x05 | Laufzeitüberwachung ausgelöst (> 4 s durchgehend) | Motor aus, Fehler |
-| 0x06 | Adresskollision über Sendeecho erkannt | Adresse verwerfen, Zustand UNADDRESSED, Mechanik unberührt |
+| 0x06 | Adresskollision über Sendeecho erkannt | Sendung abbrechen, Adresse verwerfen, Zustand UNADDRESSED, Mechanik unberührt; nach T_enum Rückfall auf die EEPROM-Adresse, 0x06 einmalig im Status |
 
 Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung.
 
-**Fail-Safe.** Ein hängender Controller darf den Motor nicht dauerhaft bestromen. Absicherung durch den internen Watchdog (Zeitbasis 1 s) sowie durch die Laufzeitüberwachung nach Code 0x05. Optional lässt sich ein retriggerbares Monoflop in Hardware ergänzen, das den Transistorschalter nach 4 s zwangsweise sperrt.
+**Fail-Safe.** Ein hängender Controller darf den Motor nicht dauerhaft bestromen. Absicherung durch den internen Watchdog (Zeitbasis 1 s) sowie durch die Laufzeitüberwachung nach Code 0x05. Der Watchdog wird nur gefüttert, solange die 1-ms-Zeitbasis läuft (stehen die Interrupts, folgt ein Reset); nach einem Watchdog-Reset startet die Karte mit Motor aus in ERROR 0x05 statt zu homen. In IDLE, ERROR und nach STOP ist PA7 immer low. Die App ohne Bootloader setzt bei `BOOTEND ≠ 0` das Bit IVSEL, damit ihre Interruptvektoren gefunden werden (sonst stünden die Interrupts still). Schließt eine vorgemerkte Fahrt direkt an eine laufende an, zählt die Laufzeit durch. Optional lässt sich ein retriggerbares Monoflop in Hardware ergänzen, das den Transistorschalter nach 4 s zwangsweise sperrt.
 
 ---
 
@@ -541,7 +551,7 @@ Arduino-ESP32, bewusst ohne ESPHome, da bei zehn Modulen die Entity-Verwaltung s
 
 | Aufgabe | Bibliothek |
 |---|---|
-| WLAN-Einrichtung | WiFiManager, Captive Portal beim Erststart |
+| WLAN-Einrichtung | WiFiManager, Captive Portal (nicht blockierend) nur ohne gespeicherte Zugangsdaten; Portal-Seiten für Firmware-Upload/Löschen gesperrt. Mit Zugangsdaten verbindet die Steuerung im Hintergrund und wiederholt mit wachsendem Abstand; Bus und Anzeige laufen unabhängig vom WLAN |
 | Web-UI | eingebauter `WebServer` (in T8 gewählt; siehe unten) |
 | Konfiguration | ArduinoJson zum Parsen, Ablage in `Preferences`/NVS |
 | MQTT | PubSubClient mit Home-Assistant-Auto-Discovery |
@@ -600,7 +610,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | POST | `/api/time` | `{"iso":"2026-09-01T14:07:00"}` — Uhr manuell stellen |
 | GET | `/api/wifi/scan` | erreichbare WLANs (SSID, RSSI, verschlüsselt) |
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall aufs alte Netz nach ~25 s) |
-| POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen |
+| POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen (5 min, nicht blockierend; die Web-UI ist so lange nur über das Portal erreichbar) |
 | POST | `/api/reboot` | Neustart |
 | GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl (`0` = automatisch), hh:mm:ss-Timeout, `net_scope`, `admin_user`, `admin_pass` (nur schreibend), sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS. `admin_pass` wird nie ausgeliefert (`/api/config` GET meldet nur `admin_set`) |
 
@@ -614,10 +624,26 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 2. **Anmeldung** (`cfg.admin_pass`): ist ein Passwort gesetzt, verlangen alle
    Endpunkte HTTP-Basic-Auth (`401` sonst). Ohne Passwort entfällt die Anmeldung.
 
+3. **Herkunft der Seite** (DNS-Rebinding/CSRF): beantwortet werden nur Anfragen,
+   deren `Host` eine IP-Adresse, der Hostname oder der Hostname mit einem
+   üblichen lokalen Suffix (`.local`, `.fritz.box`, `.lan`, `.home`,
+   `.home.arpa`, `.internal`, `.localdomain`) ist. Schreibende Anfragen
+   (alle außer GET/HEAD) brauchen `Content-Type: application/json` oder die
+   Kopfzeile `X-Krone-Request: 1` (Upload); beides erzwingt im Browser einen
+   CORS-Preflight, den die Steuerung nicht beantwortet. Eigene Skripte senden
+   JSON mit passendem Content-Type.
+
+Während eines Modul-Updates antworten OTA, GitHub-Update, Neustart,
+Wiederherstellung, Portal, Enumeration und Modulkommandos mit `409`.
+`/api/config` liefert das MQTT-Passwort nicht aus (nur `mqtt_set`); ein leeres
+Feld beim Speichern lässt es unverändert. Betriebsart und Text überdauern einen
+Neustart (NVS, 30 s nach der letzten Änderung gesichert).
+
 Zusätzlich lassen sich die schreibenden Steuer-Endpunkte (`/api/text`,
 `/api/mode`, `/api/home`, `/api/selftest`, `/api/module`, `/api/enumerate`) über
-den Schalter **REST-Schreib-API** sperren (`403`); Statusabfragen und die
-Einstellungen bleiben dann weiter erreichbar. MQTT, OTA und mDNS sind einzeln
+den Schalter **REST-Schreib-API** sperren (`403`) – das gilt auch für die
+entsprechenden Bedienelemente der eigenen Web-Oberfläche; Statusabfragen und die
+Einstellungen bleiben weiter erreichbar. MQTT, OTA und mDNS sind einzeln
 abschaltbar. Die Web-Oberfläche selbst ist nicht abschaltbar.
 
 Die Weboberfläche ist eine einzelne, vom ESP32-C3 ausgelieferte Seite
@@ -728,7 +754,7 @@ Nicht zwingend: X2-Entstörkondensator (reines Trafo-Netzteil, keine Schaltstör
 
 Gewählt: **eigenes** Schaltnetzteil 5 V / 2 A, galvanisch unabhängig vom 42-V~-Kreis. Verteilung über zwei Adern des Busbandkabels. Bei zehn Modulen und kurzer Kettenlänge sind keine lokalen Regler erforderlich.
 
-Die 5 V werden **nicht** aus den 42 V~ abgeleitet: das würde einen isolierten Wandler erzwingen, weil die Trafo-Sekundärseite potenzialfrei bleiben muss (8.4), und koppelt Schaltstörungen der Triac-Lasten in die Logik. Ein Katalog-5-V-Netzteil ist billiger, störärmer und erlaubt Inbetriebnahme/Diagnose ohne Motorversorgung. Am Master-Trägerboard sitzt hinter der 5-V-Klemme ein **Verpolschutz** (P-Kanal-MOSFET als High-Side-Schalter), der bei vertauschter Klemme die gesamte Kette schützt.
+Die 5 V werden **nicht** aus den 42 V~ abgeleitet: das würde einen isolierten Wandler erzwingen, weil die Trafo-Sekundärseite potenzialfrei bleiben muss (8.4), und koppelt Schaltstörungen der Triac-Lasten in die Logik. Ein Katalog-5-V-Netzteil ist billiger, störärmer und erlaubt Inbetriebnahme/Diagnose ohne Motorversorgung. Am Master-Trägerboard sitzt hinter der 5-V-Klemme ein P-Kanal-MOSFET (Q1) als Verpolschutz. **Bekannter Mangel Rev. 0.2 (Issue #36):** Q1 ist mit Source an der Klemme und Drain an der Last eingebaut; seine Body-Diode leitet bei vertauschter Klemme, der Schutz ist damit wirkungslos. Die 5-V-Klemme also nicht verpolen und den Verpolfall an Rev.-0.2-Platinen nicht testen; Korrektur in der nächsten Revision.
 
 ### 8.3 Treiberspannung für den Triac-Eingang
 
@@ -885,3 +911,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.22 | 11.09.2026 | Kapitel 5.7: **Browser-UPDI-Werksflasher der Daughter Card am Gerät verifiziert** (10.09.2026) — Chip-Erase, Geräte-ID-Prüfung, Fuse- und Seitenschreiben (`BOOTEND = 0x0C`) sowie die Bootloader→App-Übergabe (IVSEL/Vektortabelle) laufen auf echter Hardware. Grund für den vorherigen Fehlschlag („Timeout: 1/66 B") war eine fehlende `CTRLA.RSD`-Blockschreibsequenz in `updi.js` (Commit `59710f8`, bereits vor dieser Verifikation behoben). Die **Firmware-Verteilung über den Bus selbst** (Kommandos 0x54–0x58, `docs/module-bootloader.md` Bench-Punkte 3–9) bleibt offen, bis die bestellte Master-Hardware aufgebaut ist. Keine Code-Änderung, reine Statuskorrektur in README/Spezifikation/Backlog/`module-bootloader.md`. |
 | 0.27 | 21.09.2026 | Kapitel 5.4: neues Kommando `LED_SYNC` (0x41, Broadcast, kein Payload). Der Master sendet es periodisch (~1 s); Module und Master nullen darauf ihre Status-LED-Blinkphase, damit alle LEDs im gleichen Takt blinken statt seit dem jeweils eigenen Boot-Zeitpunkt zu laufen. Reine Kosmetik, keine Auswirkung auf Mechanik, Bus-Timing oder Sicherheitsabschaltungen. Firmware v1.13 (`firmware/CHANGELOG.md`). |
 | 0.28 | 30.09.2026 | Kapitel 8.1: konkreter Trafo festgelegt (Sedlbauer RSO 825028, 100 VA, 2 × 18 V / 2,78 A, Datenblatt Stand 06/2011) statt 50 bis 80 VA; Leerlaufspannung in Reihe rund 40,6 V. Mindestausstattung der Netzseite ergänzt: Primärsicherung 0,8 A T (Herstellerangabe), NTC gegen Einschaltstrom, Varistor 275 V~ als Überspannungsschutz, Sekundärsicherung 3,15 A T. NTC-Wert und Sicherungsbauform sind Richtwerte und vor dem Kauf zu bestätigen. Keine Firmware- oder Hardware-Änderung. |
+| 0.29 | 02.10.2026 | **Review-Fixes, Firmware v1.16** (Issues #18–#43). 4.4/6.3: Flag-Bit 2 (Triac-Polarität) entfällt und ist reserviert – laut Netzliste schaltet PA7 high in beiden Zweigen den Motor ein; ungültige EEPROM-Abbilder werden auf die Vorgaben migriert. 4.5.1/4.5.3: Busadresse und CHAIN_OUT erst nach fehlerfreiem ACK-Echo; Sendung bricht bei Echo-Abweichung ab; nach einer Kollision Rückfall auf die EEPROM-Adresse nach T_enum, 0x06 einmalig im Status. 4.5.2/4.5.4: Verifikationslauf (GET_UID) und Warnung bei Serviceadresse 250 umgesetzt, Nachsondierung hinter einem Kettenende. 5.4/5.5: SET puffert nur, GO während Fahrt/Homing wird vorgemerkt, SET_CONFIG wirkt sofort (Blattzahl/Offset → 0x04, HOME nötig); Statusbyte 1 = gepuffertes Ziel. 5.6: Timeout ab Rahmenende, Wiederholung nur bei Busruhe, Sendewarteschlange, Inter-Byte-Timeout 2 ms im Modul. 5.7: Bootloader startet nach Abbruch nie die halbe App, Übertragung wiederaufsetzbar, BL-Version 2. 6.2/6.4: Positionsspeicherung nur ohne Autohoming (Ungültig-Eintrag bei Fahrtbeginn); Watchdog nur bei laufender Zeitbasis, nach WDT-Reset Start in ERROR 0x05; Plain-App setzt IVSEL bei BOOTEND≠0. 7.3/7.5: Bus und Anzeige vor dem WLAN, WLAN nicht blockierend, Portal ohne Firmware-Upload; Host-Prüfung und JSON/X-Krone-Request-Pflicht für schreibende Anfragen; Betriebsart/Text dauerhaft; Sperre während Modul-Updates. 8.2: Verpolschutz Q1 auf Rev. 0.2 wirkungslos (Einbaulage, #36). |

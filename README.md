@@ -143,7 +143,7 @@ Daughter Cards aus ihrer Web-UI, ohne PC und Adapter.
   Bus** (Master erkennt/aktualisiert die Modul-Firmware) ist noch nicht
   getestet — Design und Bench-Test-Checkliste in
   [`docs/module-bootloader.md`](docs/module-bootloader.md); bis dahin
-  `pio run -e attiny1616 -t upload` (ohne Bootloader) als abgesicherter Weg.
+  `pio run -e attiny1616 -t upload` (ohne Bootloader) als abgesicherter Weg – ab Firmware 1.16 (setzt bei `BOOTEND≠0` selbst IVSEL); ältere Plain-Apps auf einer werksgeflashten Karte (BOOTEND=0x0C) legen die Interrupts lahm – Issue #19.
 - **UPDI-Ader im Flachbandkabel (verworfener Bastelweg).** Ader 9 des Busbands
   ist frei; eine Drahtbrücke je Karte von `J6.2` auf `J2.9` brächte UPDI auf den
   Bus, aber allen zehn Karten gemeinsam (kein Einzeladressieren). Der

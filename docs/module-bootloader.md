@@ -22,7 +22,24 @@
 > Adressen immer zu, unabhängig vom Online-Status (siehe
 > `firmware/CHANGELOG.md`). `pio run -e attiny1616 -t upload` (App @
 > 0x0000, ohne Bootloader) bleibt der abgesicherte Weg, wenn eine Karte
-> dennoch per Browser-Werksflash zurückgeholt werden muss.
+> dennoch per Browser-Werksflash zurückgeholt werden muss – **erst ab
+> Firmware 1.16**: Der Upload schreibt keine Fuses, eine werksgeflashte
+> Karte behält `BOOTEND = 0x0C`. Ältere Plain-Apps setzen dann IVSEL nicht,
+> ihre Interrupts landen mitten im Code und die Zeitbasis steht (Issue #19);
+> ab 1.16 setzt die Plain-App IVSEL selbst.
+>
+> **Stand 1.16 (Review-Fixes, Issues #29/#30/#41):** Der Bootloader (BL-
+> Version 2) startet nach einem `FW_BEGIN` bis zum erfolgreichen `FW_END`
+> in keinem Pfad die App – auch nicht nach Busstille. Die Wiederholung des
+> zuletzt angenommenen Chunks wird quittiert, `FW_BEGIN` startet jederzeit
+> neu, der Zeitablauf wird nur von eigenen Rahmen zurückgesetzt. Er nimmt
+> nur Unicast an die eigene Adresse an (bei ungültiger EEPROM-Adresse 250),
+> wartet 200 µs vor jeder Antwort, das Startfenster dauert echte 2,5 s
+> (TCB0). Als „App startbar" gelten nur die Marker 0xA5 und 0xFF. Der Master
+> wiederholt je Schritt bis zu dreimal, beginnt danach einmal neu und prüft
+> ein verlorenes `FW_END`-ACK per `GET_VERSION`. **Bootloader-Änderungen
+> erreichen Bestandskarten nur per Browser-Werksflash** – die vier Karten im
+> Feld laufen bis dahin mit BL 1.
 
 ## Ziel
 
@@ -85,7 +102,8 @@ Der Bootloader konfiguriert **PA7 (Triac-Treiber) nie als Ausgang** → der
 Transistor bleibt gesperrt, der Motor kann im Bootloader nicht bestromt werden,
 egal welcher Fehler auftritt. Der Bootloader hat einen eigenen Watchdog (~1 s).
 Die App-seitige Laufzeitüberwachung (Fehlercode 0x05) und der App-Watchdog bleiben
-unverändert.
+unverändert. Der Bootloader löscht beim Start nur das Ausgangslatch von PA7
+(`OUTCLR`), für den Fall, dass er ohne Reset erreicht wird.
 
 ## Bausteine
 

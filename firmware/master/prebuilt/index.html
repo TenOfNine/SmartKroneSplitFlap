@@ -402,7 +402,8 @@
         Geräte-ID, Fuse- und Seitenschreiben, Bootloader→App-Übergabe).
         Web Serial ist je nach Adapter/Browser trotzdem variabel — klappt es
         nicht, bleibt <code>pio run -e attiny1616 -t upload</code> der sichere
-        Weg. Rückmeldungen willkommen.
+        Weg (ab Firmware 1.16; ältere Plain-Apps vertragen die gesetzte Fuse
+        <code>BOOTEND</code> nicht). Rückmeldungen willkommen.
       </span>
     </div>
 
@@ -576,7 +577,7 @@
       line("✓ geschrieben und verifiziert.", "ok");
     } catch (e) {
       line("✗ " + (e && e.message ? e.message : e), "err");
-      line("Der abgesicherte Weg: pio run -e attiny1616 -t upload -d firmware/module");
+      line("Der abgesicherte Weg (ab Firmware 1.16): pio run -e attiny1616 -t upload -d firmware/module");
     } finally {
       goBtn.disabled = false;
     }

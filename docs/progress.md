@@ -6,6 +6,22 @@ seit 19.09.2026). Die vollständige historische Aufgabenliste T1–T20 steht in
 `firmware/CHANGELOG.md`. Diese Datei ist der schnelle Überblick für die
 laufende Fehlersuche — bei jeder Sitzung oben ergänzen, nicht umschreiben.
 
+**Stand 02.10.2026 — Firmware v1.16 (Review-Fixes, am Gerät noch nicht verifiziert):**
+Zwei unabhängige Voll-Reviews (30.09./01.10.) haben 32 Issues ergeben (#18–#49).
+Behoben in v1.16 (Details je Issue): Flag-Bit 2 hielt den Motor in IDLE/ERROR
+bestromt (#18, **vor dem ersten Anlegen von 42 V~ entscheidend**), Plain-Upload
+bei BOOTEND=0x0C legte die Interrupts lahm (#19), Ursache des
+Positions-1-Adressverlusts (#20, Master-Timing nach Enumerationsende bzw.
+`masterapp_tick` während der Enumeration – die Pegelwandler-Hypothese unten ist
+damit überholt), Bus-Zeitbudget/Sendewarteschlange (#21), Enumeration (#22),
+SET_CONFIG sofort wirksam (#23), Positionsring (#24), Zielpuffer (#25),
+Soll/Ist-Abgleich (#26), Persistenz der Betriebsart (#27), GET_UID/250/0x06
+(#28), Bootloader (#29, #30 – wirkt erst nach Werksflash), Update-Sperre (#31),
+WiFiManager-Portal (#32), CSRF/Rebinding (#33), XSS (#34), WLAN-Start (#35).
+Offen: Hardware-Mängel #36 (Verpolschutz Master wirkungslos – Klemme nicht
+verpolen!), #37 (Bestückungsdruck), Sammel-Issues #38–#43, Inbetriebnahme
+#44–#49. **Gerätetest der 1.16: #49.**
+
 **Stand 25.09.2026:** Master v1.15, Modul-Firmware im Versionsgleichstand.
 Vier Daughter Cards körperlich angeschlossen (Ziel: zehn). Grundfunktionen
 (Bus, Enumeration, Web-UI, MQTT, OTA) laufen; mehrere Zuverlässigkeitsfragen
@@ -70,10 +86,14 @@ bei mehr als zwei Karten sind offen (siehe unten).
 - **Vier-Karten-Enumeration:** Unabhängig von der Kartenreihenfolge verliert
   häufig die *erste* Position beim „Enumeration neu starten" ihre Adresse,
   während alle folgenden Karten funktionieren und auf Identify reagieren.
-  Hypothese: die einzige strukturelle Besonderheit von Position 1 ist der
-  Pegelwandler 74LVC1G17 (Master → Karte 1), alle anderen Übergänge sind
-  Karte-zu-Karte direkt. Noch nicht mit Logic Analyzer an `CHAIN` + A/B
-  bestätigt — nächster Schritt bei den nächsten freien Kanälen.
+  ~~Hypothese: Pegelwandler 74LVC1G17 an Position 1.~~ **Ursache gefunden
+  (Review 01.10., Ko-Simulation, Issue #20):** Im Durchlauf nach
+  Enumerationsende sendete der Master mit veraltetem Zeitstempel noch eine
+  Statusabfrage an Adresse 1; deren Wiederholung kollidierte mit der Antwort
+  von Karte 1, die daraufhin dauerhaft taub wurde. Mit fester Modulzahl traf
+  `masterapp_tick` schon das ENUM_ASSIGN-ACK von Karte 1. Behoben in v1.16;
+  Prüfung am Gerät in #49 (im `/debug`-Log darf auf
+  `TX 7: AA 55 04 52 00 0D 61` kein `await retry cmd=0x10 addr=1` mehr folgen).
 - **Issue [#16](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/16):**
   Root Cause behoben, Langzeit-Stabilität mit mehr als zwei Karten noch
   nicht bestätigt.
@@ -111,4 +131,11 @@ bei mehr als zwei Karten sind offen (siehe unten).
 - `docs/module-bootloader.md` — Status der Firmware-Verteilung über den Bus
 - GitHub Issues [#1](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/1),
   [#16](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/16),
-  [#17](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/17)
+  [#17](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/17),
+  Review-Befunde [#18–#43](https://github.com/TenOfNine/SmartKroneSplitFlap/issues?q=is%3Aissue+label%3Asicherheit%2Cmodul-firmware%2Cmaster-firmware%2Chardware),
+  offene Inbetriebnahme-Punkte: Netzseite [#44](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/44),
+  O-2/O-5/O-6 [#45](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/45),
+  restliche Karten [#46](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/46),
+  Selbsttest [#47](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/47),
+  Reflash trotz Verify [#48](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/48),
+  Gerätetest v1.16 [#49](https://github.com/TenOfNine/SmartKroneSplitFlap/issues/49)

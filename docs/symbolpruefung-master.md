@@ -171,10 +171,14 @@ Symbol: KiCad `Transistor_FET:AO3401A` (leitet von `TP0610T` ab), verbatim
 | Pin 2 | **S** (Source) | Pin 2 = `S` (passive) | Pin 2 → +5V_RAW |
 | Pin 3 | **D** (Drain) | Pin 3 = `D` (passive) | Pin 3 → +5V_IN |
 
-→ Standard-AO3401A-Belegung (1=G, 2=S, 3=D). High-Side-Verpolschutz: Source am
-Eingang, Drain zur Last, Gate an GND. Body-Diode Anode→S, Kathode→D: leitet bei
-richtiger Polung S→D (lädt die Last), dann V_GS = −5 V → FET voll durch. Bei
-Verpolung sperren FET und Body-Diode. V_GS,max ±12 V — die 5 V liegen sicher
+→ Standard-AO3401A-Belegung (1=G, 2=S, 3=D). Die Pinbelegung des Symbols stimmt.
+**Korrektur 02.10.2026 (Issue #36):** Die hier ursprünglich angegebene
+Diodenrichtung war falsch. Beim P-FET liegt die Body-Diode mit der Anode am
+Drain und der Kathode an der Source (so auch im Projektsymbol gezeichnet). Mit
+Source am Eingang und Drain zur Last leitet sie bei **vertauschter** Klemme
+(+5V_IN → +5V_RAW); der Verpolschutz auf Rev. 0.2 ist damit wirkungslos. Richtig
+wäre Drain am Eingang, Source zur Last (dann leitet die Diode bei richtiger
+Polung, der Kanal schaltet durch, bei Verpolung sperren Kanal und Diode). V_GS,max ±12 V — die 5 V liegen sicher
 darunter, R8 (100 kΩ) hält V_GS definiert.
 
 ## 4b. SM712 / PSM712 (D2) — RS-485-TVS-Array

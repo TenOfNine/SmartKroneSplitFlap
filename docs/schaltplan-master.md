@@ -127,8 +127,12 @@ aber **ungefilterten** Schiene `+5V_IN`, damit der Ferrit nicht den Kettenstrom
 **Verpolschutz.** Q1 (AO3401A, P-Kanal, High-Side): Source an `+5V_RAW`, Drain an
 `+5V_IN`, Gate an GND, R8 = 100 kΩ Gate→Source. Bei richtiger Polung zieht
 V_GS = −5 V den FET voll durch (R_DS(on) ≈ 55 mΩ → bei 2 A ~0,1 V Abfall, ~0,2 W).
-Bei vertauschter Klemme sperrt der FET **und** seine Body-Diode → die gesamte
-Kette (auch J2/Bus) bleibt geschützt. V_GS = 5 V liegt weit innerhalb ±12 V, kein
+⚠️ **Bekannter Mangel Rev. 0.2 (Issue #36):** In dieser Einbaulage (Source an
+der Klemme) leitet die Body-Diode bei vertauschter Klemme – der Verpolschutz ist
+wirkungslos. Die 5-V-Klemme daher nicht verpolen und den Verpolfall an Rev.-0.2-
+Platinen nicht testen. Korrektur für die nächste Revision: Drain an `+5V_RAW`,
+Source an `+5V_IN`, Gate an GND (R8 dann zwischen Gate und Source). Die
+ursprüngliche Aussage „FET und Body-Diode sperren bei Verpolung" war falsch. V_GS = 5 V liegt weit innerhalb ±12 V, kein
 Gate-Zener nötig.
 
 ### 4.2 J2 — Bus zur ersten Daughter Card

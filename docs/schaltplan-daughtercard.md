@@ -289,7 +289,7 @@ Der Zweig funktioniert unverändert mit VDRV = 5 V oder 15 V; nur R9 ist anzupas
 
 Falls die Messung ergibt, dass Pin 9 der Anzeige nach Masse gezogen werden muss statt bestromt zu werden. Dann werden Q1, Q2, R7, R8, R9 nicht bestückt und stattdessen Q3 und R10 gesetzt.
 
-In beiden Zweigen gilt: **PA7 high bedeutet Motor an.** Eine Invertierung in der Firmware ist nicht nötig, das Flag-Bit 2 der EEPROM-Konfiguration bleibt als Reserve bestehen.
+In beiden Zweigen gilt: **PA7 high bedeutet Motor an.** Eine Invertierung in der Firmware gibt es nicht; das Flag-Bit 2 der EEPROM-Konfiguration ist reserviert und wird von der Firmware ab v1.16 immer gelöscht (Issue #18).
 
 ### 5.5 CHAIN
 
