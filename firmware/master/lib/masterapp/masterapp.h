@@ -33,9 +33,18 @@ typedef enum {
 #define APP_TEXT_MAX 48u
 #define APP_HMS_TIMEOUT_DEFAULT_MS 600000u  /* 10 min, Vorgabe (7.7) */
 
+/* Obergrenzen fuer masterapp_status_json (Zeichen ohne NUL): Kopf mit
+ * vollstaendig maskiertem Text (je Byte hoechstens \u00XX), je Modul ein
+ * Eintrag mit Hoechstwerten, Abschluss. Per Host-Test gegen den
+ * tatsaechlichen Worst Case geprueft. */
+#define MASTERAPP_JSON_HEAD_MAX   (176u + 6u * APP_TEXT_MAX)
+#define MASTERAPP_JSON_MODULE_MAX 160u
+#define MASTERAPP_STATUS_JSON_MAX(n) \
+    ((size_t)MASTERAPP_JSON_HEAD_MAX + (size_t)(n) * MASTERAPP_JSON_MODULE_MAX + 4u)
+
 typedef struct {
     busmaster_t    *bus;
-    uint8_t         module_count;   /* Feldbreite */
+    uint8_t         module_count;   /* Feldbreite, hoechstens BUSMASTER_MAX_MODULES */
     app_mode_t      mode;
     char            sep;            /* Uhr-Trennzeichen ('.' oder '-') */
     charmap_align_t align;
@@ -48,16 +57,19 @@ typedef struct {
     uint8_t  hh, mm, ss;
 
     uint8_t  shown[BUSMASTER_MAX_MODULES];
-    bool     have_shown;
+    bool     have_shown;            /* false = beim naechsten Tick neu senden */
 } masterapp_t;
 
 void masterapp_init(masterapp_t *app, busmaster_t *bus, uint8_t module_count);
 
-/* Betriebsart setzen. sep und align gelten fuer die Uhr bzw. den Text. */
+/* Betriebsart setzen. sep und align gelten fuer die Uhr bzw. den Text.
+ * Die Anzeige wird beim naechsten Tick neu gesendet, auch ohne Aenderung. */
 void masterapp_set_mode(masterapp_t *app, app_mode_t mode, char sep,
                         charmap_align_t align, uint32_t now_ms);
 
-/* Freitext setzen; schaltet die Betriebsart auf Text. */
+/* Freitext setzen (UTF-8, auf APP_TEXT_MAX Byte an einer Zeichengrenze
+ * gekuerzt); schaltet die Betriebsart auf Text und sendet neu, auch wenn
+ * derselbe Text schon angezeigt wird. */
 void masterapp_set_text(masterapp_t *app, const char *text, uint32_t now_ms);
 
 /* Aktuelle Ortszeit einspeisen (aus NTP). */
@@ -66,16 +78,38 @@ void masterapp_time_invalid(masterapp_t *app);
 
 /*
  * Regelmaessig aufrufen. Berechnet die Zielanzeige der aktuellen Betriebsart
- * und schickt bei Aenderung SET_ALL + GO an den Bus. Behandelt den
+ * und reiht bei Aenderung SET_ALL + GO ein (busmaster_show). Behandelt den
  * Auto-Rueckfall CLOCK_HMS -> CLOCK_HM nach hms_timeout_ms.
+ *
+ * Laeuft auch waehrend einer Enumeration: der Inhalt wartet dann in der
+ * Sendewarteschlange des busmaster (neuester Stand gewinnt) und geht erst
+ * nach deren Abschluss hinaus, stoert die Enumeration also nicht.
+ *
+ * Betriebsart "Aus": nichts senden und das Soll im busmaster verwerfen (kein
+ * Soll/Ist-Abgleich); beim Verlassen wird die Anzeige neu gesendet.
  */
 void masterapp_tick(masterapp_t *app, uint32_t now_ms);
 
 /* Zielblaetter der aktuellen Anzeige (module_count Werte). Fuer Tests / UI. */
 void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out);
 
-/* /api/status als JSON. Rueckgabe: geschriebene Laenge (ohne Null) oder 0. */
+/*
+ * /api/status als JSON, Text und Trennzeichen JSON-konform maskiert.
+ * Rueckgabe: geschriebene Laenge (ohne NUL); 0, wenn out_size nicht reicht.
+ * out ist in jedem Fall NUL-terminiert (bei 0 mit unvollstaendigem Inhalt).
+ *
+ * Felder: mode, sep, text, time_valid, align, detected, enum_busy,
+ * warn (BM_WARN_*), modules[] mit addr, online, ist, ziel (vom Modul gemeldet),
+ * soll (vom Master gesetzt, 0 = keins), state, error, corr, blatt, fw, miss,
+ * coll (gemeldete 0x06), uidw (Bit 0 UID-Dublette, Bit 1 UID gewechselt).
+ */
 size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size);
+
+/* Benoetigte Laenge (ohne NUL) fuer den aktuellen Zustand. */
+size_t masterapp_status_json_len(const masterapp_t *app);
+
+/* Puffergroesse (mit NUL), die fuer n Module in jedem Zustand reicht. */
+size_t masterapp_status_json_max(uint8_t module_count);
 
 /* Betriebsart als stabiler Bezeichner ("text", "clock_hm", ...). */
 const char *masterapp_mode_name(app_mode_t mode);
