@@ -192,7 +192,10 @@ def module_breakdown() -> tuple[list[tuple[str, int]], int, int]:
         base = (MODULE / "platformio.ini").read_text()
         ini.write_text(base + "\n" + MODULE_ANALYSIS_INI)
         out = _run_pio(["run", "-c", str(ini), "-e", "attiny1616_boot_analysis"], cwd=MODULE)
-        used, total = _flash_stat(out)
+        used, _chip = _flash_stat(out)
+        # Verfuegbar ist nur die App-Sektion hinter dem Bootloader:
+        # 0x4000 - 0x0C00 = 13 312 B (APP_MAX), nicht der ganze Chip (#43).
+        total = 0x4000 - 0x0C00
         elf = MODULE / ".pio" / "build" / "attiny1616_boot_analysis" / "firmware.elf"
         import shutil
         found = shutil.which("avr-nm")
