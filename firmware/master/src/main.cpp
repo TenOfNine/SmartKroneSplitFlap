@@ -31,10 +31,13 @@
 #include <WiFi.h>
 #include <WiFiManager.h>
 #include <cstdarg>
+#include <memory>
 #include <time.h>
 
 #include "driver/uart.h"
 #include "esp_freertos_hooks.h"
+#include "esp_timer.h"
+#include "lwip/apps/sntp.h"
 
 extern "C" {
 #include "busmaster.h"
@@ -139,9 +142,6 @@ struct Settings {
     uint8_t  net_scope      = 1;         /* 0 alle, 1 RFC1918 (Vorgabe), 2 nur eigenes Subnetz */
 } cfg;
 
-static uint32_t last_poll_ms;
-static uint8_t  poll_addr = 1;
-static uint8_t  poll_cycle = 0;  /* zaehlt Poll-Ticks unabhaengig von poll_addr/count */
 static uint32_t last_time_ms;
 static uint32_t last_autoscan_ms;
 static uint32_t last_mqtt_try;
@@ -348,6 +348,7 @@ static void bus_pump(uint32_t now)
             rxoff += snprintf(rxline + rxoff, sizeof(rxline) - rxoff, " %02X", b);
         }
         if (moduleupdate_busy(&g_mu)) {
+            busmaster_note_activity(&g_bus, now);   /* zaehlt fuer die Busruhe */
             if (proto_parser_feed(&g_mu_parser, b) == PARSE_FRAME_OK) {
                 const proto_frame_t *f = &g_mu_parser.frame;
                 moduleupdate_on_frame(&g_mu, f->cmd, f->addr, f->payload, f->payload_len, now);
@@ -378,16 +379,8 @@ static void identify_service_test()
     if (cfg.debug_enabled) {
         Serial.println("[bus] === CMD_IDENTIFY an Adresse 250 (Service) ===");
     }
-    proto_frame_t f{};
-    f.cmd = 0x40; /* CMD_IDENTIFY */
-    f.addr = 250; /* PROTO_ADDR_SERVICE */
-    f.payload[0] = 5; /* 5 s blinken */
-    f.payload_len = 1;
-    uint8_t buf[PROTO_MAX_PAYLOAD + 8];
-    const size_t n = proto_encode(&f, buf, sizeof(buf));
-    if (n > 0) {
-        bus_tx(nullptr, buf, n);
-    }
+    /* Ueber die Sendewarteschlange, nicht direkt auf den Bus (#21). */
+    busmaster_identify(&g_bus, PROTO_ADDR_SERVICE, 5);
 }
 
 /* --- Status-LED (D1 an GPIO6) ------------------------------ */
@@ -500,6 +493,9 @@ static void apply_time_config()
     if (cfg.ntp_enabled && strlen(cfg.ntp_server) > 0) {
         configTzTime(cfg.tz, cfg.ntp_server, "time.nist.gov");
     } else {
+        if (sntp_enabled()) {
+            sntp_stop();   /* sonst ueberschreibt SNTP die manuell gesetzte Zeit */
+        }
         setenv("TZ", cfg.tz, 1);
         tzset();
     }
@@ -818,7 +814,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 
 <details class=grp><summary>Modul-Konfiguration</summary><div class=grpbody>
 <div class=sect><h3>Modul-Konfiguration</h3>
-<p class=hint>Blattzahl, Blatt-Offset (Ausrichtung zum Leerbildimpuls, Spez. 6.3 / O-6) und Abschaltvorhalt je Modul. Erst „Lesen", damit die Felder vom aktuellen Stand der Karte ausgehen.</p>
+<p class=hint>Blattzahl, Blatt-Offset (Ausrichtung zum Leerbildimpuls, Spez. 6.3 / O-6) und Abschaltvorhalt je Modul. Erst „Lesen", damit die Felder vom aktuellen Stand der Karte ausgehen. Änderungen wirken sofort; nach geänderter Blattzahl oder geändertem Offset meldet das Modul 0x04 und braucht ein Homing.</p>
 <div class="row mt"><div class=field style=width:90px><span class=lbl>Adresse</span><input type=number id=cfgaddr min=1 max=250 value=1></div>
 <button class=btn id=cfgread style=align-self:flex-end>Lesen</button>
 <span id=cfghint class=hint style=margin:0 0 2px;align-self:flex-end></span></div>
@@ -829,11 +825,9 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 </div>
 <div id=cfgflags hidden style=margin-top:12px>
 <div class=trow><label class=switch><input type=checkbox id=cfgf0><span class=t></span></label>
-<div class=tx><b>Positionsspeicherung</b><span>Position nach jedem Stillstand ins EEPROM schreiben (Ringpuffer über 16 Zellen).</span></div></div>
+<div class=tx><b>Positionsspeicherung</b><span>Position nach jedem Stillstand ins EEPROM schreiben (Ringpuffer über 16 Zellen). Nur wirksam, wenn Autohoming aus ist.</span></div></div>
 <div class=trow><label class=switch><input type=checkbox id=cfgf1><span class=t></span></label>
 <div class=tx><b>Autohoming beim Start</b><span>Nach Kaltstart selbsttätig homen, statt auf ein Kommando zu warten.</span></div></div>
-<div class=trow><label class=switch><input type=checkbox id=cfgf2><span class=t></span></label>
-<div class=tx><b>Triac-Polarität invertiert</b><span>Ausgangspolarität an PA7 tauschen (Quelle/Senke, je nach O-2).</span></div></div>
 </div>
 <div class="row mt"><button class="btn primary" id=cfgwrite disabled>Speichern</button></div>
 </div>
@@ -865,8 +859,10 @@ let VIEW="dash",cfg={},sys={},st={};
 function blattChar(n){if(n<=2||n>40)return"";if(n<=12)return""+(n-3);if(n<=38)return String.fromCharCode(65+(n-13));return n===39?"-":"."}
 function bars(r){const q=r>=-55?4:r>=-65?3:r>=-75?2:r>=-85?1:0;let s="";for(let i=1;i<=4;i++)s+=`<i class="${i<=q?'on':''}" style="height:${3+i*2.6}px"></i>`;return s}
 function dur(s){s=s|0;const d=s/86400|0,h=(s%86400)/3600|0,m=(s%3600)/60|0;return(d?d+" d ":"")+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")}
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
+const XH={"X-Krone-Request":"1"};
 async function J(u,o){const r=await fetch(u,o);if(!r.ok)throw r.status;const t=await r.text();return t?JSON.parse(t):{}}
-async function P(u,b){try{await J(u,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b||{})});return 1}catch(e){toast("Fehler "+e);return 0}}
+async function P(u,b){try{await J(u,{method:"POST",headers:{"Content-Type":"application/json","X-Krone-Request":"1"},body:JSON.stringify(b||{})});return 1}catch(e){toast("Fehler "+e);return 0}}
 let tT;function toast(m){const t=$("#toast");t.textContent=m;t.style.opacity=1;t.style.transform="translateX(-50%) translateY(0)";clearTimeout(tT);tT=setTimeout(()=>{t.style.opacity=0;t.style.transform="translateX(-50%) translateY(20px)"},2400)}
 
 function show(v){VIEW=v;$$("#nav button").forEach(b=>b.classList.toggle("on",b.dataset.v===v));
@@ -906,7 +902,7 @@ const t=[
 ["Module online",`<span class="v ok">${on}<span style="color:var(--faint);font-size:15px">/${tot}</span></span>`,off.length?"Adr "+off.join(", ")+" offline":"alle erreichbar"],
 ["Sammelfehler",errs.length?`<span class="v err">${errs.length}</span>`:`<span class="v ok">0</span>`,errs.length?"Adr "+errs.join(", "):"keine"],
 ["Uhrzeit",`<span class=v>${(sys.time||"—").slice(0,5)}</span>`,st.time_valid?(sys.time_src||"NTP"):"nicht gesetzt"],
-["WLAN",`<span class=v>${sys.rssi??"—"}<span style="font-size:13px;color:var(--faint)"> dBm</span></span>`,sys.ssid||"—"],
+["WLAN",`<span class=v>${sys.rssi??"—"}<span style="font-size:13px;color:var(--faint)"> dBm</span></span>`,esc(sys.ssid||"—")],
 ["Bus CRC-Fehler",`<span class="v ${sys.crc_err?'warn':'ok'}">${sys.crc_err??0}</span>`,"Timeouts "+(sys.timeouts??0)],
 ["Freier Heap",`<span class=v>${Math.round((sys.heap_free||0)/1024)}<span style="font-size:13px;color:var(--faint)"> KB</span></span>`,"min "+Math.round((sys.heap_min||0)/1024)+" KB"],
 ];
@@ -917,7 +913,7 @@ $("#tiles").innerHTML=t.map(x=>`<div class="card tile"><span class=lbl>${x[0]}</
 function renderMods(){
 const M=st.modules||[];
 const on=M.filter(m=>m.online).length,er=M.filter(m=>m.error||m.state===3).length;
-$("#modsum").innerHTML=`${st.detected??M.length} erkannt · <span class="pill ok"><i></i>${on} online</span> `+(er?`<span class="pill err"><i></i>${er} Fehler</span>`:"");
+$("#modsum").innerHTML=`${st.detected??M.length} erkannt · <span class="pill ok"><i></i>${on} online</span> `+(er?`<span class="pill err"><i></i>${er} Fehler</span>`:"")+(st.warn?` <span class="pill warn"><i></i>Bus-Warnung (${(st.warn&3?"Seriennummer ":"")+(st.warn&4?"Serviceadresse 250 ":"")+(st.warn&8?"Kollision 0x06 ":"")+(st.warn&48?"Kette ":"")}) – siehe Log</span>`:"");
 $("#modtb").innerHTML=M.length?M.map(m=>{
 const p=!m.online?`<span class="pill mute"><i></i>offline</span>`:
 m.state===3?`<span class="pill err"><i></i>Fehler</span>`:
@@ -943,7 +939,7 @@ async function pollLog(){if(VIEW!=="log")return;
 const f=$("#logf .on").dataset.f;let d;try{d=await J("/api/log?sev="+f)}catch(e){return}
 $("#loglist").innerHTML=(d.entries||[]).map(e=>{
 const pill=e.sev===2?`<span class="pill err">Fehler</span>`:e.sev===1?`<span class="pill warn">Warnung</span>`:`<span class="pill mute">Info</span>`;
-return `<div class=e><time>+${dur(e.t/1000)}</time>${pill}<div><span class=who>${e.src}</span> ${e.msg}</div></div>`}).join("")
+return `<div class=e><time>+${dur(e.t/1000)}</time>${pill}<div><span class=who>${esc(e.src)}</span> ${esc(e.msg)}</div></div>`}).join("")
 ||`<p class=hint style=padding:8px>Keine Einträge.</p>`}
 
 // ── Einstellungen ──
@@ -996,6 +992,7 @@ $("#modcntf").hidden=autoM;
 modCntHint();
 $("#cf_mqtt_port").value=cfg.mqtt_port;
 ["mqtt_host","mqtt_user","mqtt_pass","base_topic","node_id","ntp_server","tz","ip","mask","gw","dns"].forEach(k=>{const el=$("#cf_"+k);if(el)el.value=cfg[k]??""});
+$("#cf_mqtt_pass").placeholder=cfg.mqtt_set?"gesetzt – leer lassen = unverändert":"";
 $("#cf_sep").value=cfg.sep||".";
 tzLoad(cfg.tz||"CET-1CEST,M3.5.0,M10.5.0/3");
 $("#cf_net_scope").value=String(cfg.net_scope??1);
@@ -1007,10 +1004,10 @@ $("#authhint").textContent=cfg.admin_set
 :"Ohne Passwort ist die Oberfläche im zugelassenen Netz ohne Anmeldung erreichbar.";
 CB.forEach(k=>{const el=$("#cf_"+k);if(el)el.checked=!!cfg[k]});
 $("#ipf").hidden=!cfg.use_static;$("#mqf").style.opacity=cfg.mqtt_enabled?1:.4;
-$("#iphint").innerHTML=cfg.use_static?"Feste Adresse — wird beim Speichern übernommen.":`Aktuell per DHCP: <b style="font-family:var(--mono);color:var(--ink)">${sys.ip||"—"}</b>`;
-$("#timehint").innerHTML=`Aktuell: <b style="font-family:var(--mono);color:var(--ink)">${sys.time||"—"}</b> · Quelle ${sys.time_src||"—"}`;
+$("#iphint").innerHTML=cfg.use_static?"Feste Adresse — wird beim Speichern übernommen.":`Aktuell per DHCP: <b style="font-family:var(--mono);color:var(--ink)">${esc(sys.ip||"—")}</b>`;
+$("#timehint").innerHTML=`Aktuell: <b style="font-family:var(--mono);color:var(--ink)">${esc(sys.time||"—")}</b> · Quelle ${esc(sys.time_src||"—")}`;
 $("#wdot").className="dot "+(sys.ssid?"ok":"err");
-$("#wkv").innerHTML=`<dt>Verbunden mit</dt><dd>${sys.ssid||"—"}</dd><dt>IP</dt><dd>${sys.ip||"—"}</dd><dt>Signal</dt><dd>${sys.rssi??"—"} dBm</dd>`;
+$("#wkv").innerHTML=`<dt>Verbunden mit</dt><dd>${esc(sys.ssid||"—")}</dd><dt>IP</dt><dd>${esc(sys.ip||"—")}</dd><dt>Signal</dt><dd>${sys.rssi??"—"} dBm</dd>`;
 $("#mqdot").className="dot "+(sys.mqtt_connected?"ok":sys.mqtt_enabled?"warn":"");
 otaUiState();renderSys();loadModFw()}
 function otaUiState(){const on=!!cfg.ota_enabled;
@@ -1050,8 +1047,8 @@ await P("/api/time",{iso:v});toast("Uhr gesetzt");setTimeout(refresh,600)};
 
 $("#wscan").onclick=async()=>{$("#wbox").style.display="block";$("#wlist").innerHTML="<div class=hint style=padding:12px>Suche …</div>";
 let d;try{d=await J("/api/wifi/scan")}catch(e){$("#wlist").innerHTML="<div class=hint style=padding:12px>Scan fehlgeschlagen</div>";return}
-$("#wlist").innerHTML=(d.nets||[]).map((w,i)=>`<button class="wifi n" data-s="${w.ssid.replace(/"/g,'&quot;')}">
-<span class=bars>${bars(w.rssi)}</span><span class=ssid>${w.ssid}</span><span class=lock>${w.enc?"🔒":""}</span></button>`).join("")
+$("#wlist").innerHTML=(d.nets||[]).map((w,i)=>`<button class="wifi n" data-s="${esc(w.ssid)}">
+<span class=bars>${bars(w.rssi)}</span><span class=ssid>${esc(w.ssid)}</span><span class=lock>${w.enc?"🔒":""}</span></button>`).join("")
 ||"<div class=hint style=padding:12px>Keine Netze</div>"};
 $("#wlist").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 $$(".wifi .n").forEach(n=>n.classList.remove("sel"));b.classList.add("sel");$("#wpsk").focus()};
@@ -1066,7 +1063,7 @@ a.download=(cfg.node_id||"krone")+"-backup.json";a.click();URL.revokeObjectURL(a
 $("#restore").onchange=async e=>{const f=e.target.files[0];e.target.value="";if(!f)return;
 const txt=await f.text();try{JSON.parse(txt)}catch(_){return toast("Keine gültige JSON-Datei")}
 if(!confirm("Alle Einstellungen (inkl. WLAN) aus der Datei übernehmen und neu starten?"))return;
-try{await fetch("/api/backup",{method:"POST",headers:{"Content-Type":"application/json"},body:txt})}catch(_){}
+try{await fetch("/api/backup",{method:"POST",headers:{"Content-Type":"application/json","X-Krone-Request":"1"},body:txt})}catch(_){}
 toast("Wiederhergestellt — Neustart …")};
 
 let _fw=null;
@@ -1077,7 +1074,7 @@ $("#fwgo").onclick=()=>{if(!_fw)return;
 if(!/\.kota$/i.test(_fw.name)&&!confirm("Die Datei endet nicht auf .kota — das signierte App-Image wird erwartet. Trotzdem hochladen?"))return;
 if(!confirm(`Firmware „${_fw.name}“ prüfen und einspielen?`))return;
 const fd=new FormData();fd.append("firmware",_fw,_fw.name);
-const x=new XMLHttpRequest();x.open("POST","/api/update");
+const x=new XMLHttpRequest();x.open("POST","/api/update");x.setRequestHeader("X-Krone-Request","1");
 $("#fwbar").style.display="block";$("#fwfill").style.width="0";$("#fwgo").disabled=true;
 x.upload.onprogress=ev=>{if(ev.lengthComputable)$("#fwfill").style.width=Math.round(100*ev.loaded/ev.total)+"%"};
 x.onload=()=>{if(x.status===200){$("#fwfill").style.width="100%";toast("Update geschrieben — Neustart …")}
@@ -1087,7 +1084,7 @@ x.send(fd)};
 $("#fwghgo").onclick=()=>{
 if(!confirm("Neueste Firmware direkt aus dem GitHub-Repository laden und einspielen? Das dauert je nach Internetverbindung der Steuerung einen Moment."))return;
 $("#fwghgo").disabled=true;const old=$("#fwghgo").textContent;$("#fwghgo").textContent="Lädt …";
-fetch("/api/update/github",{method:"POST"}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
+fetch("/api/update/github",{method:"POST",headers:XH}).then(r=>r.json().then(j=>({ok:r.ok,j}))).then(({ok,j})=>{
 if(ok&&j.ok){toast("Update geschrieben — Neustart …")}
 else{$("#fwghgo").disabled=false;$("#fwghgo").textContent=old;toast("Update fehlgeschlagen: "+(j.error||"unbekannt"))}
 }).catch(()=>{$("#fwghgo").disabled=false;$("#fwghgo").textContent=old;toast("Verbindung abgebrochen")})};
@@ -1100,9 +1097,9 @@ const ht=sys.heap_total||0,hf=sys.heap_free||0;
 const hpct=ht?Math.round(100*(1-hf/ht)):0;
 const tc=(sys.temp_c!=null&&sys.temp_c>-40&&sys.temp_c<150)?sys.temp_c.toFixed(1)+" °C":"—";
 $("#syskv").innerHTML=`
-<dt>Hostname</dt><dd>${hn}${sys.mdns_enabled?` · <span style=color:var(--dim)>${hn}.local</span>`:""}</dd>
-<dt>Firmware</dt><dd>v${sys.fw_version||"?"} <span style=color:var(--dim)>(${sys.fw||"—"})</span></dd>
-<dt>Chip</dt><dd>ESP32-C3 · MAC ${sys.mac||"—"}</dd>
+<dt>Hostname</dt><dd>${esc(hn)}${sys.mdns_enabled?` · <span style=color:var(--dim)>${esc(hn)}.local</span>`:""}</dd>
+<dt>Firmware</dt><dd>v${esc(sys.fw_version||"?")} <span style=color:var(--dim)>(${esc(sys.fw||"—")})</span></dd>
+<dt>Chip</dt><dd>ESP32-C3 · MAC ${esc(sys.mac||"—")}</dd>
 <dt>Uptime</dt><dd>${dur(sys.uptime_s)}</dd>
 <dt>CPU-Last</dt><dd>${sys.cpu_load??"—"} % <span style=color:var(--faint)>(grob, Idle-Hook)</span></dd>
 <dt>RAM</dt><dd>${kb(hf)} / ${kb(ht)} KB frei · ${hpct} % belegt <span style=color:var(--faint)>(min ${kb(sys.heap_min)} KB)</span></dd>
@@ -1110,7 +1107,7 @@ $("#syskv").innerHTML=`
 <dt>Programm / OTA</dt><dd>${kb(sys.sketch_used)} KB belegt · ${kb(sys.sketch_free)} KB frei für Update</dd>
 <dt>OTA (Web-UI)</dt><dd>${sys.ota_enabled?"erlaubt":"gesperrt"} · ${sys.ota_signed?"nur signiert":"unsigniert"}</dd>
 <dt>Zugriff</dt><dd>${["alle Adressen","private Netze (RFC1918)","nur eigenes Subnetz"][sys.net_scope??1]} · Anmeldung ${sys.auth_on?"aktiv":"aus"}</dd>
-<dt>Zeitzone</dt><dd>${tzName(sys.tz)}</dd>`}
+<dt>Zeitzone</dt><dd>${esc(tzName(sys.tz))}</dd>`}
 function tzName(tz){if(!tz)return"—";const z=TZ.find(z=>z[1]===tz||z[2]===tz);
 return z?z[0]+(z[2]===tz?" · Sommerzeit":z[2]?" · Normalzeit":""):tz;}
 
@@ -1158,31 +1155,32 @@ setTimeout(()=>pollCfg(addr),250);
 };
 async function pollCfg(addr){
 let c;try{c=await J("/api/module/config?addr="+addr)}catch(e){return}
-if(!c.known){$("#cfghint").textContent="keine Antwort von Adr "+addr;return}
+if(!c.known){if((pollCfg.n=(pollCfg.n||0)+1)<8){setTimeout(()=>pollCfg(addr),250);return}pollCfg.n=0;$("#cfghint").textContent="keine Antwort von Adr "+addr;return}
+pollCfg.n=0;
 $("#cfgblattzahl").value=c.blattzahl;$("#cfgoffset").value=c.offset;$("#cfgvorhalt").value=c.vorhalt;
-$("#cfgf0").checked=!!(c.flags&1);$("#cfgf1").checked=!!(c.flags&2);$("#cfgf2").checked=!!(c.flags&4);
+$("#cfgf0").checked=!!(c.flags&1);$("#cfgf1").checked=!!(c.flags&2);
 $("#cfgform").hidden=false;$("#cfgflags").hidden=false;$("#cfgwrite").disabled=false;
-$("#cfghint").textContent="Adr "+addr+" gelesen";
+$("#cfghint").textContent="Adr "+addr+" gelesen · Flags 0x"+(c.flags|0).toString(16).padStart(2,"0");
 }
 $("#cfgwrite").onclick=async()=>{
 const addr=+$("#cfgaddr").value;
-const flags=(+$("#cfgf0").checked)|(+$("#cfgf1").checked<<1)|(+$("#cfgf2").checked<<2);
+const flags=(+$("#cfgf0").checked)|(+$("#cfgf1").checked<<1);
 const body={addr,action:"set_config",blattzahl:+$("#cfgblattzahl").value,
   offset:+$("#cfgoffset").value,vorhalt:+$("#cfgvorhalt").value,flags};
 try{await P("/api/module",body)}catch(e){return toast("Speichern fehlgeschlagen")}
 toast("Konfiguration an Adr "+addr+" gesendet");
-$("#cfghint").textContent="prüfe …";
-setTimeout(()=>pollCfg(addr),250);
+$("#cfghint").textContent="prüfe …";$("#cfgwrite").disabled=true;
+setTimeout(()=>pollCfg(addr),400);
 };
 
 // ── Poll-Schleifen ──
 async function refresh(){
 try{st=await J("/api/status")}catch(e){}
 try{sys=await J("/api/system")}catch(e){}
-$("#foot").innerHTML=`<span class="dot ${sys.ssid?"ok":"err"}"></span> ${sys.ssid?"verbunden":"kein WLAN"}<br>Uptime ${dur(sys.uptime_s)}<br>FW v${sys.fw_version||"?"} (${(sys.fw||"").split(" ")[0]})`;
+$("#foot").innerHTML=`<span class="dot ${sys.ssid?"ok":"err"}"></span> ${sys.ssid?"verbunden":"kein WLAN"}<br>Uptime ${dur(sys.uptime_s)}<br>FW v${esc(sys.fw_version||"?")} (${esc((sys.fw||"").split(" ")[0])})`;
 const on=(st.modules||[]).filter(m=>m.online).length;
 $("#meta").innerHTML=`<div>Module <b>${on}/${(st.modules||[]).length}</b></div>
-<div>WLAN <b>${sys.ssid||"—"}</b> · <b>${sys.rssi??"—"} dBm</b></div>
+<div>WLAN <b>${esc(sys.ssid||"—")}</b> · <b>${sys.rssi??"—"} dBm</b></div>
 <div>MQTT <b>${sys.mqtt_enabled?(sys.mqtt_connected?"verbunden":"getrennt"):"aus"}</b></div>
 <div>NTP <b>${st.time_valid?"gültig":"—"}</b></div>`;
 if(VIEW==="dash")renderDash();
@@ -1251,6 +1249,68 @@ static bool client_is_local()
 
 static bool auth_required() { return cfg.admin_pass[0] != 0; }
 
+/* DNS-Rebinding (#33): nur Anfragen an eine IP-Adresse oder an den eigenen
+ * Namen (ggf. mit ueblichem lokalem Suffix) beantworten. Eine fremde Domain,
+ * die per DNS auf die Steuerung zeigt, bekommt 403. */
+static bool host_ok()
+{
+    String h = web.hostHeader();
+    h.toLowerCase();
+    if (h.length() == 0 || h[0] == '[') {
+        return true;                                  /* leer bzw. IPv6-Literal */
+    }
+    const int colon = h.indexOf(':');
+    if (colon >= 0) {
+        h = h.substring(0, colon);
+    }
+    bool ipv4 = h.length() > 0;
+    for (size_t i = 0; i < h.length(); ++i) {
+        if (!isdigit((unsigned char)h[i]) && h[i] != '.') { ipv4 = false; break; }
+    }
+    if (ipv4) {
+        return true;
+    }
+    String hn = cfg.node_id;
+    hn.toLowerCase();
+    if (h == hn) {
+        return true;
+    }
+    static const char *const kSuffix[] = { ".local", ".fritz.box", ".lan", ".home",
+                                           ".home.arpa", ".internal", ".localdomain" };
+    for (const char *sfx : kSuffix) {
+        if (h == hn + sfx) return true;
+    }
+    return false;
+}
+
+/* CSRF (#33): zustandsaendernde Anfragen nur mit JSON-Body oder der eigenen
+ * Kopfzeile. Beides erzwingt im Browser einen CORS-Preflight, den die
+ * Steuerung nicht beantwortet -- fremde Seiten koennen also nichts ausloesen. */
+static bool csrf_ok()
+{
+    const HTTPMethod m = web.method();
+    if (m == HTTP_GET || m == HTTP_HEAD || m == HTTP_OPTIONS) {
+        return true;
+    }
+    if (web.header("X-Krone-Request") == "1") {
+        return true;
+    }
+    String ct = web.header("Content-Type");
+    ct.toLowerCase();
+    return ct.startsWith("application/json");
+}
+
+/* Waehrend eines Modul-Updates nichts zulassen, was den Bus belegt, die
+ * Hauptschleife blockiert oder neu startet (#31). */
+static bool mu_free()
+{
+    if (!moduleupdate_busy(&g_mu)) {
+        return true;
+    }
+    send_json(409, "{\"error\":\"module_update_busy\"}");
+    return false;
+}
+
 static bool auth_ok()
 {
     return !auth_required() || web.authenticate(cfg.admin_user, cfg.admin_pass);
@@ -1261,12 +1321,20 @@ static bool auth_ok()
 static WebServer::THandlerFunction guard(WebServer::THandlerFunction h)
 {
     return [h]() {
+        if (!host_ok()) {
+            send_json(403, "{\"error\":\"host\"}");
+            return;
+        }
         if (!client_is_local()) {
             send_json(403, "{\"error\":\"net_scope\"}");
             return;
         }
         if (!auth_ok()) {
             web.requestAuthentication();
+            return;
+        }
+        if (!csrf_ok()) {
+            send_json(403, "{\"error\":\"csrf\"}");
             return;
         }
         h();
@@ -1279,12 +1347,14 @@ static WebServer::THandlerFunction guard(WebServer::THandlerFunction h)
 
 static void handle_status()
 {
-    static char buf[3072];
-    if (masterapp_status_json(&g_app, buf, sizeof(buf)) == 0) {
+    /* Groesse aus dem Worst Case der masterapp, nicht fest (#40). */
+    const size_t n = masterapp_status_json_max(g_app.module_count);
+    std::unique_ptr<char[]> buf(new (std::nothrow) char[n]);
+    if (!buf || masterapp_status_json(&g_app, buf.get(), n) == 0) {
         send_json(500, "{\"error\":\"buf\"}");
         return;
     }
-    send_json(200, buf);
+    send_json(200, buf.get());
 }
 
 static void time_str(char *out, size_t n, const char **src)
@@ -1306,7 +1376,7 @@ static void handle_system()
     time_str(tbuf, sizeof(tbuf), &tsrc);
 
     JsonDocument d;
-    d["uptime_s"]       = millis() / 1000UL;
+    d["uptime_s"]       = (uint32_t)(esp_timer_get_time() / 1000000LL);
     d["heap_free"]      = ESP.getFreeHeap();
     d["heap_min"]       = ESP.getMinFreeHeap();
     d["ssid"]           = WiFi.isConnected() ? WiFi.SSID() : String("");
@@ -1390,15 +1460,16 @@ static void handle_mode()
         send_json(400, "{\"error\":\"mode\"}");
         return;
     }
-    const char *sep = doc["sep"] | ".";
+    const char *sep = doc["sep"] | "";
     const uint8_t al = doc["align"] | (uint8_t)cfg.align;
-    masterapp_set_mode(&g_app, mode_from_string(doc["mode"]), sep[0], align_from(al), millis());
+    masterapp_set_mode(&g_app, mode_from_string(doc["mode"]), sep[0] ? sep[0] : cfg.sep,
+                       align_from(al), millis());
     ok_json();
 }
 
 static void handle_home()
 {
-    if (!write_allowed()) return;
+    if (!write_allowed() || !mu_free()) return;
     JsonDocument doc;
     body_json(doc);
     busmaster_home(&g_bus, (uint8_t)(doc["addr"] | 0));
@@ -1407,29 +1478,75 @@ static void handle_home()
 
 static void handle_selftest()
 {
-    if (!write_allowed()) return;
+    if (!write_allowed() || !mu_free()) return;
     busmaster_home(&g_bus, PROTO_ADDR_BROADCAST);
     ok_json();
 }
 
+/* Zahlfeld aus dem JSON lesen und gegen [lo, hi] pruefen. */
+static bool json_uint(JsonDocument &doc, const char *key, unsigned lo, unsigned hi,
+                      unsigned *out)
+{
+    if (!doc[key].is<unsigned>()) return false;
+    const unsigned v = doc[key];
+    if (v < lo || v > hi) return false;
+    *out = v;
+    return true;
+}
+
 static void handle_module()
 {
-    if (!write_allowed()) return;
+    if (!write_allowed() || !mu_free()) return;
     JsonDocument doc;
     if (!body_json(doc) || !doc["action"].is<const char *>()) {
         send_json(400, "{\"error\":\"action\"}");
         return;
     }
-    const uint8_t addr = doc["addr"] | 0;
+    unsigned addr = 0;
+    if (!json_uint(doc, "addr", 0, PROTO_ADDR_MAX, &addr)) {
+        send_json(400, "{\"error\":\"addr\"}");
+        return;
+    }
     const char *a = doc["action"];
-    if (!strcmp(a, "home"))          busmaster_home(&g_bus, addr);
-    else if (!strcmp(a, "stop"))     busmaster_stop(&g_bus, addr);
-    else if (!strcmp(a, "identify")) busmaster_identify(&g_bus, addr, doc["s"] | 5);
-    else if (!strcmp(a, "get_config")) busmaster_poll_config(&g_bus, addr, millis());
-    else if (!strcmp(a, "set_config"))
-        busmaster_set_config(&g_bus, addr, doc["blattzahl"] | 40, doc["offset"] | 0,
-                             doc["vorhalt"] | 0, doc["flags"] | 0);
-    else { send_json(400, "{\"error\":\"action\"}"); return; }
+    const bool unicast_only = strcmp(a, "home") != 0 && strcmp(a, "stop") != 0;
+    if (unicast_only && addr == 0) {
+        send_json(400, "{\"error\":\"addr\"}");
+        return;
+    }
+    if (!strcmp(a, "home")) {
+        busmaster_home(&g_bus, (uint8_t)addr);
+    } else if (!strcmp(a, "stop")) {
+        busmaster_stop(&g_bus, (uint8_t)addr);
+    } else if (!strcmp(a, "identify")) {
+        unsigned sec = 5;
+        if (!doc["s"].isNull() && !json_uint(doc, "s", 0, 255, &sec)) {
+            send_json(400, "{\"error\":\"s\"}");
+            return;
+        }
+        busmaster_identify(&g_bus, (uint8_t)addr, (uint8_t)sec);
+    } else if (!strcmp(a, "get_config")) {
+        /* Cache verwerfen, damit die UI nur eine frische Antwort sieht (#23). */
+        if (addr <= BUSMASTER_MAX_MODULES) g_bus.mod[addr - 1].cfg_known = false;
+        busmaster_poll_config(&g_bus, (uint8_t)addr, millis());
+    } else if (!strcmp(a, "set_config")) {
+        /* Alle vier Felder sind Pflicht (kein stilles Ueberschreiben mit 0);
+         * Flags nur Bit 0/1, Bit 2 ist reserviert (#18, #23). */
+        unsigned bz = 0, off = 0, vh = 0, fl = 0;
+        if (!json_uint(doc, "blattzahl", 40, 80, &bz) || (bz != 40 && bz != 64 && bz != 80) ||
+            !json_uint(doc, "offset", 0, bz - 1, &off) ||
+            !json_uint(doc, "vorhalt", 0, 60, &vh) ||
+            !json_uint(doc, "flags", 0, 3, &fl)) {
+            send_json(400, "{\"error\":\"config\"}");
+            return;
+        }
+        busmaster_set_config(&g_bus, (uint8_t)addr, (uint8_t)bz, (uint8_t)off, (uint8_t)vh,
+                             (uint8_t)fl);
+        if (addr <= BUSMASTER_MAX_MODULES) g_bus.mod[addr - 1].cfg_known = false;
+        busmaster_poll_config(&g_bus, (uint8_t)addr, millis());
+    } else {
+        send_json(400, "{\"error\":\"action\"}");
+        return;
+    }
     ok_json();
 }
 
@@ -1456,7 +1573,7 @@ static void handle_module_config()
 
 static void handle_enumerate()
 {
-    if (!write_allowed()) return;
+    if (!write_allowed() || !mu_free()) return;
     dbg_log("[bus] === Enumeration gestartet ===");
     busmaster_start_enumeration(&g_bus, millis());
     evlog_push(&g_log, millis(), EVLOG_INFO, "bus", "Enumeration (Web) gestartet");
@@ -1567,7 +1684,7 @@ static const char DEBUG_HTML[] PROGMEM =
     "<!doctype html><html><head><meta charset=\"utf-8\">"
     "<title>Bus-Debug</title></head><body style=\"font-family:sans-serif;padding:2rem\">"
     "<h1>Bus-Debug</h1>"
-    "<p><button onclick=\"fetch('/api/debug/identify',{method:'POST'})"
+    "<p><button onclick=\"fetch('/api/debug/identify',{method:'POST',headers:{'X-Krone-Request':'1'}})"
     ".then(r=>r.text()).then(t=>document.getElementById('out').textContent=t)\">"
     "CMD_IDENTIFY an Adresse 250 (Service) senden</button></p>"
     "<pre id=\"out\"></pre>"
@@ -1676,12 +1793,14 @@ static void handle_wifi_connect()
 
 static void handle_wifi_portal()
 {
+    if (!mu_free()) return;
     want_portal = true;
     ok_json();
 }
 
 static void handle_reboot()
 {
+    if (!mu_free()) return;
     want_reboot = true;
     reboot_at = millis() + 400;
     ok_json();
@@ -1698,7 +1817,12 @@ static void apply_config_doc(JsonDocument &doc)
     };
     cpS("mqtt_host", cfg.mqtt_host, sizeof(cfg.mqtt_host));
     cpS("mqtt_user", cfg.mqtt_user, sizeof(cfg.mqtt_user));
-    cpS("mqtt_pass", cfg.mqtt_pass, sizeof(cfg.mqtt_pass));
+    /* leeres Feld = unveraendert; ausgeliefert wird das Passwort nur in der
+     * Sicherung (/api/backup), nicht ueber /api/config. */
+    if (doc["mqtt_pass"].is<const char *>() && ((const char *)doc["mqtt_pass"])[0]) {
+        strlcpy(cfg.mqtt_pass, doc["mqtt_pass"], sizeof(cfg.mqtt_pass));
+    }
+    if (doc["mqtt_pass_clear"] == true) cfg.mqtt_pass[0] = 0;
     cpS("base_topic", cfg.base_topic, sizeof(cfg.base_topic));
     cpS("node_id", cfg.node_id, sizeof(cfg.node_id));
     cpS("ntp_server", cfg.ntp_server, sizeof(cfg.ntp_server));
@@ -1750,7 +1874,7 @@ static void config_to_json(JsonDocument &d)
     d["mqtt_host"]     = cfg.mqtt_host;
     d["mqtt_port"]     = cfg.mqtt_port;
     d["mqtt_user"]     = cfg.mqtt_user;
-    d["mqtt_pass"]     = cfg.mqtt_pass;
+    d["mqtt_set"]      = cfg.mqtt_pass[0] != 0;    /* Passwort nur in der Sicherung */
     d["base_topic"]    = cfg.base_topic;
     d["node_id"]       = cfg.node_id;
     d["module_count"]  = cfg.module_count;
@@ -1786,9 +1910,9 @@ static void handle_config()
     }
     JsonDocument d;
     config_to_json(d);
-    char out[768];
-    serializeJson(d, out, sizeof(out));
-    send_json(200, out);
+    String out;
+    serializeJson(d, out);
+    send_json(200, out.c_str());
 }
 
 /*
@@ -1799,6 +1923,7 @@ static void handle_config()
 static void handle_backup()
 {
     if (web.method() == HTTP_POST) {
+        if (!mu_free()) return;
         JsonDocument doc;
         if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
         apply_config_doc(doc);
@@ -1821,12 +1946,13 @@ static void handle_backup()
     JsonDocument d;
     config_to_json(d);
     d["admin_pass"] = cfg.admin_pass;   /* in der Sicherung, nicht ueber /api/config */
+    d["mqtt_pass"]  = cfg.mqtt_pass;
     d["wifi_ssid"]  = WiFi.SSID();
     d["wifi_psk"]   = WiFi.psk();
-    char out[960];
-    serializeJson(d, out, sizeof(out));
+    String out;
+    serializeJson(d, out);
     web.sendHeader("Content-Disposition", "attachment; filename=\"krone-backup.json\"");
-    send_json(200, out);
+    send_json(200, out.c_str());
 }
 
 /*
@@ -1942,7 +2068,11 @@ static void handle_update_upload()
 
     if (up.status == UPLOAD_FILE_START) {
         ota_reset();
-        if (!client_is_local() || !auth_ok()) { strlcpy(g_ota_err, "kein Zugriff", sizeof(g_ota_err)); return; }
+        if (!host_ok() || !client_is_local() || !auth_ok() || !csrf_ok()) {
+            strlcpy(g_ota_err, "kein Zugriff", sizeof(g_ota_err));
+            return;
+        }
+        if (moduleupdate_busy(&g_mu)) { strlcpy(g_ota_err, "module_update_busy", sizeof(g_ota_err)); return; }
         if (!cfg.ota_enabled)                 { strlcpy(g_ota_err, "ota_disabled", sizeof(g_ota_err)); return; }
         evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Upload: %s", up.filename.c_str());
         return;
@@ -1996,6 +2126,7 @@ static const char GITHUB_KOTA_URL[] =
 
 static void handle_update_github()
 {
+    if (!mu_free()) return;
     if (!cfg.ota_enabled) { send_json(403, "{\"error\":\"ota_disabled\"}"); return; }
     if (!WiFi.isConnected()) { send_json(503, "{\"error\":\"kein WLAN\"}"); return; }
 
@@ -2090,7 +2221,28 @@ static void web_begin()
      * Antwort); der Antwort-Handler zusaetzlich ueber guard(). */
     web.on("/api/update",    HTTP_POST, guard(handle_update_done), handle_update_upload);
     web.on("/api/update/github", HTTP_POST, guard(handle_update_github));
-    web.begin();
+    static const char *kHeaders[] = { "Content-Type", "X-Krone-Request" };
+    web.collectHeaders(kHeaders, 2);
+}
+
+/* Der App-Webserver und das WiFiManager-Portal lauschen beide auf Port 80;
+ * es darf immer nur einer laufen. */
+static bool g_web_running = false;
+
+static void web_start()
+{
+    if (!g_web_running) {
+        web.begin();
+        g_web_running = true;
+    }
+}
+
+static void web_stop()
+{
+    if (g_web_running) {
+        web.stop();
+        g_web_running = false;
+    }
 }
 
 /* ================================================================== */
@@ -2156,15 +2308,23 @@ static void mqtt_callback(char *t, uint8_t *payload, unsigned int len)
     }
 }
 
+static uint32_t g_mqtt_backoff_ms = 5000;
+
 static void mqtt_ensure()
 {
-    if (!cfg.mqtt_enabled || mqtt.connected() || strlen(cfg.mqtt_host) == 0) {
+    if (!cfg.mqtt_enabled || mqtt.connected() || strlen(cfg.mqtt_host) == 0 ||
+        WiFi.status() != WL_CONNECTED) {
         return;
     }
-    if (millis() - last_mqtt_try < 5000) {
+    if (millis() - last_mqtt_try < g_mqtt_backoff_ms) {
         return;
     }
     last_mqtt_try = millis();
+    /* Ein toter Broker darf loop() nicht sekundenlang anhalten (#35):
+     * TCP-Verbindungsaufbau und CONNACK-Wartezeit kurz halten, Wiederholung
+     * mit wachsendem Abstand (5 s .. 60 s). */
+    net.setTimeout(1);
+    mqtt.setSocketTimeout(2);
     mqtt.setServer(cfg.mqtt_host, cfg.mqtt_port);
     mqtt.setBufferSize(1024);   /* Discovery-Payloads inkl. availability + device */
     mqtt.setCallback(mqtt_callback);
@@ -2179,8 +2339,10 @@ static void mqtt_ensure()
         mqtt.subscribe(topic("home/press").c_str());
         mqtt.subscribe(topic("selftest/press").c_str());
         mqtt_publish_discovery();
+        g_mqtt_backoff_ms = 5000;
         evlog_push(&g_log, millis(), EVLOG_INFO, "mqtt", "verbunden, Auto-Discovery gesendet");
     } else {
+        if (g_mqtt_backoff_ms < 60000) g_mqtt_backoff_ms *= 2;
         evlog_push(&g_log, millis(), EVLOG_WARN, "mqtt", "Broker %s nicht erreichbar", cfg.mqtt_host);
     }
 }
@@ -2302,18 +2464,153 @@ static void poll_events(uint32_t now)
     }
 }
 
-static void handle_portal_request()
+/* --- WLAN: nicht blockierend (#35), Portal ohne Firmware-Upload (#32) --- */
+
+static WiFiManager *g_wm = nullptr;
+static bool     g_portal = false;
+static bool     g_net_up = false;
+static uint32_t g_wifi_retry_ms = 0;
+static uint32_t g_wifi_backoff_ms = 10000;
+
+/* Das Portal von WiFiManager 2.0.17 registriert /update und /u (Firmware ohne
+ * Signaturpruefung) sowie /erase unabhaengig vom Menue. Der WebServer nimmt
+ * den ersten passenden Handler in Registrierungsreihenfolge; der Callback
+ * laeuft in setupConfigPortal() nach dem Anlegen des Servers und vor den
+ * Bibliotheksrouten (WiFiManager.cpp). Die eigenen Handler haben keine
+ * Upload-Funktion, ein Image erreicht handleUpdating() also nie. */
+static void wm_prepare()
 {
-    if (!want_portal) {
+    if (g_wm == nullptr) {
+        g_wm = new WiFiManager();
+    }
+    g_wm->setWebServerCallback([]() {
+        auto deny = []() { g_wm->server->send(403, "text/plain", "gesperrt"); };
+        g_wm->server->on("/update", deny);
+        g_wm->server->on("/u", deny);
+        g_wm->server->on("/erase", deny);
+    });
+    static const char *kMenu[] = { "wifi", "info", "exit" };
+    g_wm->setMenu(kMenu, 3);
+    g_wm->setConfigPortalBlocking(false);
+}
+
+static void portal_start(uint16_t timeout_s)
+{
+    if (g_portal) {
         return;
     }
-    want_portal = false;
-    evlog_push(&g_log, millis(), EVLOG_INFO, "wifi", "Konfigurationsportal geöffnet");
-    WiFiManager wm;
-    wm.setConfigPortalTimeout(300);
-    wm.startConfigPortal(cfg.node_id);
-    evlog_push(&g_log, millis(), EVLOG_INFO, "wifi", "Portal beendet");
-    apply_static_ip();
+    wm_prepare();
+    web_stop();                                   /* Port 80 fuer das Portal */
+    g_wm->setConfigPortalTimeout(timeout_s);
+    g_wm->startConfigPortal(cfg.node_id);
+    g_portal = true;
+    evlog_push(&g_log, millis(), EVLOG_INFO, "wifi", "Konfigurationsportal geöffnet (AP \"%s\")",
+               cfg.node_id);
+}
+
+static void handle_portal_request()
+{
+    if (want_portal) {
+        want_portal = false;
+        portal_start(300);
+    }
+}
+
+/* Je loop()-Durchlauf: Portal bedienen bzw. Verbindung halten. */
+static void wifi_service(uint32_t now)
+{
+    if (g_portal) {
+        const bool connected = g_wm->process();
+        if (connected || !g_wm->getConfigPortalActive()) {
+            if (g_wm->getConfigPortalActive()) {
+                g_wm->stopConfigPortal();
+            }
+            g_portal = false;
+            evlog_push(&g_log, now, EVLOG_INFO, "wifi", "Portal beendet");
+            if (WiFi.status() != WL_CONNECTED && g_wm->getWiFiIsSaved()) {
+                WiFi.mode(WIFI_STA);
+                WiFi.begin();
+            }
+        }
+        return;
+    }
+    web_start();
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!g_net_up) {
+            g_net_up = true;
+            g_wifi_backoff_ms = 10000;
+            if (cfg.mdns_enabled) {
+                MDNS.begin(cfg.node_id);
+                MDNS.addService("http", "tcp", 80);
+            }
+            apply_time_config();
+        }
+        return;
+    }
+    g_net_up = false;
+    /* Eigene Wiederverbindung zusaetzlich zum Autoreconnect des Frameworks,
+     * mit wachsendem Abstand; nicht waehrend eines Netzwechsels aus der UI. */
+    if (!wifi_switching && (uint32_t)(now - g_wifi_retry_ms) >= g_wifi_backoff_ms) {
+        g_wifi_retry_ms = now;
+        if (g_wifi_backoff_ms < 120000) g_wifi_backoff_ms *= 2;
+        if (WiFi.SSID().length() > 0 || (g_wm && g_wm->getWiFiIsSaved())) {
+            WiFi.begin();
+        }
+    }
+}
+
+/* --- Betriebsart/Text dauerhaft (#27) ----------------------------------- */
+
+static Preferences g_app_prefs;
+static char     g_saved_mode[16] = "";
+static char     g_saved_text[APP_TEXT_MAX + 1] = "";
+static uint32_t g_app_change_ms = 0;
+static bool     g_app_dirty = false;
+#define APP_SAVE_DELAY_MS 30000UL   /* NVS erst nach 30 s ohne Aenderung */
+
+static void app_state_restore()
+{
+    g_app_prefs.begin("kapp", true);
+    g_app_prefs.getString("mode", g_saved_mode, sizeof(g_saved_mode));
+    g_app_prefs.getString("text", g_saved_text, sizeof(g_saved_text));
+    g_app_prefs.end();
+    if (!g_saved_mode[0]) {
+        return;
+    }
+    if (!strcmp(g_saved_mode, "text")) {
+        masterapp_set_text(&g_app, g_saved_text, millis());
+    } else {
+        masterapp_set_mode(&g_app, mode_from_string(g_saved_mode), cfg.sep,
+                           align_from(cfg.align), millis());
+    }
+}
+
+static void app_state_tick(uint32_t now)
+{
+    const char *mode = masterapp_mode_name(g_app.mode);
+    const bool changed = strcmp(mode, g_saved_mode) != 0 ||
+                         (g_app.mode == APP_MODE_TEXT && strcmp(g_app.text, g_saved_text) != 0);
+    if (!changed) {
+        g_app_dirty = false;
+        return;
+    }
+    if (!g_app_dirty) {
+        g_app_dirty = true;
+        g_app_change_ms = now;
+        return;
+    }
+    if ((uint32_t)(now - g_app_change_ms) < APP_SAVE_DELAY_MS) {
+        return;
+    }
+    strlcpy(g_saved_mode, mode, sizeof(g_saved_mode));
+    if (g_app.mode == APP_MODE_TEXT) {
+        strlcpy(g_saved_text, g_app.text, sizeof(g_saved_text));
+    }
+    g_app_prefs.begin("kapp", false);
+    g_app_prefs.putString("mode", g_saved_mode);
+    g_app_prefs.putString("text", g_saved_text);
+    g_app_prefs.end();
+    g_app_dirty = false;
 }
 
 /* ================================================================== */
@@ -2336,31 +2633,36 @@ void setup()
     WiFi.setSleep(false);
     apply_static_ip();
 
-    WiFiManager wm;
-    wm.setConfigPortalTimeout(180);
-    wm.autoConnect(cfg.node_id);
-
-    apply_time_config();
-
-    if (cfg.mdns_enabled) {
-        MDNS.begin(cfg.node_id);
-        MDNS.addService("http", "tcp", 80);
-    }
-
+    /* Bus und Anzeige laufen unabhaengig vom WLAN (#35). */
     bus_begin();
     busmaster_init(&g_bus, bus_tx, nullptr);
+    /* Sendeende als Zeitbezug: bus_tx() blockiert bis zum letzten Bit (#21). */
+    busmaster_set_clock(&g_bus, [](void *) -> uint32_t { return millis(); }, nullptr);
     busmaster_set_log(&g_bus, busmaster_log_cb, nullptr);
+    busmaster_set_enum_hint(&g_bus, cfg.module_count);
     masterapp_init(&g_app, &g_bus, effective_module_count());
     g_app.sep = cfg.sep;
     g_app.align = align_from(cfg.align);
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
+    app_state_restore();
 
     proto_parser_reset(&g_mu_parser);
     module_fw_verify();
 
     web_begin();
+    apply_time_config();
 
-    busmaster_start_enumeration(&g_bus, millis());
+    /* Mit gespeicherten Zugangsdaten im Hintergrund verbinden, sonst das
+     * Portal oeffnen -- beides blockiert loop() nicht. */
+    wm_prepare();
+    if (g_wm->getWiFiIsSaved()) {
+        WiFi.begin();
+        web_start();
+    } else {
+        portal_start(0);
+    }
+    /* Die erste Enumeration startet in loop(), wenn das 2,5-s-Startfenster
+     * des Modul-Bootloaders vorbei ist (Karten ignorieren dort Broadcasts). */
 }
 
 void loop()
@@ -2378,6 +2680,7 @@ void loop()
     if (t1 - t0 >= 3) { dbg_log("[loop] web.handleClient %lums", (unsigned long)(t1 - t0)); }
 
     handle_portal_request();
+    wifi_service(millis());
     const uint32_t t2 = millis();
     if (t2 - t1 >= 3) { dbg_log("[loop] handle_portal_request %lums", (unsigned long)(t2 - t1)); }
 
@@ -2392,9 +2695,9 @@ void loop()
     bus_pump(bus_now);
     if (moduleupdate_busy(&g_mu)) {
         /* Waehrend eines Modul-Updates ruht der Statusverkehr auf dem Bus. */
-        if (now - g_mu_last_tick >= 20) {
-            g_mu_last_tick = now;
-            moduleupdate_tick(&g_mu, now);
+        if (bus_now - g_mu_last_tick >= 20) {
+            g_mu_last_tick = bus_now;
+            moduleupdate_tick(&g_mu, bus_now);
         }
     } else {
         busmaster_tick(&g_bus, bus_now);
@@ -2403,12 +2706,12 @@ void loop()
      * Stand stehen (busmaster.h: "0 = unbekannt", danach nie zurueckgesetzt
      * ausser bei Enumeration) -- ohne diesen Reset zeigt die UI nach einem
      * erfolgreichen Bus-Update weiter die alte Version, weil der normale
-     * Versions-Poll (unten, poll_cycle) ein bereits bekanntes Modul nie
+     * Abfrageplan (busmaster_service_poll) ein bereits bekanntes Modul nie
      * erneut abfragt. Adresse wechselt in g_mu.cur, sobald eine Karte fertig
      * ist (Erfolg oder Fehlschlag) -- in beiden Faellen neu abfragen. */
     if (g_mu.cur != g_mu_prev_cur) {
         if (g_mu_prev_cur >= 1 && g_mu_prev_cur <= BUSMASTER_MAX_MODULES) {
-            g_bus.mod[g_mu_prev_cur - 1].ver_known = false;
+            busmaster_invalidate_version(&g_bus, g_mu_prev_cur);
         }
         g_mu_prev_cur = g_mu.cur;
     }
@@ -2440,11 +2743,38 @@ void loop()
     /* Auto-Modus: solange nichts erkannt ist, alle ~10 s neu enumerieren, damit
      * spaeter angesteckte Karten von selbst auftauchen. Sobald >= 1 erkannt,
      * hoert das auf (kein Dauer-ENUM_RESET auf laufende Module). */
-    if (cfg.module_count == 0 && g_bus.module_count == 0 &&
+    static bool s_first_enum = false;
+    if (!s_first_enum && now >= 3000) {
+        s_first_enum = true;
+        last_autoscan_ms = now;
+        busmaster_start_enumeration(&g_bus, now);
+    }
+    if (s_first_enum && cfg.module_count == 0 && g_bus.module_count == 0 &&
         !busmaster_enum_busy(&g_bus) && !moduleupdate_busy(&g_mu) &&
         now - last_autoscan_ms >= 10000) {
         last_autoscan_ms = now;
         busmaster_start_enumeration(&g_bus, now);
+    }
+
+    /* Neue Bus-Warnungen ins Ereignislog (#28). */
+    {
+        static uint32_t s_warn_seq = 0;
+        if (g_bus.warn_seq != s_warn_seq) {
+            s_warn_seq = g_bus.warn_seq;
+            const uint8_t w = busmaster_warnings(&g_bus);
+            if (w & BM_WARN_UID_DUP)
+                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Gleiche Seriennummer auf zwei Adressen – Enumeration wiederholen");
+            if (w & BM_WARN_UID_CHANGED)
+                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Seriennummer einer Adresse hat sich seit der letzten Enumeration geändert");
+            if (w & BM_WARN_SERVICE_ADDR)
+                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Karte auf Serviceadresse 250 – nie enumerierte Karte am Bus");
+            if (w & BM_WARN_COLLISION)
+                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Adresskollision (0x06) gemeldet");
+            if (w & BM_WARN_ENUM_LIMIT)
+                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Mehr als %u Karten in der Kette", (unsigned)BUSMASTER_MAX_MODULES);
+            if (w & BM_WARN_ENUM_GAP)
+                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Kette vorzeitig zu Ende – Karten dahinter über ihre gespeicherte Adresse erreicht");
+        }
     }
 
     masterapp_tick(&g_app, now);
@@ -2455,37 +2785,21 @@ void loop()
      * gerade mit einer Antwort beschaeftigt ist (bm->awaiting); dann wird
      * es beim naechsten Tick erneut versucht, last_led_sync_ms bleibt
      * absichtlich stehen. */
-    if (!moduleupdate_busy(&g_mu) && !busmaster_enum_busy(&g_bus) &&
-        now - last_led_sync_ms >= 1000) {
+    if (!moduleupdate_busy(&g_mu) && now - last_led_sync_ms >= 1000) {
         if (busmaster_led_sync(&g_bus, bus_now)) {
             last_led_sync_ms = now;
         }
     }
 
-    if (!moduleupdate_busy(&g_mu) && !busmaster_enum_busy(&g_bus) && !g_bus.awaiting &&
-        now - last_poll_ms >= 100) {
-        last_poll_ms = now;
-        const uint8_t count = effective_module_count();
-        if (count > 0) {
-            /* Ein online-Modul ohne bekannte Firmware-Version einmalig abfragen,
-             * sonst die normale Statusabfrage. poll_cycle laeuft unabhaengig
-             * von poll_addr/count -- bei wenigen Modulen (count < 4) wuerde
-             * "poll_addr % 4 == 0" sonst nie eintreten und die Versions-
-             * abfrage nie ausgeloest werden. */
-            ++poll_cycle;
-            uint8_t vaddr = 0;
-            for (uint8_t a = 1; a <= count && a <= BUSMASTER_MAX_MODULES; ++a) {
-                if (g_bus.mod[a - 1].online && !g_bus.mod[a - 1].ver_known) { vaddr = a; break; }
-            }
-            if (vaddr && (poll_cycle % 4u) == 0u) {
-                busmaster_poll_version(&g_bus, vaddr, bus_now);
-            } else {
-                busmaster_poll_status(&g_bus, poll_addr, bus_now);
-            }
-            poll_addr = (poll_addr % count) + 1;
-            if (poll_addr == 1 && mqtt.connected()) {
-                mqtt_publish_state();
-            }
+    /* Abfrageplan im busmaster (#20, #21): Status rundlaufend, Versionen mit
+     * eigenem Zeiger, Serviceadresse; MQTT-Zustand je abgeschlossener Runde. */
+    if (!moduleupdate_busy(&g_mu)) {
+        if (busmaster_service_poll(&g_bus, effective_module_count(), bus_now) &&
+            mqtt.connected()) {
+            mqtt_publish_state();
         }
     }
+
+    app_state_tick(now);
 }
+
