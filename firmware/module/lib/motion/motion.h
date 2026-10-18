@@ -28,10 +28,18 @@ extern "C" {
 /* Zeitkonstanten in Millisekunden (Spezifikation 4.3, 6.2, 6.4). */
 #define MOTION_DEBOUNCE_MS        20u    /* Sperrzeit nach einer Flanke */
 #define MOTION_TIME_PER_BLATT_MS  60u
+/* Homing-Timeout (0x02) und Laufzeitgrenze (0x05) fuer 40 Blatt, rund 1,7
+ * Umdrehungen. Fuer 64/80 Blatt skalieren beide mit der Blattzahl, siehe
+ * motion_homing_timeout_ms() / motion_runtime_limit_ms(). */
 #define MOTION_HOMING_TIMEOUT_MS  4000u  /* Fehlercode 0x02 */
 #define MOTION_NO_PULSE_MS        200u   /* Fehlercode 0x01, mit Wiederholung */
 #define MOTION_RUNTIME_LIMIT_MS   4000u  /* Fehlercode 0x05, Laufzeitueberwachung */
 #define MOTION_MAX_RETRIES        3u     /* wie die Originalsteuerung */
+/* So viele Blattimpulse bei abgeschaltetem Motor (IDLE/ERROR) innerhalb des
+ * Fensters gelten als Motorlauf ohne Ansteuerung (0x07); ein einzelner
+ * Nachlaufimpuls nach dem Abschalten loest nichts aus. */
+#define MOTION_STRAY_PULSES       3u
+#define MOTION_STRAY_WINDOW_MS    1000u
 
 /* Fehlercodes, Abschnitt 6.4. */
 #define MOTION_ERR_NONE        0x00u
@@ -40,6 +48,8 @@ extern "C" {
 #define MOTION_ERR_BLATTZAHL   0x03u
 #define MOTION_ERR_UNSYNCED    0x04u
 #define MOTION_ERR_RUNTIME     0x05u
+/* 0x06 (Sendeecho) meldet die Enumeration, siehe enumeration.h. */
+#define MOTION_ERR_STRAY       0x07u   /* Blattimpulse ohne Motoransteuerung */
 
 typedef enum {
     MOTION_HOMING = 0,
@@ -66,8 +76,9 @@ typedef struct {
     uint16_t correction_count;
 
     /* intern */
-    uint32_t last_blatt_ms;
-    uint32_t last_leer_ms;
+    uint32_t last_blatt_ms;       /* Bezug fuer 0x01 und Abschaltvorhalt */
+    uint32_t blatt_edge_ms;       /* letzte angenommene Blattflanke (Sperrzeit) */
+    uint32_t last_leer_ms;        /* letzte angenommene Leerbildflanke (Sperrzeit) */
     uint32_t motor_since_ms;
     uint32_t state_since_ms;
     uint8_t  retries;
@@ -76,6 +87,8 @@ typedef struct {
     bool     seen_first_leer;
     bool     motor_on;            /* Gate-Pegel PA7 (high = Motor an) */
     bool     gate_cut_early;      /* Abschaltvorhalt hat das Gate abgeschaltet */
+    uint8_t  stray_count;         /* Blattimpulse bei abgeschaltetem Motor */
+    uint32_t stray_since_ms;
 } motion_t;
 
 /*
@@ -120,6 +133,15 @@ void motion_enter_error(motion_t *m, uint8_t code, uint32_t now_ms);
 
 /* Zeitfortschritt: Timeouts, Laufzeitueberwachung, Abschaltvorhalt. */
 void motion_tick(motion_t *m, uint32_t now_ms);
+
+/* Homing-Timeout (0x02) fuer die konfigurierte Blattzahl: 4 s bei 40 Blatt,
+ * 6,4 s bei 64, 8 s bei 80 (je rund 1,7 Umdrehungen). Gilt bis zum ersten
+ * Leerbild und erneut fuer die Blattzahlerkennung bis zum zweiten. */
+uint32_t motion_homing_timeout_ms(const motion_t *m);
+
+/* Laufzeitgrenze (0x05) fuer durchgehenden Motorlauf im aktuellen Zustand:
+ * Fahrt wie der Homing-Timeout, Homing (beide Phasen) das Doppelte. */
+uint32_t motion_runtime_limit_ms(const motion_t *m);
 
 /* Pegel fuer PA7 (Triac-Gate). High = Motor an, in jeder Bestueckung (#18). */
 bool motion_triac_gate(const motion_t *m);

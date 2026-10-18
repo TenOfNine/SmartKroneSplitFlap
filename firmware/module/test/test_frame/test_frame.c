@@ -165,6 +165,119 @@ static void test_two_frames_back_to_back(void)
     TEST_ASSERT_EQUAL_HEX8(40, p.frame.payload[0]);
 }
 
+/* Alle Bytes fuettern; zaehlt Fehler und gueltige Rahmen (#56). */
+static void feed_count(proto_parser_t *p, const uint8_t *buf, size_t n,
+                       unsigned *errs, unsigned *oks)
+{
+    for (size_t i = 0; i < n; ++i) {
+        const proto_parse_result_t r = proto_parser_feed(p, buf[i]);
+        if (r == PARSE_FRAME_OK) {
+            (*oks)++;
+        } else if (r != PARSE_NEED_MORE) {
+            (*errs)++;
+        }
+    }
+}
+
+/* Rahmen A verliert ein Byte und verschluckt so den Anfang von B: B wird im
+ * Neuaufsatz aus den schon gelesenen Bytes gefunden. */
+static void test_resync_recovers_swallowed_frame(void)
+{
+    proto_frame_t f;
+    uint8_t a[PROTO_MAX_FRAME], b[PROTO_MAX_FRAME], bus[2 * PROTO_MAX_FRAME];
+    const uint8_t st[8] = { 4, 4, 0, 0, 40, 0, 0, 1 };
+    const size_t na = make(&f, CMD_GET_STATUS, 1, st, 8, a);
+    const uint8_t pl[1] = { 9 };
+    const size_t nb = make(&f, CMD_SET, 2, pl, 1, b);
+    size_t n = 0;
+    for (size_t i = 0; i < na; ++i) {
+        if (i != 6) {
+            bus[n++] = a[i];                  /* Byte 6 fehlt */
+        }
+    }
+    memcpy(&bus[n], b, nb);
+    n += nb;
+
+    proto_parser_t p;
+    proto_parser_reset(&p);
+    unsigned errs = 0, oks = 0;
+    feed_count(&p, bus, n, &errs, &oks);
+    TEST_ASSERT_EQUAL_UINT(1, errs);
+    TEST_ASSERT_EQUAL_UINT(1, oks);
+    TEST_ASSERT_EQUAL_HEX8(CMD_SET, p.frame.cmd);
+    TEST_ASSERT_EQUAL_HEX8(2, p.frame.addr);
+    TEST_ASSERT_EQUAL_HEX8(9, p.frame.payload[0]);
+}
+
+/* Ungueltige Laenge direkt hinter einer Scheinpraeambel: die echte
+ * Praeambel steckt im verworfenen LEN-Byte. */
+static void test_resync_after_len_error(void)
+{
+    proto_frame_t f;
+    uint8_t b[PROTO_MAX_FRAME], bus[PROTO_MAX_FRAME + 2];
+    const size_t nb = make(&f, CMD_GET_STATUS, 1, NULL, 0, b);
+    bus[0] = PROTO_PREAMBLE_0;
+    bus[1] = PROTO_PREAMBLE_1;
+    memcpy(&bus[2], b, nb);                   /* AA 55 | AA 55 04 10 01 .. */
+
+    proto_parser_t p;
+    proto_parser_reset(&p);
+    unsigned errs = 0, oks = 0;
+    feed_count(&p, bus, nb + 2u, &errs, &oks);
+    TEST_ASSERT_EQUAL_UINT(1, errs);          /* LEN 0xAA */
+    TEST_ASSERT_EQUAL_UINT(1, oks);
+    TEST_ASSERT_EQUAL_HEX8(CMD_GET_STATUS, p.frame.cmd);
+}
+
+/* Ein vollstaendiger Rahmen mitten in einem Scheinrahmen. */
+static void test_resync_finds_embedded_frame(void)
+{
+    proto_frame_t f;
+    uint8_t b[PROTO_MAX_FRAME], bus[3 + PROTO_MAX_FRAME + 8];
+    const uint8_t pl[1] = { 33 };
+    const size_t nb = make(&f, CMD_SET, 4, pl, 1, b);
+    size_t n = 0;
+    bus[n++] = PROTO_PREAMBLE_0;
+    bus[n++] = PROTO_PREAMBLE_1;
+    const uint8_t fake_len = (uint8_t)(PROTO_LEN_OVERHEAD + nb + 3u);   /* schliesst B ein */
+    bus[n++] = fake_len;
+    memcpy(&bus[n], b, nb);
+    n += nb;
+    while (n < 3u + fake_len) {
+        bus[n++] = 0x11;                      /* Rest des Scheinrahmens */
+    }
+
+    proto_parser_t p;
+    proto_parser_reset(&p);
+    unsigned errs = 0, oks = 0;
+    feed_count(&p, bus, n, &errs, &oks);
+    TEST_ASSERT_EQUAL_UINT(1, oks);
+    TEST_ASSERT_EQUAL_UINT(0, errs);          /* Fund ersetzt den CRC-Fehler */
+    TEST_ASSERT_EQUAL_HEX8(4, p.frame.addr);
+    TEST_ASSERT_EQUAL_HEX8(33, p.frame.payload[0]);
+}
+
+/* Reiner Muell ohne Praeambel nach einem CRC-Fehler: kein Fund, Parser
+ * danach sofort wieder bereit. */
+static void test_resync_garbage_then_clean_frame(void)
+{
+    proto_frame_t f;
+    uint8_t a[PROTO_MAX_FRAME], b[PROTO_MAX_FRAME];
+    const size_t na = make(&f, CMD_GET_STATUS, 1, NULL, 0, a);
+    a[na - 1] ^= 0xFFu;
+    const uint8_t pl[1] = { 5 };
+    const size_t nb = make(&f, CMD_SET, 3, pl, 1, b);
+    proto_parser_t p;
+    proto_parser_reset(&p);
+    unsigned errs = 0, oks = 0;
+    feed_count(&p, a, na, &errs, &oks);
+    TEST_ASSERT_EQUAL_UINT(1, errs);
+    TEST_ASSERT_EQUAL_UINT(0, oks);
+    feed_count(&p, b, nb, &errs, &oks);
+    TEST_ASSERT_EQUAL_UINT(1, oks);
+    TEST_ASSERT_EQUAL_HEX8(5, p.frame.payload[0]);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -177,5 +290,9 @@ int main(void)
     RUN_TEST(test_bad_len);
     RUN_TEST(test_resync_after_garbage);
     RUN_TEST(test_two_frames_back_to_back);
+    RUN_TEST(test_resync_recovers_swallowed_frame);
+    RUN_TEST(test_resync_after_len_error);
+    RUN_TEST(test_resync_finds_embedded_frame);
+    RUN_TEST(test_resync_garbage_then_clean_frame);
     return UNITY_END();
 }

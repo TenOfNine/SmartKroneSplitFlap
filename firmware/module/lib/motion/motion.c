@@ -27,25 +27,36 @@ static void enter(motion_t *m, motion_state_t s, uint32_t now)
     }
 }
 
+/* Motorfehler: Motor aus, ERROR. Nach jedem Motorfehler ist die Lage nicht
+ * mehr gesichert (Impulse ausgeblieben, Laufzeit ueberschritten, Blattzahl
+ * falsch, Motor lief ohne Ansteuerung): nicht synchronisiert, Ist unbekannt.
+ * Das naechste GO homt deshalb, statt aus einer falschen Lage zu fahren. */
 static void fail(motion_t *m, uint8_t code, uint32_t now)
 {
     m->error = code;
     m->motor_on = false;
     m->gate_cut_early = false;
     m->go_pending = false;
+    m->counting = false;
+    m->synced = false;
+    m->current = 0;
     enter(m, MOTION_ERROR, now);
 }
 
 static void start_homing(motion_t *m, uint32_t now)
 {
     m->synced = false;
+    m->current = 0;               /* unbekannt bis zum Leerbild */
     m->seen_first_leer = false;
     m->counting = (m->detected_blattzahl == 0);
     m->count_value = 0;
     m->retries = 0;
+    m->stray_count = 0;
     m->motor_on = true;
     m->gate_cut_early = false;
-    m->last_leer_ms = now;
+    /* Nur die Zeitfenster beginnen jetzt; die Sperrzeit bleibt auf die letzte
+     * echte Flanke bezogen, sonst ginge ein Impuls kurz nach dem Start
+     * verloren (#39). */
     m->last_blatt_ms = now;
     m->motor_since_ms = now;
     enter(m, MOTION_HOMING, now);
@@ -63,10 +74,11 @@ static void start_move(motion_t *m, uint32_t now)
         return;  /* schon am Ziel */
     }
     m->retries = 0;
+    m->stray_count = 0;
     m->gate_cut_early = false;
     m->motor_on = true;
     m->motor_since_ms = now;
-    m->last_blatt_ms = now;
+    m->last_blatt_ms = now;       /* Fenster fuer 0x01, nicht die Sperrzeit */
     enter(m, MOTION_MOVING, now);
 }
 
@@ -111,8 +123,12 @@ void motion_init(motion_t *m, const module_config_t *cfg,
     m->seen_first_leer = false;
     m->motor_on = false;
     m->gate_cut_early = false;
+    m->stray_count = 0;
+    m->stray_since_ms = now_ms;
     m->last_blatt_ms = now_ms;
-    m->last_leer_ms = now_ms;
+    /* Flanken sofort annehmen: Sperrzeit gilt erst nach einer Flanke. */
+    m->blatt_edge_ms = now_ms - MOTION_DEBOUNCE_MS;
+    m->last_leer_ms = now_ms - MOTION_DEBOUNCE_MS;
     m->motor_since_ms = now_ms;
 
     const bool have_pos = m->position_save && stored_position >= 1 &&
@@ -154,23 +170,67 @@ static bool debounced(uint32_t now, uint32_t last)
     return (uint32_t)(now - last) >= MOTION_DEBOUNCE_MS;
 }
 
+uint32_t motion_homing_timeout_ms(const motion_t *m)
+{
+    return (uint32_t)MOTION_HOMING_TIMEOUT_MS * m->blattzahl / 40u;
+}
+
+uint32_t motion_runtime_limit_ms(const motion_t *m)
+{
+    const uint32_t limit = (uint32_t)MOTION_RUNTIME_LIMIT_MS * m->blattzahl / 40u;
+    return (m->state == MOTION_HOMING) ? 2u * limit : limit;
+}
+
+/* Blattimpuls bei abgeschaltetem Motor: einzelne Nachlaufimpulse sind
+ * normal, eine Folge im Takt eines laufenden Motors nicht (Triac oder
+ * Ansteuerung defekt, Trommel von Hand gedreht). */
+static void stray_pulse(motion_t *m, uint32_t now)
+{
+    if (m->stray_count == 0u ||
+        (uint32_t)(now - m->stray_since_ms) > MOTION_STRAY_WINDOW_MS) {
+        m->stray_count = 0;
+        m->stray_since_ms = now;
+    }
+    m->stray_count++;
+    if (m->stray_count >= MOTION_STRAY_PULSES) {
+        m->stray_count = 0;
+        fail(m, MOTION_ERR_STRAY, now);   /* 0x07 */
+    }
+}
+
 bool motion_on_blatt_pulse(motion_t *m, uint32_t now_ms)
 {
-    if (!debounced(now_ms, m->last_blatt_ms)) {
+    if (!debounced(now_ms, m->blatt_edge_ms)) {
         return false;
     }
+    m->blatt_edge_ms = now_ms;
     m->last_blatt_ms = now_ms;
 
     if (m->counting) {
         m->count_value++;
     }
 
-    if (m->state == MOTION_MOVING) {
+    switch (m->state) {
+    case MOTION_MOVING:
         advance_current(m);
         m->retries = 0;
         if (remaining(m) == 0) {
             enter_idle(m, now_ms);  /* Ziel erreicht */
         }
+        break;
+    case MOTION_HOMING:
+        /* Nach dem ersten Leerbild laeuft die Lage mit, damit ein Abbruch der
+         * Blattzahlerkennung (Timeout, STOP) die richtige Position hinterlaesst
+         * (#39). */
+        if (m->seen_first_leer) {
+            advance_current(m);
+        }
+        break;
+    case MOTION_IDLE:
+    case MOTION_ERROR:
+    default:
+        stray_pulse(m, now_ms);
+        break;
     }
     return true;
 }
@@ -204,11 +264,13 @@ bool motion_on_leer_pulse(motion_t *m, uint32_t now_ms)
         return true;
     }
 
-    /* Zweiter Leerbildimpuls: Blattzahlerkennung abschliessen. */
+    /* Zweiter Leerbildimpuls: Blattzahlerkennung abschliessen. Die erkannte
+     * Zahl muss zur konfigurierten passen (6.2); sonst stimmt jede
+     * Zielrechnung nicht. Sie steht danach im Statusbyte 4. */
     m->detected_blattzahl = m->count_value;
     m->counting = false;
-    if (m->detected_blattzahl != 40 && m->detected_blattzahl != 64 &&
-        m->detected_blattzahl != 80) {
+    m->current = (uint8_t)((m->blatt_offset % m->blattzahl) + 1u);
+    if (m->detected_blattzahl != m->blattzahl) {
         fail(m, MOTION_ERR_BLATTZAHL, now_ms);
         return true;
     }
@@ -252,6 +314,12 @@ void motion_stop(motion_t *m, uint32_t now_ms)
 {
     m->go_pending = false;
     m->motor_on = false;
+    if (m->state == MOTION_HOMING) {
+        /* Erkennung abgebrochen, beim naechsten Homing neu. Vor dem ersten
+         * Leerbild bleibt die Karte unsynchronisiert (Ist 0), danach gilt die
+         * mitgezaehlte Lage. */
+        m->counting = false;
+    }
     if (m->state == MOTION_MOVING || m->state == MOTION_HOMING) {
         enter(m, MOTION_IDLE, now_ms);
     }
@@ -273,7 +341,13 @@ void motion_tick(motion_t *m, uint32_t now_ms)
 {
     switch (m->state) {
     case MOTION_HOMING:
-        if ((uint32_t)(now_ms - m->state_since_ms) >= MOTION_HOMING_TIMEOUT_MS) {
+        /* Rueckfallebene: beide Homing-Phasen sind einzeln begrenzt, die
+         * Laufzeitueberwachung deckt das Homing trotzdem mit ab (#39). */
+        if ((uint32_t)(now_ms - m->motor_since_ms) >= motion_runtime_limit_ms(m)) {
+            fail(m, MOTION_ERR_RUNTIME, now_ms);   /* 0x05 */
+            break;
+        }
+        if ((uint32_t)(now_ms - m->state_since_ms) >= motion_homing_timeout_ms(m)) {
             if (m->seen_first_leer) {
                 /* Schon synchronisiert, nur die Blattzahlerkennung ist nicht
                  * fertig geworden -> mit der konfigurierten Blattzahl arbeiten. */
@@ -286,7 +360,7 @@ void motion_tick(motion_t *m, uint32_t now_ms)
         break;
 
     case MOTION_MOVING: {
-        if ((uint32_t)(now_ms - m->motor_since_ms) >= MOTION_RUNTIME_LIMIT_MS) {
+        if ((uint32_t)(now_ms - m->motor_since_ms) >= motion_runtime_limit_ms(m)) {
             fail(m, MOTION_ERR_RUNTIME, now_ms);   /* 0x05 */
             break;
         }

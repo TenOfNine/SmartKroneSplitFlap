@@ -106,17 +106,25 @@ static volatile uint8_t        tx_echo_pos;
 
 ISR(USART0_RXC_vect)
 {
+    /* RXDATAH zuerst lesen: das Lesen von RXDATAL gibt den Puffer frei. */
     const uint8_t status = USART0.RXDATAH;
     const uint8_t data = USART0.RXDATAL;
-    (void)status;
 
     rx_stamp = (uint8_t)g_ms;
 
     if (tx_echo_mode && tx_echo_pos < tx_echo_len) {
-        if (data != tx_echo_buf[tx_echo_pos]) {
+        /* Rahmen- oder Ueberlauffehler im eigenen Echo ist eine Abweichung,
+         * auch wenn das Datenbyte zufaellig passt (#56). */
+        if (data != tx_echo_buf[tx_echo_pos] ||
+            (status & (USART_FERR_bm | USART_BUFOVF_bm)) != 0u) {
             tx_echo_bad = 1;
         }
         tx_echo_pos++;
+        return;
+    }
+    if (status & USART_FERR_bm) {
+        /* Stoppbit fehlt: Byte verworfen, der Rahmen scheitert an Laenge
+         * oder CRC und der Parser setzt neu auf (#56). */
         return;
     }
 
@@ -445,8 +453,8 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
 
     switch (f->cmd) {
     case CMD_SET:
-        motion_set_target(&g_motion, f->payload[0]);
-        if (unicast) {
+        /* Ungueltiges Ziel: verwerfen und nicht bestaetigen (#39). */
+        if (motion_set_target(&g_motion, f->payload[0]) && unicast) {
             ack(CMD_SET, own);
         }
         break;
@@ -482,29 +490,31 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
         break;
     case CMD_SET_CONFIG: {
         module_config_t c = g_cfg;
-        c.blattzahl = f->payload[0];
-        c.blatt_offset = f->payload[1];
-        c.abschaltvorhalt_ms = f->payload[2];
-        c.flags = (uint8_t)(f->payload[3] & CONFIG_FLAGS_VALID_MASK);  /* Bit 2 reserviert, #18 */
-        (void)config_validate(&c);
+        if (!config_apply_set_payload(&c, f->payload, f->payload_len)) {
+            break;   /* Wert ausserhalb 6.3: nichts uebernehmen, kein ACK (#39) */
+        }
         /* ACK vor dem EEPROM-Schreiben (#21). */
         ack(CMD_SET_CONFIG, own);
         uint8_t raw[CONFIG_SIZE];
         config_to_bytes(&c, raw);
-        /* nur die vier Nutzerparameter 0..3 (Spez. 5.4); Byte 4/5 (Busadresse,
-         * T_enum) verwaltet die Enumeration. */
-        for (uint8_t i = 0; i < 4u; ++i) {
-            eeq_push((uint8_t)(EE_CONFIG_ADDR + i), raw[i]);
+        /* Nutzerparameter 0..3 und T_enum (5); Byte 4 (Busadresse) verwaltet
+         * die Enumeration. Unveraenderte Bytes schreibt eeq_service nicht. */
+        for (uint8_t i = 0; i < CONFIG_SIZE; ++i) {
+            if (i != CONFIG_BYTE_BUS_ADDRESS) {
+                eeq_push((uint8_t)(EE_CONFIG_ADDR + i), raw[i]);
+            }
         }
         g_cfg = c;
+        enum_fsm_set_t_enum(&g_enum, g_cfg.t_enum_s);
         motion_apply_config(&g_motion, &g_cfg, now);   /* sofort wirksam, #23 */
         position_sync();
         break;
     }
     case CMD_GET_CONFIG: {
-        const uint8_t cfg4[4] = { g_cfg.blattzahl, g_cfg.blatt_offset,
-                                  g_cfg.abschaltvorhalt_ms, g_cfg.flags };
-        reply(CMD_GET_CONFIG, own, cfg4, sizeof(cfg4));
+        const uint8_t cfg5[5] = { g_cfg.blattzahl, g_cfg.blatt_offset,
+                                  g_cfg.abschaltvorhalt_ms, g_cfg.flags,
+                                  g_cfg.t_enum_s };
+        reply(CMD_GET_CONFIG, own, cfg5, sizeof(cfg5));
         break;
     }
     case CMD_IDENTIFY:

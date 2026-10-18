@@ -71,7 +71,10 @@ bool proto_cmd_is_valid(uint8_t cmd, uint8_t addr, uint8_t payload_len)
     }
 
     if (info->payload_len >= 0 && payload_len != (uint16_t)info->payload_len) {
-        return false;
+        /* SET_CONFIG darf T_enum als fuenftes Byte tragen (Spez. 5.4). */
+        if (!(cmd == CMD_SET_CONFIG && payload_len == (uint16_t)info->payload_len + 1u)) {
+            return false;
+        }
     }
     if (payload_len > PROTO_MAX_PAYLOAD) {
         return false;
@@ -138,6 +141,8 @@ void proto_parser_reset(proto_parser_t *parser)
     parser->sync = 0;
 }
 
+/* Rahmen pruefen. Bei einem Fehler bleibt buf/pos fuer den Neuaufsatz
+ * stehen, der Aufrufer setzt zurueck. */
 static proto_parse_result_t finish_frame(proto_parser_t *parser)
 {
     const uint16_t need = parser->need;
@@ -149,12 +154,10 @@ static proto_parse_result_t finish_frame(proto_parser_t *parser)
     const uint16_t recv =
         (uint16_t)parser->buf[need - 2] | ((uint16_t)parser->buf[need - 1] << 8);
 
-    proto_parser_reset(parser);
-
     if (calc != recv) {
         return PARSE_ERR_CRC;
     }
-
+    proto_parser_reset(parser);
     parser->frame.cmd = parser->buf[3];
     parser->frame.addr = parser->buf[4];
     parser->frame.payload_len = payload_len;
@@ -162,7 +165,9 @@ static proto_parse_result_t finish_frame(proto_parser_t *parser)
     return PARSE_FRAME_OK;
 }
 
-proto_parse_result_t proto_parser_feed(proto_parser_t *parser, uint8_t byte)
+/* Ein Byte ohne Neuaufsatz. Bei PARSE_ERR_* stehen die Bytes des
+ * verworfenen Rahmens noch in buf[0..pos). */
+static proto_parse_result_t feed_one(proto_parser_t *parser, uint8_t byte)
 {
     /* Phase 1: auf die Praeambel 0xAA 0x55 synchronisieren. */
     if (parser->pos == 0) {
@@ -193,7 +198,6 @@ proto_parse_result_t proto_parser_feed(proto_parser_t *parser, uint8_t byte)
         const uint8_t len = parser->buf[2];
         if (len < PROTO_LEN_OVERHEAD ||
             len > PROTO_LEN_OVERHEAD + PROTO_MAX_PAYLOAD) {
-            proto_parser_reset(parser);
             return PARSE_ERR_LEN;
         }
         parser->need = (uint16_t)(3u + len);
@@ -205,4 +209,37 @@ proto_parse_result_t proto_parser_feed(proto_parser_t *parser, uint8_t byte)
         return finish_frame(parser);
     }
     return PARSE_NEED_MORE;
+}
+
+/*
+ * Neuaufsatz nach einem Fehler (#56): Ein verstuemmelter Rahmen hat womoeglich
+ * den Anfang des naechsten echten Rahmens als Nutzlast verschluckt. Die schon
+ * gelesenen Bytes ab dem zweiten werden deshalb erneut durchsucht, statt
+ * verworfen. Ohne Kopie: buf[k] des gerade verworfenen Rahmens ist work[i -
+ * pos + k], ein weiterer Fehler setzt also einfach ein Byte hinter dessen
+ * Anfang neu an. Jeder Durchgang beginnt spaeter, die Schleife endet.
+ */
+proto_parse_result_t proto_parser_feed(proto_parser_t *parser, uint8_t byte)
+{
+    const proto_parse_result_t first = feed_one(parser, byte);
+    if (first != PARSE_ERR_CRC && first != PARSE_ERR_LEN) {
+        return first;
+    }
+    uint8_t work[PROTO_MAX_FRAME];
+    uint16_t n = (uint16_t)(parser->pos - 1u);
+    memcpy(work, &parser->buf[1], n);
+    proto_parser_reset(parser);
+
+    bool found = false;
+    uint16_t i = 0;
+    while (i < n) {
+        const proto_parse_result_t r = feed_one(parser, work[i++]);
+        if (r == PARSE_FRAME_OK) {
+            found = true;   /* steht in parser->frame */
+        } else if (r == PARSE_ERR_CRC || r == PARSE_ERR_LEN) {
+            i = (uint16_t)(i - parser->pos + 1u);
+            proto_parser_reset(parser);
+        }
+    }
+    return found ? PARSE_FRAME_OK : first;
 }

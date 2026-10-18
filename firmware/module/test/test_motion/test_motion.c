@@ -703,6 +703,222 @@ static void test_enter_error_motor_off(void)
     TEST_ASSERT_EQUAL(MOTION_HOMING, m.state);
 }
 
+/* --- Review-Befunde #39 ------------------------------------------ */
+
+/* Sperrzeit nach der letzten Flanke, nicht nach GO/HOME: ein Impuls kurz
+ * nach dem Anlaufen zaehlt. */
+static void test_pulse_right_after_go_is_counted(void)
+{
+    reach_idle_at(1);
+    motion_set_target(&m, 3);
+    motion_go(&m, t);
+    t += 5u;
+    TEST_ASSERT_TRUE(motion_on_blatt_pulse(&m, t));
+    TEST_ASSERT_EQUAL_UINT8(2, m.current);
+}
+
+static void test_leer_right_after_home_syncs(void)
+{
+    reach_idle_at(7);
+    m.detected_blattzahl = 40;
+    motion_home(&m, t);
+    m.counting = false;
+    t += 5u;
+    TEST_ASSERT_TRUE(motion_on_leer_pulse(&m, t));
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_EQUAL_UINT8(1, m.current);
+}
+
+/* Timeout der Blattzahlerkennung nach dem ersten Leerbild: die mitgezaehlte
+ * Lage gilt, nicht die vom Leerbild. */
+static void test_counting_timeout_keeps_tracked_position(void)
+{
+    cfg.blatt_offset = 2;
+    motion_init(&m, &cfg, 0, t);
+    TEST_ASSERT_TRUE(m.counting);
+    TEST_ASSERT_EQUAL_UINT8(0, m.current);     /* unbekannt bis zum Leerbild */
+    leer();
+    TEST_ASSERT_EQUAL_UINT8(3, m.current);
+    for (int i = 0; i < 10; ++i) {
+        blatt();
+    }
+    TEST_ASSERT_EQUAL_UINT8(13, m.current);
+    advance(motion_homing_timeout_ms(&m));
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_TRUE(m.synced);
+    TEST_ASSERT_EQUAL_UINT8(13, m.current);
+    TEST_ASSERT_EQUAL_UINT8(0, m.detected_blattzahl);
+}
+
+/* STOP waehrend der Erkennung: Lage bleibt mitgezaehlt, Erkennung aus. */
+static void test_stop_during_counting_keeps_position(void)
+{
+    motion_init(&m, &cfg, 0, t);
+    leer();
+    blatt();
+    blatt();
+    motion_stop(&m, t);
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_TRUE(m.synced);
+    TEST_ASSERT_EQUAL_UINT8(3, m.current);
+    TEST_ASSERT_FALSE(m.counting);
+    TEST_ASSERT_FALSE(m.motor_on);
+}
+
+/* STOP vor dem ersten Leerbild: nicht synchronisiert, Ist unbekannt. */
+static void test_stop_before_leer_is_unsynced(void)
+{
+    reach_idle_at(12);
+    motion_home(&m, t);
+    blatt();
+    motion_stop(&m, t);
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_FALSE(m.synced);
+    TEST_ASSERT_EQUAL_UINT8(0, m.current);
+    motion_set_target(&m, 5);
+    motion_go(&m, t);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_UNSYNCED, m.error);
+    TEST_ASSERT_FALSE(m.motor_on);
+}
+
+/* 64/80 Blatt: Homing-Timeout und Laufzeitgrenze skalieren mit der Blattzahl. */
+static void test_limits_scale_with_blattzahl(void)
+{
+    cfg.blattzahl = 40;
+    motion_init(&m, &cfg, 0, t);
+    TEST_ASSERT_EQUAL_UINT32(4000, motion_homing_timeout_ms(&m));
+    TEST_ASSERT_EQUAL_UINT32(8000, motion_runtime_limit_ms(&m));   /* Homing */
+    cfg.blattzahl = 80;
+    motion_init(&m, &cfg, 0, t);
+    TEST_ASSERT_EQUAL_UINT32(8000, motion_homing_timeout_ms(&m));
+    cfg.blattzahl = 64;
+    cfg.flags = CONFIG_FLAG_POSITION_SAVE;
+    motion_init(&m, &cfg, 1, t);
+    TEST_ASSERT_EQUAL_UINT32(6400, motion_runtime_limit_ms(&m));   /* Fahrt */
+}
+
+static void test_homing_80_blatt_not_error_after_4s(void)
+{
+    cfg.blattzahl = 80;
+    motion_init(&m, &cfg, 0, t);
+    m.counting = false;
+    advance(MOTION_HOMING_TIMEOUT_MS);
+    TEST_ASSERT_EQUAL(MOTION_HOMING, m.state);
+    advance(MOTION_HOMING_TIMEOUT_MS);
+    TEST_ASSERT_EQUAL(MOTION_ERROR, m.state);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_NO_LEER, m.error);
+}
+
+/* Laengste Fahrt bei 80 Blatt (79 Blatt, 4,74 s) ohne 0x05. */
+static void test_longest_move_80_blatt_completes(void)
+{
+    cfg.blattzahl = 80;
+    cfg.flags = CONFIG_FLAG_POSITION_SAVE;
+    motion_init(&m, &cfg, 1, t);
+    motion_set_target(&m, 80);
+    motion_go(&m, t);
+    for (int i = 0; i < 79; ++i) {
+        TEST_ASSERT_EQUAL(MOTION_MOVING, m.state);
+        blatt();
+        motion_tick(&m, t);
+    }
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_NONE, m.error);
+    TEST_ASSERT_EQUAL_UINT8(80, m.current);
+}
+
+/* Laufzeitueberwachung auch im Homing (Rueckfallebene, z. B. bei einem
+ * Logikfehler, der das Phasenfenster immer wieder oeffnet). */
+static void test_runtime_limit_covers_homing(void)
+{
+    motion_init(&m, &cfg, 0, t);
+    const uint32_t start = t;
+    while (t - start < 2u * MOTION_RUNTIME_LIMIT_MS - 100u) {
+        m.state_since_ms = t;          /* Phasen-Timeout kuenstlich aushebeln */
+        advance(100);
+        TEST_ASSERT_EQUAL(MOTION_HOMING, m.state);
+    }
+    m.state_since_ms = t;
+    advance(100);
+    TEST_ASSERT_EQUAL(MOTION_ERROR, m.state);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_RUNTIME, m.error);
+    TEST_ASSERT_FALSE(motion_triac_gate(&m));
+}
+
+/* Erkannte Blattzahl gueltig, aber ungleich der konfigurierten: 0x03. */
+static void test_detected_blattzahl_must_match_config(void)
+{
+    motion_init(&m, &cfg, 0, t);     /* konfiguriert 40 */
+    leer();
+    for (int i = 0; i < 64; ++i) {
+        blatt();
+    }
+    leer();
+    TEST_ASSERT_EQUAL(MOTION_ERROR, m.state);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_BLATTZAHL, m.error);
+    TEST_ASSERT_EQUAL_UINT8(64, m.detected_blattzahl);
+    TEST_ASSERT_FALSE(m.synced);
+    TEST_ASSERT_FALSE(motion_triac_gate(&m));
+}
+
+/* Nach einem Motorfehler ist die Lage nicht gesichert: GO homt. */
+static void test_motor_error_unsyncs(void)
+{
+    reach_idle_at(1);
+    motion_set_target(&m, 5);
+    motion_go(&m, t);
+    blatt();
+    for (uint8_t i = 0; i <= MOTION_MAX_RETRIES; ++i) {
+        advance(MOTION_NO_PULSE_MS);
+    }
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_NO_BLATT, m.error);
+    TEST_ASSERT_FALSE(m.synced);
+    TEST_ASSERT_EQUAL_UINT8(0, m.current);
+    motion_go(&m, t);
+    TEST_ASSERT_EQUAL(MOTION_HOMING, m.state);
+}
+
+/* Drei Blattimpulse binnen 1 s bei abgeschaltetem Motor: 0x07. */
+static void test_stray_pulses_in_idle_are_error_07(void)
+{
+    reach_idle_at(10);
+    blatt();
+    blatt();
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    blatt();
+    TEST_ASSERT_EQUAL(MOTION_ERROR, m.state);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_STRAY, m.error);
+    TEST_ASSERT_FALSE(m.synced);
+    TEST_ASSERT_FALSE(motion_triac_gate(&m));
+}
+
+/* Einzelne Nachlauf- oder Stoerimpulse mit grossem Abstand: kein Fehler. */
+static void test_sparse_stray_pulses_tolerated(void)
+{
+    reach_idle_at(10);
+    for (int i = 0; i < 10; ++i) {
+        t += 600u;
+        motion_on_blatt_pulse(&m, t);
+    }
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_NONE, m.error);
+}
+
+/* Nachlaufimpuls nach dem Ziel, danach neue Fahrt: Zaehler beginnt neu. */
+static void test_stray_count_resets_on_motor_start(void)
+{
+    reach_idle_at(1);
+    blatt();
+    blatt();                                   /* 2 Fremdimpulse */
+    motion_set_target(&m, 3);
+    motion_go(&m, t);
+    blatt();
+    blatt();                                   /* Ziel 3 erreicht */
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    blatt();                                   /* ein Nachlauf */
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -747,5 +963,19 @@ int main(void)
     RUN_TEST(test_apply_config_same_geometry_keeps_moving);
     RUN_TEST(test_apply_config_position_save_flag);
     RUN_TEST(test_enter_error_motor_off);
+    RUN_TEST(test_pulse_right_after_go_is_counted);
+    RUN_TEST(test_leer_right_after_home_syncs);
+    RUN_TEST(test_counting_timeout_keeps_tracked_position);
+    RUN_TEST(test_stop_during_counting_keeps_position);
+    RUN_TEST(test_stop_before_leer_is_unsynced);
+    RUN_TEST(test_limits_scale_with_blattzahl);
+    RUN_TEST(test_homing_80_blatt_not_error_after_4s);
+    RUN_TEST(test_longest_move_80_blatt_completes);
+    RUN_TEST(test_runtime_limit_covers_homing);
+    RUN_TEST(test_detected_blattzahl_must_match_config);
+    RUN_TEST(test_motor_error_unsyncs);
+    RUN_TEST(test_stray_pulses_in_idle_are_error_07);
+    RUN_TEST(test_sparse_stray_pulses_tolerated);
+    RUN_TEST(test_stray_count_resets_on_motor_start);
     return UNITY_END();
 }

@@ -97,6 +97,17 @@ static void test_firmware_update_commands(void)
     TEST_ASSERT_EQUAL_UINT(30u, PROTO_FW_CHUNK);
 }
 
+/* SET_CONFIG mit 4 Byte oder mit T_enum als fuenftem Byte (#39). */
+static void test_set_config_optional_t_enum(void)
+{
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_SET_CONFIG, 3, 4));
+    TEST_ASSERT_TRUE(proto_cmd_is_valid(CMD_SET_CONFIG, 3, 5));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_SET_CONFIG, 3, 3));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_SET_CONFIG, 3, 6));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_SET_CONFIG, PROTO_ADDR_BROADCAST, 5));
+    TEST_ASSERT_FALSE(proto_cmd_is_valid(CMD_IDENTIFY, 3, 2));   /* nur SET_CONFIG */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -108,5 +119,6 @@ int main(void)
     RUN_TEST(test_enum_assign_shape);
     RUN_TEST(test_address_range);
     RUN_TEST(test_firmware_update_commands);
+    RUN_TEST(test_set_config_optional_t_enum);
     return UNITY_END();
 }

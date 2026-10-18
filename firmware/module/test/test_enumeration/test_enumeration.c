@@ -479,6 +479,21 @@ static void test_no_unicast_response_while_enumerating(void)
     TEST_ASSERT_FALSE(enum_fsm_responds_to(&fsm, 7));
 }
 
+/* T_enum per SET_CONFIG zur Laufzeit, begrenzt wie beim Start (#39). */
+static void test_set_t_enum_runtime(void)
+{
+    enum_fsm_t f;
+    enum_fsm_init(&f, 3, 10);
+    TEST_ASSERT_EQUAL_UINT16(10000, f.t_enum_ms);
+    enum_fsm_set_t_enum(&f, 30);
+    TEST_ASSERT_EQUAL_UINT16(30000, f.t_enum_ms);
+    enum_fsm_set_t_enum(&f, 0);
+    TEST_ASSERT_EQUAL_UINT16(1000, f.t_enum_ms);
+    enum_fsm_set_t_enum(&f, 200);
+    TEST_ASSERT_EQUAL_UINT16(60000, f.t_enum_ms);
+    TEST_ASSERT_EQUAL_UINT8(3, f.address);   /* Adresse unberuehrt */
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -514,5 +529,6 @@ int main(void)
     RUN_TEST(test_take_error_reports_once);
     RUN_TEST(test_responds_to_broadcast_always);
     RUN_TEST(test_no_unicast_response_while_enumerating);
+    RUN_TEST(test_set_t_enum_runtime);
     return UNITY_END();
 }

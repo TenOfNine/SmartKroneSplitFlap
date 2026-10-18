@@ -42,6 +42,11 @@ void enum_fsm_init(enum_fsm_t *fsm, uint8_t eeprom_address, uint8_t t_enum_secon
     }
 }
 
+void enum_fsm_set_t_enum(enum_fsm_t *fsm, uint8_t t_enum_seconds)
+{
+    fsm->t_enum_ms = clamp_t_enum_ms(t_enum_seconds);
+}
+
 /* Rueckfall nach Abschnitt 4.5.2: gueltige EEPROM-Adresse -> diese,
  * sonst Serviceadresse 250. */
 static void apply_fallback(enum_fsm_t *fsm)

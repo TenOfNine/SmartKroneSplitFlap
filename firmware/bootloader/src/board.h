@@ -21,8 +21,9 @@
  * Bootloader erhoehen (erreicht die Karten nur per UPDI-Werksflash).
  *   1  bis v1.15 (inkl. DI-Pin-Fix 3d65464)
  *   2  App-Gueltigkeit nach Abbruch, wiederaufsetzbare Uebertragung, TCB0-Zeitbasis
- *   3  Antwortverzug 500 us statt 200 us (#52) */
-#define BL_VERSION        3u
+ *   3  Antwortverzug 500 us statt 200 us (#52)
+ *   4  Parser setzt nach CRC-/Laengenfehlern neu auf, Rahmenfehler verworfen (#56) */
+#define BL_VERSION        4u
 
 /* --- Flash-Aufteilung (Fuse BOOTEND = 0x0C) ---------------------- */
 #ifndef BOOT_APP_BASE

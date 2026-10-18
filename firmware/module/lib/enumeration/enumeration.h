@@ -71,6 +71,10 @@ typedef struct {
  */
 void enum_fsm_init(enum_fsm_t *fsm, uint8_t eeprom_address, uint8_t t_enum_seconds);
 
+/* T_enum zur Laufzeit aendern (SET_CONFIG mit fuenftem Byte, #39); wird wie
+ * bei enum_fsm_init auf 1..60 s begrenzt und gilt ab dem naechsten Lauf. */
+void enum_fsm_set_t_enum(enum_fsm_t *fsm, uint8_t t_enum_seconds);
+
 /*
  * Verarbeitet einen empfangenen, CRC-geprueften Rahmen.
  *   chain_in_active   Pegel der CHAIN_IN-Leitung im Moment des Empfangs

@@ -145,6 +145,43 @@ static void test_position_store_active(void)
     TEST_ASSERT_FALSE(config_position_store_active(&c));
 }
 
+/* SET_CONFIG: nur gueltige Nutzlasten werden uebernommen (#39). */
+static void test_set_payload_valid_4_and_5_bytes(void)
+{
+    module_config_t c;
+    config_defaults(&c);
+    c.bus_address = 7;
+    const uint8_t p4[4] = { 64, 63, 60, 0x01 };
+    TEST_ASSERT_TRUE(config_apply_set_payload(&c, p4, 4));
+    expect_cfg(&c, 64, 63, 60, 0x01, 7, 10);     /* T_enum unveraendert */
+    const uint8_t p5[5] = { 80, 0, 0, 0x03, 25 };
+    TEST_ASSERT_TRUE(config_apply_set_payload(&c, p5, 5));
+    expect_cfg(&c, 80, 0, 0, 0x03, 7, 25);       /* Adresse bleibt */
+}
+
+static void test_set_payload_rejects_out_of_range(void)
+{
+    module_config_t c;
+    config_defaults(&c);
+    const module_config_t before = c;
+    const uint8_t bad[][5] = {
+        { 41, 0, 0, 0x03, 10 },     /* Blattzahl */
+        { 40, 40, 0, 0x03, 10 },    /* Offset >= Blattzahl */
+        { 40, 0, 61, 0x03, 10 },    /* Vorhalt */
+        { 40, 0, 0, 0x04, 10 },     /* reserviertes Flag-Bit 2 */
+        { 40, 0, 0, 0x80, 10 },
+        { 40, 0, 0, 0x03, 0 },      /* T_enum */
+        { 40, 0, 0, 0x03, 61 },
+    };
+    for (unsigned i = 0; i < sizeof(bad) / sizeof(bad[0]); ++i) {
+        TEST_ASSERT_FALSE(config_apply_set_payload(&c, bad[i], 5));
+        TEST_ASSERT_EQUAL_MEMORY(&before, &c, sizeof(c));
+    }
+    const uint8_t ok[5] = { 40, 0, 0, 0x03, 10 };
+    TEST_ASSERT_FALSE(config_apply_set_payload(&c, ok, 3));
+    TEST_ASSERT_FALSE(config_apply_set_payload(&c, ok, 6));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -159,5 +196,7 @@ int main(void)
     RUN_TEST(test_validate_masks_reserved_bit2);
     RUN_TEST(test_validate_converges);
     RUN_TEST(test_position_store_active);
+    RUN_TEST(test_set_payload_valid_4_and_5_bytes);
+    RUN_TEST(test_set_payload_rejects_out_of_range);
     return UNITY_END();
 }

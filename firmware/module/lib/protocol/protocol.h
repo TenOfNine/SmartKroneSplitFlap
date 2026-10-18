@@ -149,8 +149,10 @@ void proto_parser_reset(proto_parser_t *parser);
 /*
  * Fuettert ein empfangenes Byte. Bei PARSE_FRAME_OK steht der Rahmen in
  * parser->frame und der interne Zustand ist bereits fuer den naechsten Rahmen
- * zurueckgesetzt. Bei PARSE_ERR_* ebenso; der Parser synchronisiert sich dann
- * wieder auf die Praeambel.
+ * zurueckgesetzt. Bei PARSE_ERR_* sucht der Parser in den Bytes des
+ * verworfenen Rahmens (ab dem zweiten) erneut nach der Praeambel (#56):
+ * Steckt dort ein vollstaendiger gueltiger Rahmen, liefert der Aufruf
+ * PARSE_FRAME_OK, ein angefangener laeuft mit den Folgebytes weiter.
  */
 proto_parse_result_t proto_parser_feed(proto_parser_t *parser, uint8_t byte);
 

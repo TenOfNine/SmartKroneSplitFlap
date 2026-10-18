@@ -78,6 +78,20 @@ void config_to_bytes(const module_config_t *cfg, uint8_t *bytes);
  */
 bool config_validate(module_config_t *cfg);
 
+/* Nutzlast von SET_CONFIG (Spez. 5.4/6.3): Blattzahl, Offset, Vorhalt, Flags
+ * und optional als fuenftes Byte T_enum in Sekunden. */
+#define CONFIG_SET_LEN       4u
+#define CONFIG_SET_LEN_TENUM 5u
+
+/*
+ * Uebernimmt eine SET_CONFIG-Nutzlast in cfg, aber nur wenn jeder Wert im
+ * zulaessigen Bereich liegt: Blattzahl 40/64/80, Offset < Blattzahl,
+ * Vorhalt <= 60, Flags ohne Bits ausserhalb 0x03, T_enum 1..60. Busadresse
+ * und (bei 4 Byte) T_enum bleiben unveraendert. Rueckgabe false: nichts
+ * uebernommen, das Modul bestaetigt nicht (#39).
+ */
+bool config_apply_set_payload(module_config_t *cfg, const uint8_t *payload, uint8_t len);
+
 static inline bool config_flag(const module_config_t *cfg, uint8_t mask)
 {
     return (cfg->flags & mask) != 0u;

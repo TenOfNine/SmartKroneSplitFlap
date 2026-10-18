@@ -73,7 +73,10 @@ static bool recv_frame(proto_parser_t *ps, uint16_t *left_ms)
             --*left_ms;
         }
         if (USART0.STATUS & USART_RXCIF_bm) {
-            if (proto_parser_feed(ps, USART0.RXDATAL) == PARSE_FRAME_OK) {
+            /* RXDATAH vor RXDATAL; Byte mit Rahmenfehler verwerfen (#56). */
+            const uint8_t st = USART0.RXDATAH;
+            const uint8_t b = USART0.RXDATAL;
+            if (!(st & USART_FERR_bm) && proto_parser_feed(ps, b) == PARSE_FRAME_OK) {
                 return true;
             }
         }

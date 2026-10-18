@@ -87,3 +87,29 @@ bool config_validate(module_config_t *cfg)
     }
     return ok;
 }
+
+bool config_apply_set_payload(module_config_t *cfg, const uint8_t *payload, uint8_t len)
+{
+    if (len != CONFIG_SET_LEN && len != CONFIG_SET_LEN_TENUM) {
+        return false;
+    }
+    const uint8_t blattzahl = payload[0];
+    if (blattzahl != 40 && blattzahl != 64 && blattzahl != 80) {
+        return false;
+    }
+    if (payload[1] >= blattzahl || payload[2] > 60u ||
+        (payload[3] & (uint8_t)~CONFIG_FLAGS_VALID_MASK) != 0u) {
+        return false;
+    }
+    if (len == CONFIG_SET_LEN_TENUM && (payload[4] < 1u || payload[4] > 60u)) {
+        return false;
+    }
+    cfg->blattzahl = blattzahl;
+    cfg->blatt_offset = payload[1];
+    cfg->abschaltvorhalt_ms = payload[2];
+    cfg->flags = payload[3];
+    if (len == CONFIG_SET_LEN_TENUM) {
+        cfg->t_enum_s = payload[4];
+    }
+    return true;
+}
