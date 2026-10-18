@@ -43,14 +43,15 @@ mit `pcbnew`, die brauchen das System-Python (`/usr/bin/python3`).
 | `build_master_firmware.py` | `pio run -e esp32c3` + `esptool merge_bin` → `firmware/master/prebuilt/` (`factory.bin` für USB + signierte `.kota` fürs Browser-OTA + Manifest). |
 | `make_release.py` | Release-Paket: prüft Versionsgleichstand (Master, Modul, `module_fw.h`), CHANGELOG-Zeile und committete Prebuilts, legt das Tag `vMAJOR.MINOR` an. Der Tag-Push erzeugt per CI das GitHub-Release; Pages spiegelt es für die Versionsauswahl im Webflasher. |
 | `build_module_firmware.py` | baut `attiny1616` (App @ 0x0000), `attiny1616_boot` (App @ 0x0C00) und den Bootloader → `firmware/module/prebuilt/` (drei Hex + signierte `.mota` für die Bus-Verteilung). |
-| `ota_keys.py` | OTA-Signaturschlüssel: `init` (ECDSA-P-256-Paar + `lib/otaverify/ota_pubkey.h`), `pubkey`, `sign IN.bin OUT.kota`, `verify`. Privater Schlüssel nie im Repo. Siehe `docs/firmware-signing.md`. |
+| `ota_keys.py` | OTA-Signaturschlüssel: `init` (ECDSA-P-256-Paar + `lib/otaverify/ota_pubkey.h`), `pubkey`, `sign IN OUT --target master\|module --version X.Y [--raw]`, `verify` (zeigt Ziel und Version). Privater Schlüssel nie im Repo. Siehe `docs/firmware-signing.md`. |
+| `gen_ca_bundle.py` | Wurzel-CAs für den GitHub-Abruf der Zentralsteuerung → `firmware/master/src/ca_bundle.h` (Format von `WiFiClientSecure::setCACertBundle`, Quelle `certifi`). `--list` zeigt die Auswahl. Nur neu ausführen, wenn GitHub die CA wechselt. |
 
 ## Bus
 
 | Werkzeug | Zweck |
 |---|---|
 | `busctl.py` | Kommandozeilenwerkzeug für den KRONE-REW-Bus (T9). |
-| `test_busctl.py` | stdlib-`unittest` für `busctl.py` (13 Tests). |
+| `test_busctl.py` | stdlib-`unittest` für `busctl.py` plus Rahmen-Selbsttest; läuft in der CI. |
 
 ## busctl.py
 
@@ -71,6 +72,11 @@ python busctl.py --port /dev/ttyUSB0 show 13 3 40 1 1     # SET_ALL + GO
 python busctl.py --port /dev/ttyUSB0 sniff 10             # Rohrahmen mitschneiden
 python busctl.py --port /dev/ttyUSB0 version 3             # GET_VERSION (App + Bootloader)
 python busctl.py --port /dev/ttyUSB0 enterboot 3           # ENTER_BOOTLOADER
+python busctl.py --port /dev/ttyUSB0 getconfig 3           # GET_CONFIG (ab 1.19 mit T_enum)
+python busctl.py --port /dev/ttyUSB0 config 3 40 0 0 0x03 --t-enum 10   # SET_CONFIG
+python busctl.py --port /dev/ttyUSB0 ledsync               # LED_SYNC-Broadcast
+python busctl.py --port /dev/ttyUSB0 modtest 3             # Selbsttest (SELFTEST, 0 = alle)
+python busctl.py --port /dev/ttyUSB0 testresult 3          # Ergebnis (GET_TEST)
 
 # Adapter ohne automatische Sende-/Empfangsumschaltung (z. B. ein MAX485-
 # Modul mit getrennten DE/RE-Pins): DE und RE brücken, an RTS ODER DTR des

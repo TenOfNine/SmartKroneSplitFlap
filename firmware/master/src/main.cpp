@@ -56,25 +56,8 @@ extern "C" {
 #include "module_fw.h"   /* generiert von tools/build_master_firmware.py */
 #include "ota_sign.h"
 
-/* --- Hardware --------------------------------------------------------- */
-#ifndef RS485_UART_NUM
-#  define RS485_UART_NUM 1
-#endif
-#ifndef PIN_RS485_RX
-#  define PIN_RS485_RX 4
-#endif
-#ifndef PIN_RS485_TX
-#  define PIN_RS485_TX 3
-#endif
-#ifndef PIN_RS485_DE
-#  define PIN_RS485_DE 10
-#endif
-#ifndef PIN_CHAIN
-#  define PIN_CHAIN 5
-#endif
-#ifndef PIN_STATUS_LED
-#  define PIN_STATUS_LED 6
-#endif
+/* --- Hardware (Belegung und Konstanten in board.h) --------------------- */
+#include "board.h"
 
 static const uart_port_t  RS485_UART   = static_cast<uart_port_t>(RS485_UART_NUM);
 static constexpr int      RS485_RX_PIN = PIN_RS485_RX;
@@ -82,25 +65,26 @@ static constexpr int      RS485_TX_PIN = PIN_RS485_TX;
 static constexpr int      RS485_DE_PIN = PIN_RS485_DE;
 static constexpr int      CHAIN_PIN    = PIN_CHAIN;
 static constexpr int      STATUS_LED   = PIN_STATUS_LED;
-static constexpr uint32_t BUS_BAUD     = 115200;
+static constexpr uint32_t BUS_BAUD     = BUS_BAUD_RATE;
 
 /* Status-LED per Hardware-PWM (LEDC) statt Software-Bitbanging -- die
  * ESP32-loop() (WiFi/Webserver/JSON) jittert genug, dass ein per Software
  * getakteter Traeger sichtbar flackert. LEDC laeuft unabhaengig davon. */
-static constexpr uint32_t LED_PWM_HZ   = 2000;
-static constexpr uint8_t  LED_PWM_BITS = 8;
-static constexpr uint8_t  LED_PWM_DUTY = 13;   /* ~5 % von 255 */
-static constexpr uint8_t  LED_PWM_CHAN = 0;
+static constexpr uint32_t LED_PWM_HZ   = LED_PWM_HZ_VAL;
+static constexpr uint8_t  LED_PWM_BITS = LED_PWM_BITS_VAL;
+static constexpr uint8_t  LED_PWM_DUTY = LED_PWM_DUTY_VAL;
+static constexpr uint8_t  LED_PWM_CHAN = LED_PWM_CHAN_VAL;
 static bool s_led_pwm_ok = false;
 
-static const char FW_BUILD[] = __DATE__ " " __TIME__;
-/* Gemeinsame Version mit der Modul-Firmware (APP_VERSION_* in
- * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
- * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
 /* loop()-Watchdog (#40): haengt ein Durchlauf laenger, startet der Master neu.
  * OTA (laengster legitimer Vorgang) fuettert ihn je Datenblock. */
 static constexpr uint32_t LOOP_WDT_TIMEOUT_S = 30;
 
+/* Gemeinsame Version mit der Modul-Firmware (APP_VERSION_* in
+ * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
+ * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. Kein
+ * __DATE__/__TIME__ im Image: der Build ist bytegleich reproduzierbar (#43),
+ * die Zuordnung ergibt sich aus Version und Release-Tag. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
 static constexpr uint8_t FW_VERSION_MINOR = 18;
 
@@ -1183,7 +1167,7 @@ const hpct=ht?Math.round(100*(1-hf/ht)):0;
 const tc=(sys.temp_c!=null&&sys.temp_c>-40&&sys.temp_c<150)?sys.temp_c.toFixed(1)+" °C":"—";
 $("#syskv").innerHTML=`
 <dt>Hostname</dt><dd>${esc(hn)}${sys.mdns_enabled?` · <span style=color:var(--dim)>${esc(hn)}.local</span>`:""}</dd>
-<dt>Firmware</dt><dd>v${esc(sys.fw_version||"?")} <span style=color:var(--dim)>(${esc(sys.fw||"—")})</span></dd>
+<dt>Firmware</dt><dd>v${esc(sys.fw_version||"?")}</dd>
 <dt>Chip</dt><dd>ESP32-C3 · MAC ${esc(sys.mac||"—")}</dd>
 <dt>Uptime</dt><dd>${dur(sys.uptime_s)}</dd>
 <dt>CPU-Last</dt><dd>${sys.cpu_load??"—"} % <span style=color:var(--faint)>(grob, Idle-Hook)</span></dd>
@@ -1267,7 +1251,7 @@ setTimeout(()=>pollCfg(addr),400);
 async function refresh(){
 try{st=await J("/api/status")}catch(e){}
 try{sys=await J("/api/system")}catch(e){}
-$("#foot").innerHTML=`<span class="dot ${sys.ssid?"ok":"err"}"></span> ${sys.ssid?"verbunden":"kein WLAN"}<br>Uptime ${dur(sys.uptime_s)}<br>FW v${esc(sys.fw_version||"?")} (${esc((sys.fw||"").split(" ")[0])})`;
+$("#foot").innerHTML=`<span class="dot ${sys.ssid?"ok":"err"}"></span> ${sys.ssid?"verbunden":"kein WLAN"}<br>Uptime ${dur(sys.uptime_s)}<br>FW v${esc(sys.fw_version||"?")}`;
 const on=(st.modules||[]).filter(m=>m.online).length;
 $("#meta").innerHTML=`<div>Module <b>${on}/${(st.modules||[]).length}</b></div>
 <div>WLAN <b>${esc(sys.ssid||"—")}</b> · <b>${sys.rssi??"—"} dBm</b></div>
@@ -1473,9 +1457,9 @@ static void handle_system()
     d["ip"]             = WiFi.localIP().toString();
     d["rssi"]           = WiFi.isConnected() ? WiFi.RSSI() : 0;
     d["mac"]            = WiFi.macAddress();
-    d["fw"]             = FW_BUILD;
     { char v[8]; snprintf(v, sizeof(v), "%u.%u", FW_VERSION_MAJOR, FW_VERSION_MINOR);
-      d["fw_version"] = v; }
+      d["fw_version"] = v;
+      d["fw"] = v; }                    /* frueher Build-Datum; jetzt die Version (#43) */
     d["node_id"]        = cfg.node_id;
     d["time"]           = tbuf;
     d["time_src"]       = tsrc;
@@ -2917,7 +2901,8 @@ void setup()
     settings_load();
     evlog_init(&g_log);
     selftest_init(&g_selftest);
-    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "sys", "Start, Firmware %s", FW_BUILD);
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "sys", "Start, Firmware %u.%u",
+               (unsigned)FW_VERSION_MAJOR, (unsigned)FW_VERSION_MINOR);
     esp_register_freertos_idle_hook(idle_hook);
 
     WiFi.mode(WIFI_STA);

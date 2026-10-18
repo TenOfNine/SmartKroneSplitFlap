@@ -37,6 +37,10 @@ class TestFrame(unittest.TestCase):
         for cmd, addr, pl in [
             (CMD["GO"], 0, b""),
             (CMD["SET_CONFIG"], 250, bytes([40, 0, 5, 3])),
+            (CMD["SET_CONFIG"], 250, bytes([40, 0, 5, 3, 25])),   # mit T_enum (1.19)
+            (CMD["LED_SYNC"], 0, b""),
+            (CMD["SELFTEST"], 0, b""),
+            (CMD["GET_TEST"], 4, bytes([2, 40, 0x60, 0x09, 58, 63, 0])),
             (CMD["SET_ALL"], 0, bytes(range(1, 33))),
         ]:
             frames = p.feed_bytes(encode(cmd, addr, pl))

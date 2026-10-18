@@ -45,8 +45,9 @@ ADDR_SERVICE = 250
 
 CMD = {
     "SET": 0x01, "SET_ALL": 0x02, "GO": 0x03, "STOP": 0x04,
-    "GET_STATUS": 0x10, "HOME": 0x20, "SET_CONFIG": 0x30, "GET_CONFIG": 0x31,
-    "IDENTIFY": 0x40, "ENUM_RESET": 0x50, "ENUM_ASSIGN": 0x51,
+    "GET_STATUS": 0x10, "HOME": 0x20, "SELFTEST": 0x21, "GET_TEST": 0x22,
+    "SET_CONFIG": 0x30, "GET_CONFIG": 0x31,
+    "IDENTIFY": 0x40, "LED_SYNC": 0x41, "ENUM_RESET": 0x50, "ENUM_ASSIGN": 0x51,
     "ENUM_DONE": 0x52, "GET_UID": 0x53,
     # Firmware-Verteilung ueber den Bus (5.7, experimentell) -- Spiegel von
     # firmware/module/lib/protocol/protocol.h, Bootloader-Bench-Checkliste
@@ -412,9 +413,47 @@ class Bus:
         self.recv()
 
     def set_config(self, addr: int, blattzahl: int, offset: int,
-                   vorhalt: int, flags: int) -> bool:
-        self.send(CMD["SET_CONFIG"], addr, bytes([blattzahl, offset, vorhalt, flags]))
+                   vorhalt: int, flags: int, t_enum: int | None = None) -> bool:
+        """SET_CONFIG; T_enum als fuenftes Byte nur fuer Karten ab 1.19.
+        Werte ausserhalb Spez. 6.3 bestaetigt die Karte nicht."""
+        pl = [blattzahl, offset, vorhalt, flags] + ([t_enum] if t_enum is not None else [])
+        self.send(CMD["SET_CONFIG"], addr, bytes(pl))
         return any(f.cmd == CMD["SET_CONFIG"] for f in self.recv())
+
+    def get_config(self, addr: int) -> dict | None:
+        """GET_CONFIG: 4 Byte, ab 1.19 mit T_enum als fuenftem."""
+        self.send(CMD["GET_CONFIG"], addr)
+        for f in self.recv():
+            if f.cmd == CMD["GET_CONFIG"] and len(f.payload) >= 4:
+                p = f.payload
+                d = {"addr": addr, "blattzahl": p[0], "offset": p[1],
+                     "vorhalt": p[2], "flags": p[3]}
+                if len(p) >= 5:
+                    d["t_enum"] = p[4]
+                return d
+        return None
+
+    def led_sync(self) -> None:
+        """LED_SYNC-Broadcast: Blinkphase aller Karten nullen (keine Antwort)."""
+        self.send(CMD["LED_SYNC"], ADDR_BROADCAST)
+
+    def module_selftest(self, addr: int = ADDR_BROADCAST) -> None:
+        """SELFTEST (Spez. 7.3): volle Umdrehung mit Zaehlung und Zeitmessung."""
+        self.send(CMD["SELFTEST"], addr)
+        if addr != ADDR_BROADCAST:
+            self.recv()
+
+    def get_test(self, addr: int) -> dict | None:
+        """GET_TEST: Ergebnis des Selbsttests (7 Byte)."""
+        self.send(CMD["GET_TEST"], addr)
+        for f in self.recv():
+            if f.cmd == CMD["GET_TEST"] and len(f.payload) >= 7:
+                p = f.payload
+                return {"addr": addr,
+                        "zustand": {0: "nie", 1: "laeuft", 2: "fertig"}.get(p[0], p[0]),
+                        "blattzahl": p[1], "umlauf_ms": p[2] | (p[3] << 8),
+                        "blattschritt_ms": (p[4], p[5]), "fehler": p[6]}
+        return None
 
     def enumerate(self, max_modules: int = ADDR_MAX) -> list[int]:
         self.send(CMD["ENUM_RESET"], ADDR_BROADCAST)
@@ -608,6 +647,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("offset", type=int)
     p.add_argument("vorhalt", type=int)
     p.add_argument("flags", type=lambda s: int(s, 0))
+    p.add_argument("--t-enum", type=int, default=None, help="T_enum in s (1..60, Karten ab 1.19)")
+    p = sub.add_parser("getconfig", help="Konfiguration lesen (GET_CONFIG)")
+    p.add_argument("addr", type=int)
+    sub.add_parser("ledsync", help="LED_SYNC-Broadcast senden")
+    p = sub.add_parser("modtest", help="Selbsttest starten (SELFTEST, 0 = alle)")
+    p.add_argument("addr", type=int, nargs="?", default=0)
+    p = sub.add_parser("testresult", help="Selbsttest-Ergebnis lesen (GET_TEST)")
+    p.add_argument("addr", type=int)
     p = sub.add_parser("sniff", help="Rohrahmen mitschneiden")
     p.add_argument("seconds", type=float, nargs="?", default=5.0)
 
@@ -658,8 +705,20 @@ def main(argv: list[str] | None = None) -> int:
             print("STOP gesendet")
         elif args.cmd == "config":
             ok = bus.set_config(args.addr, args.blattzahl, args.offset,
-                                args.vorhalt, args.flags)
-            print("ACK" if ok else "keine Antwort")
+                                args.vorhalt, args.flags, args.t_enum)
+            print("ACK" if ok else "keine Antwort (oder Wert ausserhalb Spez. 6.3)")
+        elif args.cmd == "getconfig":
+            c = bus.get_config(args.addr)
+            print(c if c else "keine Antwort")
+        elif args.cmd == "ledsync":
+            bus.led_sync()
+            print("LED_SYNC gesendet")
+        elif args.cmd == "modtest":
+            bus.module_selftest(args.addr)
+            print("SELFTEST gesendet, Ergebnis nach einigen Sekunden mit 'testresult'")
+        elif args.cmd == "testresult":
+            r = bus.get_test(args.addr)
+            print(r if r else "keine Antwort (Karte vor 1.19?)")
         elif args.cmd == "sniff":
             for t, f in bus.sniff(args.seconds):
                 print(f"  {t:7.3f}s  {f}")

@@ -4,6 +4,7 @@ name: Pages – ESP Web Flasher
 #   https://tenofnine.github.io/SmartKroneSplitFlap/
 # Der Publish-Ordner wird aus beiden prebuilt/-Verzeichnissen zusammengestellt:
 #   Master : index.html, updi.js, manifest.json, krone-master-esp32c3.factory.bin
+#   esp-web-tools/ : ESP Web Tools (npm, Version und Pruefsumme fest, #43)
 #   Modul  : krone-daughtercard-{attiny1616,attiny1616-boot,bootloader}.hex
 #   demo/  : statische Master-Web-UI mit Beispieldaten (tools/build_webui_demo.py),
 #            https://tenofnine.github.io/SmartKroneSplitFlap/demo/
@@ -47,7 +48,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: main
           fetch-depth: 0   # Tags der Release-Staende
@@ -71,6 +72,15 @@ jobs:
           jq --arg v "$d ($sha)" '.version = $v' _site/manifest.json > _site/manifest.tmp \
             && mv _site/manifest.tmp _site/manifest.json
           echo "manifest version -> $d ($sha)"
+
+          # ESP Web Tools von dieser Seite statt von unpkg (#43): exakte Version,
+          # Pruefsumme des npm-Pakets fest; dist/web importiert nur relativ.
+          EWT=10.4.0
+          EWT_SHA256=f18da75335d2f0dca044c4bb052848c0696e7b03cc23d61d8530dd6eba0a9008
+          npm pack "esp-web-tools@$EWT" --silent
+          echo "$EWT_SHA256  esp-web-tools-$EWT.tgz" | sha256sum -c -
+          mkdir -p _ewt && tar -xzf "esp-web-tools-$EWT.tgz" -C _ewt
+          cp -r _ewt/package/dist/web _site/esp-web-tools
 
           # Statische Master-Web-UI mit Beispieldaten (aus main.cpp erzeugt)
           python3 tools/build_webui_demo.py -o _site/demo/index.html
@@ -115,10 +125,10 @@ jobs:
 
           ls -lR _site
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: _site
 
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

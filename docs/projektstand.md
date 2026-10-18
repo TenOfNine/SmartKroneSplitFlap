@@ -109,10 +109,11 @@ Nächste sinnvolle Schritte:
   `tenofnine.github.io/SmartKroneSplitFlap` (und die Web-UI-Demo unter
   `…/demo/`) erreichbar wird.
 - **OTA-Signaturschlüssel** (`docs/firmware-signing.md`): privater Schlüssel
-  liegt nur lokal unter `~/.config/krone/ota-signing.pem` — sichern und als
-  GitHub-Secret `OTA_SIGNING_KEY` hinterlegen, falls in CI signiert werden soll.
-- `docs/spezifikation.md` steht auf Version 0.16: vor jeder Änderung die
-  Änderungshistorie im Anhang D fortschreiben.
+  liegt nur lokal unter `~/.config/krone/ota-signing.pem` — sichern. Signiert
+  wird lokal beim Erzeugen der Prebuilts; die CI prüft nur und braucht kein Secret.
+- `docs/spezifikation.md`: Version steht im Dokumentkopf; vor jeder Änderung die
+  Änderungshistorie im Anhang D fortschreiben. Laufender Stand der Inbetriebnahme
+  in `docs/progress.md`, Firmware-Versionen in `firmware/CHANGELOG.md`.
 - **J1-M** (`docs/pruefpunkte-j1-buchsenleiste.md`, Issue #1): mechanische
   Kodierung der J1-Drehlage festlegen.
 - **M-1-Restpunkt:** Sichtkontrolle der U1-Einbaulage am Render durch den

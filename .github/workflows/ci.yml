@@ -7,21 +7,22 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Actions auf Commit-SHAs gepinnt (Tag als Kommentar), Schreibrechte nur im
+# Release-Job (#43).
 permissions:
-  contents: write   # fuer den Release-Job
-  actions: write    # Release-Job stoesst den Pages-Workflow an
+  contents: read
 
 jobs:
   host-tests:
     name: Host-Tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: PlatformIO-Cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.platformio
           key: pio-native-${{ hashFiles('firmware/**/platformio.ini') }}
@@ -43,12 +44,12 @@ jobs:
     name: Firmware-Builds
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: PlatformIO-Cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.platformio
           key: pio-build-${{ hashFiles('firmware/**/platformio.ini') }}
@@ -74,6 +75,14 @@ jobs:
         shell: bash
       - name: Master-Firmware (ESP32-C3)
         run: pio run -e esp32c3 -d firmware/master
+      - name: Master-Prebuilt passt zur Quelle (#43)
+        run: |
+          # Der Master-Build ist bytegleich reproduzierbar
+          # (firmware/master/scripts/reproducible.py); die .kota traegt das
+          # App-Image hinter ihrem 108-Byte-Header.
+          cmp <(tail -c +109 firmware/master/prebuilt/krone-master-esp32c3.kota) \
+              firmware/master/.pio/build/esp32c3/firmware.bin
+        shell: bash
       - name: Prebuilt-Container gegen den einkompilierten Public Key pruefen
         run: |
           pip install cryptography
@@ -81,11 +90,11 @@ jobs:
           python tools/ota_keys.py verify firmware/module/prebuilt/krone-daughtercard-attiny1616.mota
 
   hardware:
-    name: Schaltplan-ERC
+    name: Schaltplan-ERC und PCB-DRC
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: KiCad 9 + Bibliotheken + xvfb
@@ -115,8 +124,20 @@ jobs:
           --severity-error --severity-warning
           -o erc-master.rpt
           hardware/master/master.kicad_sch
+      - name: DRC Daughter Card (#43)
+        run: >
+          xvfb-run -a kicad-cli pcb drc --exit-code-violations
+          --severity-error --schematic-parity
+          -o drc-daughtercard.rpt
+          hardware/daughtercard/daughtercard.kicad_pcb
+      - name: DRC Master (#43)
+        run: >
+          xvfb-run -a kicad-cli pcb drc --exit-code-violations
+          --severity-error --schematic-parity
+          -o drc-master.rpt
+          hardware/master/master.kicad_pcb
       - if: failure()
-        run: cat erc-daughtercard.rpt erc-master.rpt || true
+        run: cat erc-daughtercard.rpt erc-master.rpt drc-daughtercard.rpt drc-master.rpt || true
       # Informativ: haengt von der genauen KiCad-Symbolbibliothek ab; ein
       # Patch-Release kann eine Neuerzeugung der krone*.kicad_sym noetig machen.
       - name: Symbolbibliotheken aktuell (informativ)
@@ -130,9 +151,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [host-tests, firmware, hardware]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write   # GitHub-Release anlegen
+      actions: write    # Pages-Workflow anstossen
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
       - name: KiCad 9 + Bibliotheken + xvfb
@@ -168,7 +192,7 @@ jobs:
             echo "Master-Update über die Web-UI: \`krone-master-esp32c3.kota\`; Module über den Bus (im Master eingebettet) oder per Werksflash."
           } > release-notes.md
           cat release-notes.md
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: Firmware ${{ github.ref_name }}
           body_path: release-notes.md

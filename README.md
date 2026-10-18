@@ -50,11 +50,11 @@ Jedes Anzeigenmodul erhält eine eigene kleine Steuerplatine, die die Hall-Impul
 |---|---|
 | Spezifikation, Schaltplan (Netzliste) | vollständig, `docs/` |
 | Schaltplan `.kicad_sch` + Footprints + PCB-Netzliste | generiert, ERC 0/0 (Daughter Card + Master) |
-| PCB-Layout `.kicad_pcb` | geroutet, DRC 0 Fehler; Daughter Card bei JLCPCB bestellt, Master als Planungsstand |
-| Modul-Firmware (ATtiny1616) | fertig, `firmware/module/` |
-| Master-Firmware (ESP32-C3 Super Mini) | fertig, `firmware/master/` — Web-Flasher siehe unten |
+| PCB-Layout `.kicad_pcb` | geroutet, DRC 0 Fehler (in der CI geprüft); Daughter Cards und Zentralsteuerung gefertigt, Inbetriebnahme am Gerät läuft (`docs/progress.md`) |
+| Modul-Firmware (ATtiny1616) | `firmware/module/`, Version siehe `firmware/CHANGELOG.md`; Bootloader für die Verteilung über den Bus |
+| Master-Firmware (ESP32-C3 Super Mini) | `firmware/master/`, Web-UI, REST, MQTT, OTA — Web-Flasher siehe unten |
 | Bus-Werkzeug | `tools/busctl.py` |
-| CI | `.github/workflows/ci.yml` |
+| CI | `.github/workflows/ci.yml`: Host-Tests, Firmware-Builds mit Abgleich der Prebuilts gegen die Quelle, ERC/DRC, Release-Paket je Tag |
 | Offene Messungen O-2, O-5, O-6 | parametrisiert, blockieren die Fertigung nicht |
 
 Der Projektstand für den Einstieg in eine neue Arbeitssitzung steht in
@@ -66,9 +66,9 @@ Der Projektstand für den Einstieg in eine neue Arbeitssitzung steht in
 bash tools/setup.sh                              # Toolchain, siehe docs/toolchain.md
 source .venv/bin/activate
 
-pio test -e native -d firmware/module            # 62 Tests
-pio test -e native -d firmware/master            # 40 Tests
-python tools/test_busctl.py                      # 13 Tests
+pio test -e native -d firmware/module            # 163 Tests
+pio test -e native -d firmware/master            # 137 Tests
+python tools/test_busctl.py                      # 16 Tests + Rahmen-Selbsttest
 python tools/gen_daughtercard_sch.py --erc --pdf --png
 ```
 
