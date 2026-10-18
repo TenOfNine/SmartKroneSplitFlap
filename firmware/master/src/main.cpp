@@ -120,6 +120,7 @@ static busmaster_t   g_bus;
 static masterapp_t   g_app;
 static evlog_t       g_log;
 static selftest_t    g_selftest;    /* Selbsttest, Spez. 7.3 (#47) */
+static uint8_t       g_max_seen_addr = 0;   /* hoechste seit dem Start bekannte Adresse (#17) */
 
 struct Settings {
     char     mqtt_host[64]  = "";
@@ -854,7 +855,9 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class="row mt"><button class=btn id=modfwall>Alle aktualisieren</button>
 <button class="btn primary" id=modfwsel disabled>Veraltete aktualisieren</button>
 <button class=btn id=modfwoff disabled>Offline erneut versuchen</button></div>
-<p class=hint style=margin-top:8px>„Alle aktualisieren" versucht nur gerade erreichbare Module. Eine Karte, die nach einem abgebrochenen Update im Bootloader hängt, antwortet auf normale Abfragen nicht und gilt daher als offline — <b>„Offline erneut versuchen"</b> spielt genau diesen Karten die Firmware trotzdem erneut ein.</p>
+<p class=hint style=margin-top:8px>„Alle aktualisieren" versucht nur gerade erreichbare Module. Eine Karte, die nach einem abgebrochenen Update im Bootloader hängt, antwortet auf normale Abfragen nicht und gilt daher als offline — <b>„Offline erneut versuchen"</b> spielt genau diesen Karten die Firmware trotzdem erneut ein. Die Liste behält seit dem Start gesehene Adressen auch nach einer Neu-Enumeration. Der Bootloader antwortet auf seiner gespeicherten Adresse; ist sie bekannt, hilft auch „Adresse direkt“.</p>
+<div class="row mt"><div class=field style=width:90px><span class=lbl>Adresse</span><input type=number id=modfwaddr min=1 max=32 value=1></div>
+<button class=btn id=modfwone style=align-self:flex-end>Adresse direkt aktualisieren</button></div>
 <div id=modfwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden"><div id=modfwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
 <p class=hint id=modfwlog style=margin-top:8px></p>
 </div>
@@ -1192,13 +1195,15 @@ $("#modfwsel").textContent=nOld?`Veraltete aktualisieren (${nOld})`:"Veraltete a
 $("#modfwoff").disabled=!_modfw.ok||nOff===0||_modfwBusy;
 $("#modfwoff").textContent=nOff?`Offline erneut versuchen (${nOff})`:"Offline erneut versuchen";
 $("#modfwall").disabled=!_modfw.ok||_modfwBusy;
+$("#modfwone").disabled=!_modfw.ok||_modfwBusy;
 }
 $("#modfwall").onclick=()=>startModFw({all:true},"alle erreichbaren Module");
 $("#modfwsel").onclick=()=>startModFw({addr:_modfw.modules.filter(m=>m.status==="outdated").map(m=>m.addr)},"veraltete Module");
 $("#modfwoff").onclick=()=>startModFw({addr:_modfw.modules.filter(m=>m.status==="offline").map(m=>m.addr)},"offline gemeldete Module (erneuter Versuch)");
+$("#modfwone").onclick=()=>{const a=+$("#modfwaddr").value;if(a>=1&&a<=32)startModFw({addr:[a]},"Adresse "+a+" (auch ohne Antwort, z. B. im Bootloader)")};
 async function startModFw(body,what){
 if(!confirm(`Firmware auf ${what} über den Bus einspielen? Die betroffenen Module sind je einige Sekunden eingefroren.`))return;
-try{await P("/api/module/update",body)}catch(e){return toast("Start fehlgeschlagen")}
+if(!await P("/api/module/update",body))return;
 _modfwBusy=true;$("#modfwbar").style.display="block";pollModFw();
 }
 async function pollModFw(){
@@ -1741,7 +1746,12 @@ static void handle_module_firmware()
     d["len"]      = g_module_img_len;
     d["busy"]     = moduleupdate_busy(&g_mu);
     JsonArray a = d["modules"].to<JsonArray>();
-    const uint8_t count = effective_module_count();
+    /* Auch Adressen, die seit dem Start schon einmal da waren: eine Karte,
+     * die im Bootloader haengt, verschwindet sonst nach einer Neu-
+     * Enumeration aus der Liste und "Offline erneut versuchen" erreicht
+     * sie nicht mehr (#17). */
+    const uint8_t count = effective_module_count() > g_max_seen_addr
+                              ? effective_module_count() : g_max_seen_addr;
     for (uint8_t i = 1; i <= count && i <= BUSMASTER_MAX_MODULES; ++i) {
         const bm_module_t *m = &g_bus.mod[i - 1];
         JsonObject o = a.add<JsonObject>();
@@ -1755,9 +1765,9 @@ static void handle_module_firmware()
                        : "outdated";
         o["status"]  = st;
     }
-    char out[1024];
-    serializeJson(d, out, sizeof(out));
-    send_json(200, out);
+    String out;
+    serializeJson(d, out);
+    send_json(200, out.c_str());
 }
 
 static void handle_module_update()
@@ -2981,6 +2991,7 @@ void loop()
     /* Feldbreite der effektiven Modulzahl nachfuehren (Enumeration / Override). */
     {
         const uint8_t eff = effective_module_count();
+        if (eff > g_max_seen_addr) g_max_seen_addr = eff;
         if (g_app.module_count != eff) {
             g_app.module_count = eff;
             g_app.have_shown = false;
