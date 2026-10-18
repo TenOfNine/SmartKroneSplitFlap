@@ -1,7 +1,11 @@
 /*
  * SerialUPDI im Browser -- schreibt die Modul-Firmware (ATtiny1616) ueber einen
- * USB-Seriell-Adapter (Web Serial API).  EXPERIMENTELL, am Geraet noch nicht
- * verifiziert.  Der abgesicherte Weg bleibt `pio run -e attiny1616 -t upload`.
+ * USB-Seriell-Adapter (Web Serial API).  Werksflash am Geraet verifiziert
+ * (10.09.2026: Chip-Erase, Geraete-ID, BOOTEND, Seitenschreiben, Verify).
+ * Seit Firmware 1.19 (#41, #48): Geraete-ID vor dem Chip-Erase, App-Marker im
+ * EEPROM erst nach erfolgreichem Verify gueltig, OSCCFG/WDTCFG geprueft,
+ * UPDI am Ende aus -- diese Schritte sind am Geraet noch nicht bestaetigt.
+ * Ausweichweg bleibt `pio run -e attiny1616 -t upload`.
  *
  * Portiert nach den Referenzimplementierungen pymcuprog (Microchip) und
  * SerialUPDI/prog.py (megaTinyCore).  Nur tinyAVR-1-Serie (NVMCTRL v0,
@@ -30,6 +34,7 @@
   const CS_ASI_SYS_STATUS = 0x0b;
 
   const CTRLB_CCDETDIS = 1 << 3; // 0x08 -- Kollisionserkennung aus (1-Draht)
+  const CTRLB_UPDIDIS = 1 << 2;  // 0x04 -- UPDI aus (wie pymcuprog leave_progmode)
   const CTRLA_IBDLY = 1 << 7;    // 0x80 -- Inter-Byte-Delay
   // CTRLA-Werte fuer den Blockschreibvorgang: GTVAL = 6 (Guard-Zeit 2 Takte)
   // plus/ohne RSD (Response Signature Disable, Bit 3). Wie SerialUPDI.
@@ -64,9 +69,19 @@
   const NVM_STATUS_WRERROR = 0x04;
 
   const SIGROW_DEVICEID = 0x1100;
+  // Fuse-Adressen und Vorgaben aus iotn1616.h (avr-libc der PlatformIO-Toolchain)
   const FUSE_BASE = 0x1280;
+  const FUSE_WDTCFG = FUSE_BASE + 0x00;    // Fuse 0, Vorgabe 0x00 (WDT per Software)
   const FUSE_BODCFG = FUSE_BASE + 0x01;    // Fuse 1
+  const FUSE_OSCCFG = FUSE_BASE + 0x02;    // Fuse 2, Vorgabe 0x02 (FREQSEL 20 MHz)
+  const FUSE_SYSCFG0 = FUSE_BASE + 0x05;   // Fuse 5, Vorgabe 0xC4 (CRC aus, UPDI-Pin, EESAVE 0)
   const FUSE_BOOTEND = FUSE_BASE + 0x08;   // Fuse 8
+  const WDTCFG_VALUE = 0x00;               // Firmware stellt den WDT selbst (board.h)
+  const OSCCFG_FREQSEL_MASK = 0x03;
+  const OSCCFG_FREQSEL_20MHZ = 0x02;       // F_CPU 20 MHz ohne Vorteiler (board.h)
+  const SYSCFG0_EESAVE = 0x01;
+  const SYSCFG0_RSTPINCFG_MASK = 0x0c;
+  const SYSCFG0_RSTPINCFG_UPDI = 0x04;
   const BOOTEND_VALUE = 0x0c;              // 0x0C * 256 = App ab 0x0C00
 
   // BODCFG-Soll-Wert, siehe ATtiny1614/1616/1617-Datenblatt (Microchip
@@ -93,6 +108,8 @@
   // (dort dasselbe Byte 8: 0x00 = Update laeuft, 0xFF/0xA5 = App gueltig).
   const EEPROM_BASE = 0x1400;
   const EE_APP_VALID = 8;
+  const EE_APP_INVALID = 0x00;   // Bootloader bleibt im Update-Wartemodus
+  const EE_APP_OK = 0xff;
 
   const ATTINY1616_ID = [0x1e, 0x94, 0x21]; // laut pymcuprog DFP + avrdude.conf
 
@@ -195,13 +212,20 @@
       this.buf = new Uint8Array(0);
     }
 
-    /* UPDI-BREAK: bei 300 Bd zwei Nullbytes -> Leitung lange genug low */
+    /* UPDI-BREAK: bei 300 Bd zwei Nullbytes -> Leitung lange genug low.
+     * Erst das Echo beider Bytes abwarten (je ~33 ms), sonst schneidet das
+     * Umschalten auf die Arbeitsbaudrate den BREAK ab (#41). */
     async sendBreak() {
       await this.reopen(BREAK_BAUD);
       await this.write(new Uint8Array([0x00, 0x00]));
-      await sleep(60);
+      try {
+        await this.read(2, 400);
+      } catch (_) {
+        await sleep(80);   // Adapter ohne Echo bei 300 Bd: Mindestdauer abwarten
+      }
       await this.reopen(BAUD);
       await sleep(2);
+      this.flush();
     }
   }
 
@@ -436,10 +460,27 @@
       return this.u.lds8(addr);
     }
 
+    /* Ein EEPROM-Byte schreiben (NVM v0 wie pymcuprog write_eeprom: Seiten-
+     * puffer leeren, Byte laden, Erase+Write; beim EEPROM betrifft das nur die
+     * geladenen Bytes) und zuruecklesen. */
+    async writeEepromByte(offset, value) {
+      await this._waitNvmReady();
+      await this.u.sts8(NVMCTRL_CTRLA, NVM_CMD_PBC);
+      await this._waitNvmReady();
+      await this.u.sts8(EEPROM_BASE + offset, value & 0xff);
+      await this.u.sts8(NVMCTRL_CTRLA, NVM_CMD_ERWP);
+      await this._waitNvmReady();
+      const got = await this.u.lds8(EEPROM_BASE + offset);
+      if (got !== (value & 0xff)) {
+        throw new Error(`EEPROM[${offset}] = 0x${hex2(got)} statt 0x${hex2(value)}`);
+      }
+    }
+
     async done() {
-      // Reset -> Anwendung startet
+      // Reset -> Anwendung startet; danach UPDI abschalten (#41)
       await this.u.stcs(CS_ASI_RESET_REQ, RESET_REQ);
       await this.u.stcs(CS_ASI_RESET_REQ, RESET_RUN);
+      await this.u.stcs(CS_CTRLB, CTRLB_UPDIDIS | CTRLB_CCDETDIS);
     }
   }
 
@@ -518,34 +559,49 @@
     const nvm = new NvmProgrammer(u, log);
 
     await t.open(BAUD);
-    try {
-      const sa = await u.initLink();
-      log(`UPDI verbunden (STATUSA=0x${hex2(sa)}).`);
-
-      await nvm.chipErase();
-      await nvm.enterProgmode();
-
+    const checkId = async () => {
       const id = await nvm.readDeviceId();
       log(`Geräte-ID: ${id.map(hex2).join(" ")}`);
       if (id[0] !== ATTINY1616_ID[0] || id[1] !== ATTINY1616_ID[1] || id[2] !== ATTINY1616_ID[2]) {
         throw new Error(
-          `kein ATtiny1616 (erwartet ${ATTINY1616_ID.map(hex2).join(" ")}). Abbruch.`
+          `kein ATtiny1616 (erwartet ${ATTINY1616_ID.map(hex2).join(" ")}). Abbruch, nichts gelöscht.`
         );
       }
+    };
+    let flashing = false;
+    try {
+      const sa = await u.initLink();
+      log(`UPDI verbunden (STATUSA=0x${hex2(sa)}).`);
 
-      // Diagnose: EEPROM-Byte 8 ("App gueltig"-Marker des Bootloaders,
-      // firmware/bootloader/src/main.c) direkt nach dem Chip-Erase auslesen.
-      // 0xFF = wirklich geloescht (vom Bootloader als "ok" behandelt), jeder
-      // andere Wert -- vor allem 0x00 ("Update laeuft") -- bedeutet, der
-      // Chip-Erase hat das EEPROM NICHT zurueckgesetzt; ein alter Marker
-      // aus einem frueheren, abgebrochenen Bus-Update wuerde dann trotz
-      // frisch und korrekt geschriebenem Flash den Bootloader weiter im
-      // Update-Wartemodus haengen lassen ("Verify gruen, Karte trotzdem tot").
+      // Geraete-ID vor dem Chip-Erase pruefen (#41): ein falscher Chip wird
+      // nicht geloescht. Nur ein gesperrter Chip (LOCKBIT) gibt die ID erst
+      // nach dem Erase preis -- das setzt diese Firmware nie.
+      const locked = ((await u.ldcs(CS_ASI_SYS_STATUS)) & SYS_STATUS_LOCKSTATUS) !== 0;
+      if (locked) {
+        log("Chip gesperrt -- ID-Prüfung erst nach dem Chip-Erase möglich.");
+      } else {
+        await nvm.enterProgmode();
+        await checkId();
+      }
+
+      await nvm.chipErase();
+      await nvm.enterProgmode();
+      if (locked) await checkId();
+
+      // Diagnose (#48): EEPROM-Byte 8 ("App gueltig"-Marker des Bootloaders)
+      // direkt nach dem Chip-Erase. Mit EESAVE = 1 bleibt das EEPROM stehen;
+      // ein alter Marker 0x00 aus einem abgebrochenen Bus-Update liesse den
+      // Bootloader trotz gruenem Verify im Update-Wartemodus haengen.
       const eeAfterErase = await u.lds8(EEPROM_BASE + EE_APP_VALID);
       log(`EEPROM[8] nach Chip-Erase: 0x${hex2(eeAfterErase)}` +
-          (eeAfterErase === 0xff ? " (geloescht, ok)" : " (!) nicht geloescht"));
+          (eeAfterErase === 0xff ? " (geloescht)" : " (nicht geloescht, EESAVE?)"));
 
       if (factory) {
+        // Bis zum erfolgreichen Verify gilt die App als ungueltig: ein Abbruch
+        // laesst den Bootloader warten, statt ein halbes Abbild zu starten (#41).
+        await nvm.writeEepromByte(EE_APP_VALID, EE_APP_INVALID);
+        flashing = true;
+
         const cur = await nvm.readFuse(FUSE_BOOTEND);
         log(`BOOTEND ist 0x${hex2(cur)} -> setze 0x${hex2(BOOTEND_VALUE)} …`);
         await nvm.writeFuse(FUSE_BOOTEND, BOOTEND_VALUE);
@@ -561,6 +617,32 @@
         await nvm.writeFuse(FUSE_BODCFG, BODCFG_VALUE);
         const chkBod = await u.lds8(FUSE_BODCFG);
         if (chkBod !== BODCFG_VALUE) throw new Error(`BODCFG-Fuse nicht gesetzt (0x${hex2(chkBod)}).`);
+
+        // Takt und Watchdog auf die Vorgaben, von denen die Firmware ausgeht
+        // (#41): 20 MHz ohne Vorteiler (sonst stimmt keine Baudrate), WDT
+        // nicht per Fuse (sonst gesperrt und mit fremder Periode).
+        const osc = await nvm.readFuse(FUSE_OSCCFG);
+        if ((osc & OSCCFG_FREQSEL_MASK) !== OSCCFG_FREQSEL_20MHZ) {
+          const want = (osc & ~OSCCFG_FREQSEL_MASK) | OSCCFG_FREQSEL_20MHZ;
+          log(`OSCCFG ist 0x${hex2(osc)} (nicht 20 MHz) -> setze 0x${hex2(want)} …`);
+          await nvm.writeFuse(FUSE_OSCCFG, want);
+          if ((await nvm.readFuse(FUSE_OSCCFG)) !== want) throw new Error("OSCCFG-Fuse nicht gesetzt.");
+        } else {
+          log(`OSCCFG 0x${hex2(osc)} (20 MHz) ok.`);
+        }
+        const wdt = await nvm.readFuse(FUSE_WDTCFG);
+        if (wdt !== WDTCFG_VALUE) {
+          log(`WDTCFG ist 0x${hex2(wdt)} -> setze 0x${hex2(WDTCFG_VALUE)} …`);
+          await nvm.writeFuse(FUSE_WDTCFG, WDTCFG_VALUE);
+          if ((await nvm.readFuse(FUSE_WDTCFG)) !== WDTCFG_VALUE) throw new Error("WDTCFG-Fuse nicht gesetzt.");
+        } else {
+          log("WDTCFG 0x00 ok.");
+        }
+        // SYSCFG0 nur lesen: RSTPINCFG weg von UPDI waere die einzige echte
+        // Aussperrfalle, EESAVE erklaert einen stehengebliebenen EEPROM-Marker.
+        const sys0 = await nvm.readFuse(FUSE_SYSCFG0);
+        log(`SYSCFG0 0x${hex2(sys0)}: Reset-Pin ${(sys0 & SYSCFG0_RSTPINCFG_MASK) === SYSCFG0_RSTPINCFG_UPDI ? "UPDI" : "(!) nicht UPDI"}, ` +
+            `EESAVE ${(sys0 & SYSCFG0_EESAVE) ? "an (EEPROM bleibt beim Erase stehen)" : "aus"}.`);
       }
 
       log("Schreibe Flash …");
@@ -568,14 +650,24 @@
       log("Verifiziere …");
       await nvm.verifyFlash(image);
 
-      // Diagnose: derselbe Marker unmittelbar vor dem Reset -- das ist der
-      // Stand, den der Bootloader beim naechsten Start tatsaechlich liest.
+      if (factory) {
+        // Erst jetzt gilt die App als gueltig (Bootloader: 0xFF/0xA5 startbar).
+        await nvm.writeEepromByte(EE_APP_VALID, EE_APP_OK);
+        flashing = false;
+      }
       const eeFinal = await u.lds8(EEPROM_BASE + EE_APP_VALID);
       log(`EEPROM[8] vor dem Neustart: 0x${hex2(eeFinal)}` +
           (eeFinal !== 0x00 ? " (App gilt als gueltig)" : " (!) App gilt als UNGUELTIG -- Karte bleibt im Bootloader"));
 
       await nvm.done();
-      log("Fertig. Die Karte startet neu.");
+      log("Fertig. Die Karte startet neu, UPDI ist aus.");
+    } catch (e) {
+      if (flashing) {
+        // Kein Reset in ein unvollstaendiges Abbild. Nach dem Aus-/Einschalten
+        // wartet ein vollstaendig geschriebener Bootloader wegen des Markers.
+        log("Abgebrochen: Karte bleibt angehalten (UPDI-Programmiermodus), App als ungueltig markiert. Erneut flashen.");
+      }
+      throw e;
     } finally {
       await t.close();
     }

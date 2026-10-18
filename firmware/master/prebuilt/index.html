@@ -443,7 +443,11 @@
       <span class="mk">Experimentell</span>
       <span>
         Der Werksflash ist <b>am Gerät verifiziert</b> (Chip-Erase,
-        Geräte-ID, Fuse- und Seitenschreiben, Bootloader→App-Übergabe).
+        Geräte-ID, Fuse- und Seitenschreiben, Bootloader→App-Übergabe; Stand
+        10.09.2026). Seit Firmware 1.19 prüft er die Geräte-ID vor dem Löschen,
+        markiert die App erst nach erfolgreichem Verify als gültig, prüft Takt-
+        und Watchdog-Fuse und schaltet UPDI am Ende ab — diese Schritte sind am
+        Gerät noch nicht bestätigt. Bitte das Protokoll aufheben.
         Web Serial ist je nach Adapter/Browser trotzdem variabel — klappt es
         nicht, bleibt <code>pio run -e attiny1616 -t upload</code> der sichere
         Weg (ab Firmware 1.16; ältere Plain-Apps vertragen die gesetzte Fuse
