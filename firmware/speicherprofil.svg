@@ -6,22 +6,22 @@
 </defs>
 <rect width="860" height="724" fill="#0b0c0e"/>
 <text x="20" y="30" font-size="19" font-weight="700" fill="#eef0f2">Firmware-Speicherprofil</text>
-<text x="20" y="49" font-size="12.5" fill="#9aa1ab">Flash-Speicherverbrauch nach Bereich, gemessen am gelinkten Firmware-Abbild · Stand 2026-10-02, nahe Commit `2e79c3e`</text>
+<text x="20" y="49" font-size="12.5" fill="#9aa1ab">Flash-Speicherverbrauch nach Bereich, gemessen am gelinkten Firmware-Abbild · Stand 2026-10-18, nahe Commit `60c1bf5`</text>
 <line x1="20" y1="60" x2="840" y2="60" stroke="#252a31"/>
 <text x="20" y="92" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700" fill="#eef0f2">Master · ESP32-C3 Super Mini</text>
 <text x="840" y="92" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">OTA-Partition 1.310.720 B</text>
-<text x="20" y="117" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">91.3 % belegt · 113.880 B frei von 1.310.720 B</text>
+<text x="20" y="117" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">91.6 % belegt · 109.628 B frei von 1.310.720 B</text>
 <rect x="20" y="124" width="820" height="26" rx="6" fill="#131519" stroke="#1c2025"/>
 <rect x="20.0" y="124" width="169.7" height="26" fill="#5b8def"/>
 <rect x="189.7" y="124" width="105.3" height="26" fill="#b07cf0"/>
 <rect x="295.0" y="124" width="75.2" height="26" fill="#35b3a3"/>
-<rect x="370.3" y="124" width="70.5" height="26" fill="#f2b03d"/>
-<rect x="440.7" y="124" width="59.1" height="26" fill="#7d8590"/>
-<rect x="499.9" y="124" width="59.0" height="26" fill="#565d67"/>
-<rect x="558.8" y="124" width="53.3" height="26" fill="#e8735c"/>
-<rect x="612.2" y="124" width="39.7" height="26" fill="#4fc0e8"/>
-<rect x="651.8" y="124" width="116.9" height="26" fill="#8a92a6"/>
-<rect x="768.8" y="124" width="71.2" height="26" fill="url(#hatch)"/>
+<rect x="370.3" y="124" width="72.5" height="26" fill="#f2b03d"/>
+<rect x="442.7" y="124" width="59.1" height="26" fill="#7d8590"/>
+<rect x="501.8" y="124" width="59.0" height="26" fill="#565d67"/>
+<rect x="560.8" y="124" width="53.3" height="26" fill="#e8735c"/>
+<rect x="614.1" y="124" width="39.7" height="26" fill="#4fc0e8"/>
+<rect x="653.8" y="124" width="117.6" height="26" fill="#8a92a6"/>
+<rect x="771.4" y="124" width="68.6" height="26" fill="url(#hatch)"/>
 <rect x="20" y="124" width="820" height="26" rx="6" fill="none" stroke="#1c2025"/>
 <rect x="20" y="156" width="11" height="11" rx="2" fill="#5b8def"/>
 <text x="38" y="166" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">WLAN-Funkstack (net80211/pp/phy/wpa)</text>
@@ -37,19 +37,19 @@
 <text x="840" y="208" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">9.2 %</text>
 <rect x="20" y="219" width="11" height="11" rx="2" fill="#f2b03d"/>
 <text x="38" y="229" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">main.cpp -- eigener Code</text>
-<text x="740" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">112.674 B</text>
-<text x="840" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">8.6 %</text>
+<text x="740" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">115.830 B</text>
+<text x="840" y="229" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">8.8 %</text>
 <rect x="20" y="240" width="11" height="11" rx="2" fill="#7d8590"/>
 <text x="38" y="250" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstiges Framework</text>
 <text x="740" y="250" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">94.510 B</text>
 <text x="840" y="250" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">7.2 %</text>
 <rect x="20" y="261" width="11" height="11" rx="2" fill="#565d67"/>
 <text x="38" y="271" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">ESP-IDF-Kern/HAL</text>
-<text x="740" y="271" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">94.249 B</text>
+<text x="740" y="271" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">94.275 B</text>
 <text x="840" y="271" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">7.2 %</text>
 <rect x="20" y="282" width="11" height="11" rx="2" fill="#e8735c"/>
 <text x="38" y="292" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstige ESP32-Sektionen (IRAM, Header, Alignment)</text>
-<text x="740" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">85.265 B</text>
+<text x="740" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">85.212 B</text>
 <text x="840" y="292" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">6.5 %</text>
 <rect x="20" y="303" width="11" height="11" rx="2" fill="#4fc0e8"/>
 <text x="38" y="313" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">WiFiManager (Captive Portal)</text>
@@ -57,27 +57,27 @@
 <text x="840" y="313" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">4.8 %</text>
 <rect x="20" y="324" width="11" height="11" rx="2" fill="#8a92a6"/>
 <text x="38" y="334" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">weitere Systemkomponenten</text>
-<text x="740" y="334" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">186.888 B</text>
+<text x="740" y="334" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">188.011 B</text>
 <text x="840" y="334" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">14.3 %</text>
 <rect x="20" y="345" width="11" height="11" rx="2" fill="none" stroke="#666e79" stroke-dasharray="2,2"/>
 <text x="38" y="355" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#666e79">frei</text>
-<text x="740" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">113.880 B</text>
-<text x="840" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">8.7 %</text>
+<text x="740" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">109.628 B</text>
+<text x="840" y="355" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">8.4 %</text>
 <line x1="20" y1="390" x2="840" y2="390" stroke="#252a31"/>
 <text x="20" y="420" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="16" font-weight="700" fill="#eef0f2">Modul · ATtiny1616</text>
 <text x="840" y="420" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">App-Sektion ab 0x0C00, 13.312 B</text>
-<text x="20" y="445" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">53.4 % belegt · 6.203 B frei von 13.312 B</text>
+<text x="20" y="445" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">54.2 % belegt · 6.091 B frei von 13.312 B</text>
 <rect x="20" y="452" width="820" height="26" rx="6" fill="#131519" stroke="#1c2025"/>
 <rect x="20.0" y="452" width="130.1" height="26" fill="#f2b03d"/>
 <rect x="150.1" y="452" width="81.7" height="26" fill="#5b8def"/>
-<rect x="231.8" y="452" width="69.0" height="26" fill="#b07cf0"/>
-<rect x="300.8" y="452" width="48.0" height="26" fill="#35b3a3"/>
-<rect x="348.8" y="452" width="31.2" height="26" fill="#7d8590"/>
-<rect x="380.0" y="452" width="24.5" height="26" fill="#565d67"/>
-<rect x="404.5" y="452" width="19.9" height="26" fill="#e8735c"/>
-<rect x="424.4" y="452" width="18.2" height="26" fill="#4fc0e8"/>
-<rect x="442.6" y="452" width="15.3" height="26" fill="#8a92a6"/>
-<rect x="457.9" y="452" width="382.1" height="26" fill="url(#hatch)"/>
+<rect x="231.8" y="452" width="69.4" height="26" fill="#b07cf0"/>
+<rect x="301.1" y="452" width="48.0" height="26" fill="#35b3a3"/>
+<rect x="349.2" y="452" width="37.7" height="26" fill="#7d8590"/>
+<rect x="386.9" y="452" width="24.5" height="26" fill="#565d67"/>
+<rect x="411.4" y="452" width="19.9" height="26" fill="#e8735c"/>
+<rect x="431.3" y="452" width="18.2" height="26" fill="#4fc0e8"/>
+<rect x="449.5" y="452" width="15.3" height="26" fill="#8a92a6"/>
+<rect x="464.8" y="452" width="375.2" height="26" fill="url(#hatch)"/>
 <rect x="20" y="452" width="820" height="26" rx="6" fill="none" stroke="#1c2025"/>
 <rect x="20" y="484" width="11" height="11" rx="2" fill="#f2b03d"/>
 <text x="38" y="494" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">main.c -- eigener Code</text>
@@ -89,16 +89,16 @@
 <text x="840" y="515" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">10.0 %</text>
 <rect x="20" y="526" width="11" height="11" rx="2" fill="#b07cf0"/>
 <text x="38" y="536" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">sonstiges</text>
-<text x="740" y="536" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">1.120 B</text>
-<text x="840" y="536" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">8.4 %</text>
+<text x="740" y="536" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">1.126 B</text>
+<text x="840" y="536" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">8.5 %</text>
 <rect x="20" y="547" width="11" height="11" rx="2" fill="#35b3a3"/>
 <text x="38" y="557" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lib/protocol (Rahmen/CRC)</text>
 <text x="740" y="557" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">780 B</text>
 <text x="840" y="557" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">5.9 %</text>
 <rect x="20" y="568" width="11" height="11" rx="2" fill="#7d8590"/>
 <text x="38" y="578" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">lib/enumeration (Adressvergabe)</text>
-<text x="740" y="578" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">506 B</text>
-<text x="840" y="578" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">3.8 %</text>
+<text x="740" y="578" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">612 B</text>
+<text x="840" y="578" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">4.6 %</text>
 <rect x="20" y="589" width="11" height="11" rx="2" fill="#565d67"/>
 <text x="38" y="599" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#eef0f2">Interrupt-Vektoren (ISR)</text>
 <text x="740" y="599" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#9aa1ab">398 B</text>
@@ -117,6 +117,6 @@
 <text x="840" y="662" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#eef0f2">1.9 %</text>
 <rect x="20" y="673" width="11" height="11" rx="2" fill="none" stroke="#666e79" stroke-dasharray="2,2"/>
 <text x="38" y="683" font-family="system-ui,-apple-system,'Segoe UI',sans-serif" font-size="12.5" fill="#666e79">frei</text>
-<text x="740" y="683" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">6.203 B</text>
-<text x="840" y="683" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">46.6 %</text>
+<text x="740" y="683" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" fill="#666e79">6.091 B</text>
+<text x="840" y="683" text-anchor="end" font-family="ui-monospace,Menlo,Consolas,monospace" font-size="12" font-weight="600" fill="#666e79">45.8 %</text>
 </svg>
