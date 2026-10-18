@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.29 |
-| Datum | 02.10.2026 |
+| Version | 0.30 |
+| Datum | 18.10.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -245,9 +245,9 @@ Die Busadresse wird ausschließlich über die CHAIN-Leitung vergeben. Ein DIP-Sc
 
 1. Master sendet `ENUM_RESET` als Broadcast. Alle Karten wechseln in den Zustand ENUMERATING, antworten nicht mehr auf ihre bisherige Adresse und ziehen CHAIN_OUT inaktiv.
 2. Master aktiviert die CHAIN-Leitung zur ersten Karte.
-3. Master sendet `ENUM_ASSIGN` mit der nächsten freien Adresse. Nur die Karte mit aktivem CHAIN_IN und ohne Laufzeitadresse übernimmt sie und bestätigt. Erst wenn das Sendeecho des ACK fehlerfrei war, schreibt sie die Adresse ins EEPROM und aktiviert CHAIN_OUT. Bleibt das ACK beim Master aus, prüft er per `PING` an die vergebene Adresse, ob sie übernommen wurde, bevor er `ENUM_ASSIGN` wiederholt (sonst würde die nächste Karte dieselbe Adresse erhalten).
+3. Master sendet `ENUM_ASSIGN` mit der nächsten freien Adresse. Nur die Karte mit aktivem CHAIN_IN und ohne Laufzeitadresse übernimmt sie und bestätigt. Erst wenn das Sendeecho des ACK fehlerfrei war, schreibt sie die Adresse ins EEPROM und aktiviert CHAIN_OUT; weicht es ab, verwirft sie die Zuweisung und bleibt in ENUMERATING, nimmt also an der Wiederholung teil. Bleibt das ACK beim Master aus, prüft er per `PING` an die vergebene Adresse, ob sie übernommen wurde, bevor er `ENUM_ASSIGN` wiederholt (sonst würde die nächste Karte dieselbe Adresse erhalten).
 4. Schritt 3 wiederholt sich, bis keine Bestätigung mehr kommt.
-5. Master sendet `ENUM_DONE` als Broadcast. Alle Karten, die noch in ENUMERATING sind, verlassen den Zustand unverzüglich.
+5. Master sendet `ENUM_DONE` als Broadcast. Alle Karten, die noch in ENUMERATING sind, verlassen den Zustand unverzüglich. Alle Karten schalten CHAIN_OUT ab – CHAIN wird nur während der Enumeration gebraucht. Bliebe es aktiv und verpasste eine Karte bei der nächsten Enumeration beide `ENUM_RESET`, sähe ihre Nachfolgerin schon beim ersten `ENUM_ASSIGN` ein aktives CHAIN_IN, und zwei Karten übernähmen dieselbe Adresse mit byte-gleichem ACK.
 
 Für zehn Karten ist die Enumeration in deutlich unter einer Sekunde abgeschlossen. Die Adresse entspricht damit der physischen Position im Anzeigenfeld, und der Master kennt die Modulanzahl ohne Konfiguration. Ein Kartentausch erfordert keinerlei Einstellung.
 
@@ -270,7 +270,7 @@ T_enum beträgt 10 s, parametrierbar von 1 bis 60 s. Wird `ENUM_DONE` empfangen,
 
 #### 4.5.3 Kollisionserkennung
 
-Da /RE fest auf GND liegt, liest jede Karte ihre eigene Sendung zurück. Weicht ein zurückgelesenes Byte vom gesendeten ab, liegt eine Kollision vor. Die Karte bricht die Sendung ab, verwirft ihre Laufzeitadresse, geht in den Zustand UNADDRESSED und merkt sich den Fehlercode 0x06. Eine doppelt vergebene Adresse meldet sich damit selbst, statt sporadisch verfälschte Antworten zu erzeugen. Damit eine einzelne Störung (etwa eine Kollision mit einer Master-Wiederholung) die Karte nicht dauerhaft taub macht, fällt sie nach T_enum ohne neue Enumeration auf ihre EEPROM-Adresse zurück (wie 4.5.2) und meldet 0x06 einmalig in Byte 3 der nächsten Statusantwort; der Master warnt in Log und Web-UI.
+Da /RE fest auf GND liegt, liest jede Karte ihre eigene Sendung zurück. Weicht ein zurückgelesenes Byte vom gesendeten ab, bricht die Karte die Sendung ab und merkt sich den Fehlercode 0x06; er erscheint einmalig in Byte 3 der nächsten Statusantwort, der Master warnt in Log und Web-UI. Eine einzelne Abweichung kann auch ein Störimpuls sein (Triac- und Motorschaltvorgänge auf dem Flachbandkabel); die Adresse bleibt dann erhalten. Erst eine zweite Abweichung ohne fehlerfreie Antwort dazwischen innerhalb von 5 s gilt als Adresskollision: Die Karte verwirft ihre Laufzeitadresse und geht in den Zustand UNADDRESSED. Eine doppelt vergebene Adresse kollidiert bei jeder Antwort und meldet sich damit weiterhin selbst. Damit die Karte nicht dauerhaft taub bleibt, fällt sie nach T_enum ohne neue Enumeration auf ihre EEPROM-Adresse zurück (wie 4.5.2). Für das ACK auf `ENUM_ASSIGN` gilt 4.5.1 Schritt 3.
 
 #### 4.5.4 Verifikationslauf
 
@@ -412,7 +412,7 @@ Bei 10 Modulen umfasst `SET_ALL` 18 Byte, `GO` 8 Byte. Ein komplettes Update bel
 
 | Parameter | Wert |
 |---|---|
-| Antwortverzug Slave, min. | 200 µs nach Rahmenende |
+| Antwortverzug Slave, min. | 500 µs nach Rahmenende (Reserve gegen die DE-Abschaltung des Masters, die der ESP32-C3 per Software in einer nicht im IRAM liegenden UART-ISR ausführt) |
 | Antwortverzug Slave, max. | 3 ms |
 | Timeout Master | 5 ms ab Ende der eigenen Anfrage (Sendeende, nicht Beginn des Schleifendurchlaufs) |
 | Guard-Zeit nach DE-Abschaltung | 100 µs |
@@ -420,6 +420,8 @@ Bei 10 Modulen umfasst `SET_ALL` 18 Byte, `GO` 8 Byte. Ein komplettes Update bel
 | Wiederholungen bei Timeout | 2, danach Modul als offline markiert; eine Wiederholung wird erst nach ≥ 1 ms Busruhe und ohne angefangenen Rahmen gesendet |
 | Sendedisziplin Master | Alle Kommandos über eine Warteschlange; gesendet wird nur ohne ausstehende Antwort und außerhalb der Enumeration |
 | Inter-Byte-Timeout Modul | 2 ms: ein angefangener Rahmen ohne Folgebyte wird verworfen |
+| Empfang Master | Bytes gehen sofort an die Software (FIFO-Schwelle 2 Byte, Timeout 1 Zeichen), damit eine laufende Antwort für die Busruhe-Prüfung sichtbar ist |
+| Echo Master | Das eigene Echo wird direkt nach dem Sendeende gegen den gesendeten Rahmen abgeglichen und verworfen; eine Abweichung zählt als Sendekollision (`tx_coll`). Den Rest des Echos löscht der Treiber bei TX_DONE |
 
 ### 5.7 Firmware-Verteilung über den Bus (experimentell)
 
@@ -513,7 +515,7 @@ Enthält das Flags-Byte Bits außerhalb 0x07 (z. B. 0xFF eines gelöschten EEPRO
 | 0x03 | Erkannte Blattzahl unplausibel | Motor aus, Fehler |
 | 0x04 | Position verloren, nicht synchronisiert | Homing anfordern |
 | 0x05 | Laufzeitüberwachung ausgelöst (> 4 s durchgehend) | Motor aus, Fehler |
-| 0x06 | Adresskollision über Sendeecho erkannt | Sendung abbrechen, Adresse verwerfen, Zustand UNADDRESSED, Mechanik unberührt; nach T_enum Rückfall auf die EEPROM-Adresse, 0x06 einmalig im Status |
+| 0x06 | Abweichung im Sendeecho erkannt | Sendung abbrechen, 0x06 einmalig im Status melden, Mechanik unberührt; Adresse verwerfen (UNADDRESSED, nach T_enum Rückfall auf die EEPROM-Adresse) erst bei der zweiten Abweichung ohne fehlerfreie Antwort dazwischen innerhalb von 5 s (4.5.3) |
 
 Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung.
 
@@ -595,7 +597,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 
 | Methode | Pfad | Funktion |
 |---|---|---|
-| GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten, erkannte Modulzahl, Enumerationsstatus) |
+| GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten sowie Busdiagnose seit Start: `rt` Wiederholungen, `to` Timeouts, `crc` CRC-Fehler, `txc` Sendekollisionen, `seen` letzte Antwort in s seit Start; erkannte Modulzahl, Enumerationsstatus) |
 | GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Zugriffsschutz (`net_scope`, `auth_on`, `ota_signed`), Modulzahl (`detected`, `field_width`, `auto_modules`, `enum_busy`), Bus-CRC-Fehler und -Timeouts, Firmware-Build |
 | GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
 | GET/POST | `/api/backup` | Vollsicherung inkl. WLAN- und Admin-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
@@ -695,6 +697,13 @@ gesendet, damit Home Assistant nach einem Neustart sofort den letzten Stand hat.
 Aktualisierung einmal je Bus-Abfragezyklus (~1 s bei zehn Modulen). `module/<n>/char`
 liefert das **dargestellte Zeichen** (`A`, `7`, `-`, `.` oder Leerzeichen), nicht
 die Blattnummer.
+
+**Busdiagnose:** Alle 60 s (mit der Statusrunde) sendet die Karte
+`<base_topic>/bus/stats` (nicht retained) als JSON mit den Gesamtzählern
+`crc`, `timeouts`, `tx_coll` und für jedes auffällige Modul `addr`, `rt`
+(Wiederholungen), `to` (Timeouts), `crc`, `txc` (Sendekollisionen), `coll`
+(gemeldete 0x06), jeweils seit Start. Passt die Liste nicht in den
+MQTT-Puffer, entfällt sie (`truncated`).
 
 Wird die Modulzahl verkleinert, löscht die Firmware die Discovery-Configs der
 entfallenen Module (leere retained Payload), damit keine Geister-Entities
@@ -912,3 +921,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.27 | 21.09.2026 | Kapitel 5.4: neues Kommando `LED_SYNC` (0x41, Broadcast, kein Payload). Der Master sendet es periodisch (~1 s); Module und Master nullen darauf ihre Status-LED-Blinkphase, damit alle LEDs im gleichen Takt blinken statt seit dem jeweils eigenen Boot-Zeitpunkt zu laufen. Reine Kosmetik, keine Auswirkung auf Mechanik, Bus-Timing oder Sicherheitsabschaltungen. Firmware v1.13 (`firmware/CHANGELOG.md`). |
 | 0.28 | 30.09.2026 | Kapitel 8.1: konkreter Trafo festgelegt (Sedlbauer RSO 825028, 100 VA, 2 × 18 V / 2,78 A, Datenblatt Stand 06/2011) statt 50 bis 80 VA; Leerlaufspannung in Reihe rund 40,6 V. Mindestausstattung der Netzseite ergänzt: Primärsicherung 0,8 A T (Herstellerangabe), NTC gegen Einschaltstrom, Varistor 275 V~ als Überspannungsschutz, Sekundärsicherung 3,15 A T. NTC-Wert und Sicherungsbauform sind Richtwerte und vor dem Kauf zu bestätigen. Keine Firmware- oder Hardware-Änderung. |
 | 0.29 | 02.10.2026 | **Review-Fixes, Firmware v1.16** (Issues #18–#43). 4.4/6.3: Flag-Bit 2 (Triac-Polarität) entfällt und ist reserviert – laut Netzliste schaltet PA7 high in beiden Zweigen den Motor ein; ungültige EEPROM-Abbilder werden auf die Vorgaben migriert. 4.5.1/4.5.3: Busadresse und CHAIN_OUT erst nach fehlerfreiem ACK-Echo; Sendung bricht bei Echo-Abweichung ab; nach einer Kollision Rückfall auf die EEPROM-Adresse nach T_enum, 0x06 einmalig im Status. 4.5.2/4.5.4: Verifikationslauf (GET_UID) und Warnung bei Serviceadresse 250 umgesetzt, Nachsondierung hinter einem Kettenende. 5.4/5.5: SET puffert nur, GO während Fahrt/Homing wird vorgemerkt, SET_CONFIG wirkt sofort (Blattzahl/Offset → 0x04, HOME nötig); Statusbyte 1 = gepuffertes Ziel. 5.6: Timeout ab Rahmenende, Wiederholung nur bei Busruhe, Sendewarteschlange, Inter-Byte-Timeout 2 ms im Modul. 5.7: Bootloader startet nach Abbruch nie die halbe App, Übertragung wiederaufsetzbar, BL-Version 2. 6.2/6.4: Positionsspeicherung nur ohne Autohoming (Ungültig-Eintrag bei Fahrtbeginn); Watchdog nur bei laufender Zeitbasis, nach WDT-Reset Start in ERROR 0x05; Plain-App setzt IVSEL bei BOOTEND≠0. 7.3/7.5: Bus und Anzeige vor dem WLAN, WLAN nicht blockierend, Portal ohne Firmware-Upload; Host-Prüfung und JSON/X-Krone-Request-Pflicht für schreibende Anfragen; Betriebsart/Text dauerhaft; Sperre während Modul-Updates. 8.2: Verpolschutz Q1 auf Rev. 0.2 wirkungslos (Einbaulage, #36). |
+| 0.30 | 18.10.2026 | **Verbindungsstabilität, Firmware v1.17** (Issues #50–#54, #21). 4.5.1: CHAIN_OUT wird bei `ENUM_DONE` abgeschaltet; eine Echo-Abweichung auf dem `ENUM_ASSIGN`-ACK führt zurück nach ENUMERATING (Teilnahme an der Wiederholung). 4.5.3/6.4: Eine einzelne Echo-Abweichung beim Antworten (Störimpuls) verwirft die Adresse nicht mehr, erst die zweite ohne fehlerfreie Antwort dazwischen innerhalb von 5 s; 0x06 wird in jedem Fall gemeldet. 5.6: Antwortverzug min. 500 µs (Master schaltet DE per Software in einer nicht im IRAM liegenden ISR ab), Master gibt Empfangsbytes sofort weiter (FIFO-Schwelle 2 Byte, Timeout 1 Zeichen) und gleicht das eigene Echo ab statt den Empfang zu löschen. 7.5/7.6: Busdiagnose je Modul in `/api/status`, `tx_coll` in `/api/system`, MQTT `bus/stats`. |

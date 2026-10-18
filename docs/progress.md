@@ -6,6 +6,19 @@ seit 19.09.2026). Die vollständige historische Aufgabenliste T1–T20 steht in
 `firmware/CHANGELOG.md`. Diese Datei ist der schnelle Überblick für die
 laufende Fehlersuche — bei jeder Sitzung oben ergänzen, nicht umschreiben.
 
+**Stand 18.10.2026 — Firmware v1.17 (Verbindungsstabilität, am Gerät noch nicht verifiziert):**
+Software-Review der Busverbindung Master ↔ Daughter Cards. Behoben: Bus-UART
+lief mit IDF-RX-Schwellen (laufende Antwort erst nach ihrem Ende sichtbar,
+Busruhe-Prüfung blind), `uart_flush_input()` nach dem Senden konnte
+Antworten anschneiden (#50, #21); eine einzelne Echo-Abweichung machte eine
+Karte 10 s taub – kritisch, sobald Motoren auf dem Flachbandkabel stören
+(#51); Antwortverzug 500 µs statt 200 µs gegen die softwaregesteuerte
+DE-Abschaltung des Masters (#52); CHAIN_OUT nach ENUM_DONE aus (#53);
+Busdiagnose je Modul in UI/API/MQTT (#54). Zurückgestellt: eigener Bus-Task
+(#55), Parser-Neuaufsatz (#56). Bootloader BL 3 wirkt nur nach Werksflash.
+Prüfschritte in #49 ergänzt (u. a. Logic Analyzer: DE-Abfall Master →
+Antwortbeginn Modul).
+
 **Stand 02.10.2026 — Firmware v1.16 (Review-Fixes, am Gerät noch nicht verifiziert):**
 Zwei unabhängige Voll-Reviews (30.09./01.10.) haben 32 Issues ergeben (#18–#49).
 Behoben in v1.16 (Details je Issue): Flag-Bit 2 hielt den Motor in IDLE/ERROR
