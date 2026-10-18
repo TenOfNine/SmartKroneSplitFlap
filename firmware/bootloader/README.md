@@ -22,7 +22,7 @@ Wiederaufsetzen) trifft `lib/fwupdate/fwboot` — hardwareunabhängig und mit
 NVMCTRL, EEPROM. Hardwarenahe Konstanten stehen ausschließlich in
 `src/board.h`.
 
-Verhalten (BL_VERSION 2):
+Verhalten (BL_VERSION 3; BL 3 = BL 2 mit 500 µs Antwortverzug):
 
 - App startbar = erstes App-Wort ≠ `0xFFFF` **und** EEPROM-Byte 8 = `0xA5`
   (Bus-Update fertig) oder `0xFF` (Werksflash).
@@ -36,7 +36,7 @@ Verhalten (BL_VERSION 2):
 - Wiederaufsetzbar: Wiederholung des letzten `FW_DATA` wird bestätigt,
   `FW_BEGIN` startet jederzeit neu, Leerlauf beendet die Übertragung nicht.
 - Nur Unicast an die eigene Adresse (ungültige EEPROM-Adresse → 250) mit
-  passender Nutzlastlänge; Antwort frühestens 200 µs nach Rahmenende.
+  passender Nutzlastlänge; Antwort frühestens 500 µs nach Rahmenende.
 - `GET_VERSION`: `[1 · 0xFF · 0xFF · flags · BL_VERSION]`, `APP_VALID` nach
   aktuellem Stand.
 

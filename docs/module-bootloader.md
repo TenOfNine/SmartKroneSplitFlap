@@ -34,7 +34,7 @@
 > zuletzt angenommenen Chunks wird quittiert, `FW_BEGIN` startet jederzeit
 > neu, der Zeitablauf wird nur von eigenen Rahmen zurückgesetzt. Er nimmt
 > nur Unicast an die eigene Adresse an (bei ungültiger EEPROM-Adresse 250),
-> wartet 200 µs vor jeder Antwort, das Startfenster dauert echte 2,5 s
+> wartet 500 µs (ab BL 3, vorher 200 µs) vor jeder Antwort, das Startfenster dauert echte 2,5 s
 > (TCB0). Als „App startbar" gelten nur die Marker 0xA5 und 0xFF. Der Master
 > wiederholt je Schritt bis zu dreimal, beginnt danach einmal neu und prüft
 > ein verlorenes `FW_END`-ACK per `GET_VERSION`. **Bootloader-Änderungen
