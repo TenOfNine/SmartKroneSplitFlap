@@ -919,6 +919,74 @@ static void test_stray_count_resets_on_motor_start(void)
     TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
 }
 
+/* --- Selbsttest (#47) ---------------------------------------------- */
+
+static void test_selftest_measures_rotation(void)
+{
+    reach_idle_at(7);
+    m.detected_blattzahl = 40;           /* Erkennung lief schon */
+    motion_selftest(&m, t);
+    TEST_ASSERT_EQUAL(MOTION_HOMING, m.state);
+    TEST_ASSERT_TRUE(m.counting);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_TEST_RUNNING, m.test_state);
+    blatt();
+    blatt();                             /* vor dem Leerbild: nicht gemessen */
+    leer();
+    const uint32_t t_leer = t;
+    for (int i = 0; i < 40; ++i) {
+        t += (i == 10) ? 75u : MOTION_TIME_PER_BLATT_MS;   /* ein langsamer Schritt */
+        TEST_ASSERT_TRUE(motion_on_blatt_pulse(&m, t));
+    }
+    t += 30u;
+    motion_on_leer_pulse(&m, t);
+    TEST_ASSERT_EQUAL(MOTION_IDLE, m.state);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_TEST_DONE, m.test_state);
+    TEST_ASSERT_EQUAL_UINT8(40, m.detected_blattzahl);
+    TEST_ASSERT_EQUAL_UINT16(t - t_leer, m.test_rot_ms);
+    TEST_ASSERT_EQUAL_UINT8(60, m.test_min_ms);
+    TEST_ASSERT_EQUAL_UINT8(75, m.test_max_ms);
+
+    uint8_t out[7];
+    motion_fill_test(&m, out);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_TEST_DONE, out[0]);
+    TEST_ASSERT_EQUAL_UINT8(40, out[1]);
+    TEST_ASSERT_EQUAL_UINT16(m.test_rot_ms, (uint16_t)(out[2] | (out[3] << 8)));
+    TEST_ASSERT_EQUAL_UINT8(60, out[4]);
+    TEST_ASSERT_EQUAL_UINT8(75, out[5]);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_ERR_NONE, out[6]);
+}
+
+static void test_selftest_without_leer_ends_with_error(void)
+{
+    reach_idle_at(3);
+    motion_selftest(&m, t);
+    advance(motion_homing_timeout_ms(&m));
+    TEST_ASSERT_EQUAL(MOTION_ERROR, m.state);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_TEST_DONE, m.test_state);
+    TEST_ASSERT_EQUAL_UINT16(0, m.test_rot_ms);
+    uint8_t out[7];
+    motion_fill_test(&m, out);
+    TEST_ASSERT_EQUAL_HEX8(MOTION_ERR_NO_LEER, out[6]);
+}
+
+static void test_selftest_stop_marks_incomplete(void)
+{
+    reach_idle_at(3);
+    motion_selftest(&m, t);
+    leer();
+    blatt();
+    motion_stop(&m, t);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_TEST_DONE, m.test_state);
+    TEST_ASSERT_EQUAL_UINT16(0, m.test_rot_ms);
+    TEST_ASSERT_FALSE(motion_triac_gate(&m));
+}
+
+static void test_selftest_state_none_after_start(void)
+{
+    motion_init(&m, &cfg, 0, t);
+    TEST_ASSERT_EQUAL_UINT8(MOTION_TEST_NONE, m.test_state);
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -977,5 +1045,9 @@ int main(void)
     RUN_TEST(test_stray_pulses_in_idle_are_error_07);
     RUN_TEST(test_sparse_stray_pulses_tolerated);
     RUN_TEST(test_stray_count_resets_on_motor_start);
+    RUN_TEST(test_selftest_measures_rotation);
+    RUN_TEST(test_selftest_without_leer_ends_with_error);
+    RUN_TEST(test_selftest_stop_marks_incomplete);
+    RUN_TEST(test_selftest_state_none_after_start);
     return UNITY_END();
 }

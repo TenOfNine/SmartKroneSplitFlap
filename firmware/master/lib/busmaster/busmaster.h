@@ -119,6 +119,14 @@ typedef struct {
     uint16_t timeouts_total;  /* Anfragen endgueltig ohne Antwort                */
     uint16_t crc_total;       /* CRC-Fehler waehrend einer Anfrage an das Modul  */
     uint32_t last_seen_ms;    /* letzte gueltige Antwort (Uhrzeit), 0 = nie      */
+    /* Selbsttest (GET_TEST, Spez. 7.3, #47) */
+    bool     test_known;      /* Antwort seit dem letzten Abruf erhalten          */
+    uint8_t  test_state;      /* 0 nie, 1 laeuft, 2 fertig                        */
+    uint8_t  test_blattzahl;  /* erkannte Blattzahl                               */
+    uint16_t test_rot_ms;     /* Leerbild bis Leerbild, 0 = nicht vollendet       */
+    uint8_t  test_min_ms;     /* kuerzester / laengster Blattabstand              */
+    uint8_t  test_max_ms;
+    uint8_t  test_error;      /* Fehlercode des Moduls beim Abruf                 */
 } bm_module_t;
 
 typedef enum {
@@ -146,6 +154,7 @@ typedef enum {
     BM_TX_UID,          /* GET_UID im Verifikationslauf                 */
     BM_TX_SERVICE,      /* PING an die Serviceadresse 250               */
     BM_TX_ENUM_PROBE,   /* PING an eine Adresse hinter dem Kettenende   */
+    BM_TX_TEST,         /* GET_TEST, Ergebnis des Selbsttests (#47)     */
 } bm_tx_kind_t;
 
 /* Eintrag der Sendewarteschlange. */
@@ -301,6 +310,11 @@ void busmaster_poll_version(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
 
 /* CMD_GET_CONFIG einreihen; die Antwort fuellt mod[addr-1].cfg_*. */
 void busmaster_poll_config(busmaster_t *bm, uint8_t addr, uint32_t now_ms);
+
+/* Selbsttest (Spez. 7.3, #47): SELFTEST an addr oder alle (Broadcast)
+ * einreihen; GET_TEST einreihen, die Antwort fuellt mod[addr-1].test_*. */
+void busmaster_selftest(busmaster_t *bm, uint8_t addr);
+void busmaster_poll_test(busmaster_t *bm, uint8_t addr);
 
 /* Versionsangabe eines Moduls verwerfen (z. B. nach einem Bus-Update), damit
  * der Abfrageplan sie neu einholt; setzt auch den Fehlversuchszaehler zurueck. */

@@ -57,6 +57,8 @@ typedef enum {
     CMD_STOP       = 0x04,
     CMD_GET_STATUS = 0x10,
     CMD_HOME       = 0x20,
+    CMD_SELFTEST   = 0x21,  /* volle Umdrehung mit Blattzaehlung und Zeitmessung (Spez. 7.3) */
+    CMD_GET_TEST   = 0x22,  /* Ergebnis des Selbsttests, 7 Byte */
     CMD_SET_CONFIG = 0x30,
     CMD_GET_CONFIG = 0x31,
     CMD_IDENTIFY   = 0x40,

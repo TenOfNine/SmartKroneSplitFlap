@@ -27,6 +27,15 @@ static void enter(motion_t *m, motion_state_t s, uint32_t now)
     }
 }
 
+/* Laufenden Selbsttest abschliessen; ohne zweites Leerbild bleibt die
+ * Umlaufzeit 0 (nicht vollendet). */
+static void test_end(motion_t *m)
+{
+    if (m->test_state == MOTION_TEST_RUNNING) {
+        m->test_state = MOTION_TEST_DONE;
+    }
+}
+
 /* Motorfehler: Motor aus, ERROR. Nach jedem Motorfehler ist die Lage nicht
  * mehr gesichert (Impulse ausgeblieben, Laufzeit ueberschritten, Blattzahl
  * falsch, Motor lief ohne Ansteuerung): nicht synchronisiert, Ist unbekannt.
@@ -40,6 +49,7 @@ static void fail(motion_t *m, uint8_t code, uint32_t now)
     m->counting = false;
     m->synced = false;
     m->current = 0;
+    test_end(m);
     enter(m, MOTION_ERROR, now);
 }
 
@@ -125,6 +135,12 @@ void motion_init(motion_t *m, const module_config_t *cfg,
     m->gate_cut_early = false;
     m->stray_count = 0;
     m->stray_since_ms = now_ms;
+    m->test_state = MOTION_TEST_NONE;
+    m->test_rot_ms = 0;
+    m->test_min_ms = 0;
+    m->test_max_ms = 0;
+    m->test_leer_ms = now_ms;
+    m->test_prev_ms = 0;
     m->last_blatt_ms = now_ms;
     /* Flanken sofort annehmen: Sperrzeit gilt erst nach einer Flanke. */
     m->blatt_edge_ms = now_ms - MOTION_DEBOUNCE_MS;
@@ -156,6 +172,7 @@ void motion_apply_config(motion_t *m, const module_config_t *cfg, uint32_t now_m
     m->blatt_offset = cfg->blatt_offset;
     m->go_pending = false;
     m->counting = false;
+    test_end(m);
     m->synced = false;
     m->current = 0;
     m->target = 0;
@@ -198,6 +215,23 @@ static void stray_pulse(motion_t *m, uint32_t now)
     }
 }
 
+/* Abstand zweier Blattimpulse waehrend der Messumdrehung erfassen. Der erste
+ * Impuls nach dem Leerbild setzt nur den Bezug (Lage zum Leerbild ist O-6). */
+static void test_interval(motion_t *m, uint32_t now)
+{
+    if (m->test_prev_ms != 0u) {
+        const uint32_t d = now - m->test_prev_ms;
+        const uint8_t v = d > 255u ? 255u : (uint8_t)d;
+        if (m->test_min_ms == 0u || v < m->test_min_ms) {
+            m->test_min_ms = v;
+        }
+        if (v > m->test_max_ms) {
+            m->test_max_ms = v;
+        }
+    }
+    m->test_prev_ms = now != 0u ? now : 1u;
+}
+
 bool motion_on_blatt_pulse(motion_t *m, uint32_t now_ms)
 {
     if (!debounced(now_ms, m->blatt_edge_ms)) {
@@ -224,6 +258,9 @@ bool motion_on_blatt_pulse(motion_t *m, uint32_t now_ms)
          * (#39). */
         if (m->seen_first_leer) {
             advance_current(m);
+            if (m->counting && m->test_state == MOTION_TEST_RUNNING) {
+                test_interval(m, now_ms);
+            }
         }
         break;
     case MOTION_IDLE:
@@ -253,6 +290,8 @@ bool motion_on_leer_pulse(motion_t *m, uint32_t now_ms)
         m->current = (uint8_t)((m->blatt_offset % m->blattzahl) + 1u);
         m->synced = true;
         m->count_value = 0;
+        m->test_leer_ms = now_ms;
+        m->test_prev_ms = 0;
         if (m->counting) {
             /* Bis zum zweiten Leerbildimpuls weiterlaufen. Eigenes Zeitfenster,
              * da eine volle Umdrehung laenger als der Homing-Timeout dauern
@@ -270,6 +309,11 @@ bool motion_on_leer_pulse(motion_t *m, uint32_t now_ms)
     m->detected_blattzahl = m->count_value;
     m->counting = false;
     m->current = (uint8_t)((m->blatt_offset % m->blattzahl) + 1u);
+    if (m->test_state == MOTION_TEST_RUNNING) {
+        const uint32_t rot = now_ms - m->test_leer_ms;
+        m->test_rot_ms = rot > 0xFFFFu ? 0xFFFFu : (uint16_t)rot;
+        test_end(m);
+    }
     if (m->detected_blattzahl != m->blattzahl) {
         fail(m, MOTION_ERR_BLATTZAHL, now_ms);
         return true;
@@ -319,6 +363,7 @@ void motion_stop(motion_t *m, uint32_t now_ms)
          * Leerbild bleibt die Karte unsynchronisiert (Ist 0), danach gilt die
          * mitgezaehlte Lage. */
         m->counting = false;
+        test_end(m);
     }
     if (m->state == MOTION_MOVING || m->state == MOTION_HOMING) {
         enter(m, MOTION_IDLE, now_ms);
@@ -329,7 +374,31 @@ void motion_home(motion_t *m, uint32_t now_ms)
 {
     m->error = MOTION_ERR_NONE;
     m->go_pending = false;
+    test_end(m);
     start_homing(m, now_ms);
+}
+
+void motion_selftest(motion_t *m, uint32_t now_ms)
+{
+    motion_home(m, now_ms);
+    m->detected_blattzahl = 0;     /* Erkennung erzwingen */
+    m->counting = true;
+    m->test_state = MOTION_TEST_RUNNING;
+    m->test_rot_ms = 0;
+    m->test_min_ms = 0;
+    m->test_max_ms = 0;
+    m->test_prev_ms = 0;
+}
+
+void motion_fill_test(const motion_t *m, uint8_t out[7])
+{
+    out[0] = m->test_state;
+    out[1] = m->detected_blattzahl;
+    out[2] = (uint8_t)(m->test_rot_ms & 0xFFu);
+    out[3] = (uint8_t)(m->test_rot_ms >> 8);
+    out[4] = m->test_min_ms;
+    out[5] = m->test_max_ms;
+    out[6] = m->error;
 }
 
 void motion_enter_error(motion_t *m, uint8_t code, uint32_t now_ms)
@@ -352,6 +421,7 @@ void motion_tick(motion_t *m, uint32_t now_ms)
                 /* Schon synchronisiert, nur die Blattzahlerkennung ist nicht
                  * fertig geworden -> mit der konfigurierten Blattzahl arbeiten. */
                 m->counting = false;
+                test_end(m);
                 enter_idle(m, now_ms);
             } else {
                 fail(m, MOTION_ERR_NO_LEER, now_ms);   /* 0x02 */

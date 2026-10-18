@@ -41,6 +41,11 @@ extern "C" {
 #define MOTION_STRAY_PULSES       3u
 #define MOTION_STRAY_WINDOW_MS    1000u
 
+/* Selbsttest (Spez. 7.3, #47): Zustand in GET_TEST-Byte 0. */
+#define MOTION_TEST_NONE     0u   /* seit dem Start nicht gelaufen */
+#define MOTION_TEST_RUNNING  1u
+#define MOTION_TEST_DONE     2u   /* Ergebnis gueltig, Umlaufzeit 0 = nicht vollendet */
+
 /* Fehlercodes, Abschnitt 6.4. */
 #define MOTION_ERR_NONE        0x00u
 #define MOTION_ERR_NO_BLATT    0x01u
@@ -89,6 +94,14 @@ typedef struct {
     bool     gate_cut_early;      /* Abschaltvorhalt hat das Gate abgeschaltet */
     uint8_t  stray_count;         /* Blattimpulse bei abgeschaltetem Motor */
     uint32_t stray_since_ms;
+
+    /* Selbsttest (#47) */
+    uint8_t  test_state;          /* MOTION_TEST_* */
+    uint16_t test_rot_ms;         /* Leerbild bis Leerbild, 0 = nicht vollendet */
+    uint8_t  test_min_ms;         /* kuerzester / laengster Abstand zweier Blattimpulse */
+    uint8_t  test_max_ms;         /* (auf 255 begrenzt) */
+    uint32_t test_leer_ms;
+    uint32_t test_prev_ms;        /* letzter gemessener Blattimpuls, 0 = keiner */
 } motion_t;
 
 /*
@@ -133,6 +146,16 @@ void motion_enter_error(motion_t *m, uint8_t code, uint32_t now_ms);
 
 /* Zeitfortschritt: Timeouts, Laufzeitueberwachung, Abschaltvorhalt. */
 void motion_tick(motion_t *m, uint32_t now_ms);
+
+/* Selbsttest (Spez. 7.3): erzwingt ein Homing mit Blattzahlerkennung und misst
+ * dabei die Umlaufzeit zwischen den beiden Leerbildern sowie den kuerzesten und
+ * laengsten Abstand zweier Blattimpulse. Endet mit dem zweiten Leerbild, einem
+ * Fehler, STOP, HOME oder einer Geometrieaenderung. */
+void motion_selftest(motion_t *m, uint32_t now_ms);
+
+/* GET_TEST-Antwort: Zustand, erkannte Blattzahl, Umlaufzeit (16 Bit, low
+ * zuerst), kuerzester und laengster Blattabstand in ms, Fehlercode. */
+void motion_fill_test(const motion_t *m, uint8_t out[7]);
 
 /* Homing-Timeout (0x02) fuer die konfigurierte Blattzahl: 4 s bei 40 Blatt,
  * 6,4 s bei 64, 8 s bei 80 (je rund 1,7 Umdrehungen). Gilt bis zum ersten

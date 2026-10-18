@@ -488,6 +488,18 @@ static void handle_frame(const proto_frame_t *f, uint32_t now)
             ack(CMD_HOME, own);
         }
         break;
+    case CMD_SELFTEST:
+        motion_selftest(&g_motion, now);
+        if (unicast) {
+            ack(CMD_SELFTEST, own);
+        }
+        break;
+    case CMD_GET_TEST: {
+        uint8_t tr[7];
+        motion_fill_test(&g_motion, tr);
+        reply(CMD_GET_TEST, own, tr, sizeof(tr));
+        break;
+    }
     case CMD_SET_CONFIG: {
         module_config_t c = g_cfg;
         if (!config_apply_set_payload(&c, f->payload, f->payload_len)) {

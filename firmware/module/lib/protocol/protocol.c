@@ -16,6 +16,8 @@ static const proto_cmd_info_t k_cmd_table[] = {
     { CMD_STOP,        "STOP",        ADDRESSING_BOTH,      0,  true  },
     { CMD_GET_STATUS,  "GET_STATUS",  ADDRESSING_UNICAST,   0,  true  },
     { CMD_HOME,        "HOME",        ADDRESSING_BOTH,      0,  true  },
+    { CMD_SELFTEST,    "SELFTEST",    ADDRESSING_BOTH,      0,  true  },
+    { CMD_GET_TEST,    "GET_TEST",    ADDRESSING_UNICAST,   0,  true  },
     { CMD_SET_CONFIG,  "SET_CONFIG",  ADDRESSING_UNICAST,   4,  true  },
     { CMD_GET_CONFIG,  "GET_CONFIG",  ADDRESSING_UNICAST,   0,  true  },
     { CMD_IDENTIFY,    "IDENTIFY",    ADDRESSING_UNICAST,   1,  true  },

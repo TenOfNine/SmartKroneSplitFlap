@@ -50,6 +50,7 @@ extern "C" {
 #include "moduleupdate.h"
 #include "otaverify.h"
 #include "protocol.h"
+#include "selftest.h"
 }
 #include "module_fw.h"   /* generiert von tools/build_master_firmware.py */
 #include "ota_sign.h"
@@ -118,6 +119,7 @@ static PubSubClient  mqtt(net);
 static busmaster_t   g_bus;
 static masterapp_t   g_app;
 static evlog_t       g_log;
+static selftest_t    g_selftest;    /* Selbsttest, Spez. 7.3 (#47) */
 
 struct Settings {
     char     mqtt_host[64]  = "";
@@ -725,6 +727,11 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <th>Erk.&nbsp;Blatt</th><th>FW</th><th>Verpasst</th><th title="seit Start: Wiederholungen / Timeouts / CRC-Fehler / vom Modul gemeldete Kollisionen (0x06)">Bus&nbsp;W/T/C/K</th><th></th></tr></thead>
 <tbody id=modtb></tbody></table></div>
 <p class=hint>Ist/Ziel als Blattnummer und Zeichen. „Verpasst" = ausgebliebene Statusantworten in Folge (ab 3 gilt das Modul als offline).</p>
+<div class=sect style=margin-top:18px><div class=row style=justify-content:space-between><h3 style=margin:0>Selbsttest</h3>
+<button class="btn sm" id=stbtn>Selbsttest starten</button></div>
+<p class=hint>Jedes Modul fährt eine volle Umdrehung, zählt die Blätter zwischen zwei Leerbildern und misst die Umlaufzeit (Soll 60 ms je Blatt, ±20 %; kein Blattschritt über 120 ms). Danach fährt die Anzeige wieder ihren Inhalt an. Karten vor Firmware 1.19 antworten nicht.</p>
+<div class=tw id=stbox hidden><table><thead><tr><th>Adr</th><th>Ergebnis</th><th>Blätter</th><th>Umlauf (ms)</th><th>Blattschritt min/max (ms)</th><th>Fehler</th></tr></thead>
+<tbody id=sttb></tbody></table></div></div>
 </section>
 
 <section class=view data-v=log>
@@ -926,9 +933,21 @@ $("#sendbtn").onclick=async()=>{if(await P("/api/text",{text:$("#txt").value,ali
 function sendMode(m){P("/api/mode",{mode:m,sep:cfg.sep||".",align:+($("#alignseg .on")?.dataset.a||1)});toast("Modus: "+m)}
 $("#quick").onclick=e=>{const b=e.target.closest("button");if(!b)return;const q=b.dataset.q;
 if(q==="home"){P("/api/home",{});toast("HOME an alle")}
-else if(q==="selftest"){P("/api/selftest",{});toast("Selbsttest")}
+else if(q==="selftest"){startSelftest()}
 else if(q==="stop"){P("/api/module",{addr:0,action:"stop"});toast("STOP an alle")}
 else if(q==="wifi")show("set")};
+
+// ── Selbsttest (#47) ──
+const STTXT={ok:"in Ordnung",keine_antwort:"keine Antwort",unvollstaendig:"keine volle Umdrehung",blattzahl:"Blattzahl falsch",timing:"Zeit weicht ab",nicht_getestet:"läuft …"};
+async function startSelftest(){if(await P("/api/selftest",{})){toast("Selbsttest gestartet");setTimeout(pollSelftest,1500)}}
+$("#stbtn").onclick=startSelftest;
+async function pollSelftest(){let d;try{d=await J("/api/selftest")}catch(e){return}
+if(!d.modules||!d.modules.length)return;
+$("#stbox").hidden=false;$("#stbtn").disabled=d.running;
+$("#sttb").innerHTML=d.modules.map(m=>{const ok=m.res==="ok",run=d.running&&m.res==="nicht_getestet";
+const pill=run?`<span class="pill warn"><i></i>läuft</span>`:`<span class="pill ${ok?"ok":"err"}"><i></i>${esc(STTXT[m.res]||m.res)}</span>`;
+return `<tr><td class=mono>${m.addr}</td><td>${pill}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.rot||"–"}</td><td class=mono>${m.max?m.min+" / "+m.max:"–"}</td><td>${m.err?"0x0"+m.err+" · "+esc(ERRTXT[m.err]||""):"–"}</td></tr>`}).join("");
+if(d.running)setTimeout(pollSelftest,1000)}
 
 function flapCls(m){if(!m.online)return"of";if(m.state===3)return"er";if(m.state===2)return"mv";if(m.state===1)return"hm";return""}
 function renderDash(){
@@ -1231,7 +1250,7 @@ $("#meta").innerHTML=`<div>Module <b>${on}/${(st.modules||[]).length}</b></div>
 <div>MQTT <b>${sys.mqtt_enabled?(sys.mqtt_connected?"verbunden":"getrennt"):"aus"}</b></div>
 <div>NTP <b>${st.time_valid?"gültig":"—"}</b></div>`;
 if(VIEW==="dash")renderDash();
-if(VIEW==="mods")renderMods();
+if(VIEW==="mods"){renderMods();if($("#stbox").hidden&&!pollSelftest.once){pollSelftest.once=1;pollSelftest()}}
 if(VIEW==="set")renderSys();
 if(st.modules&&!textPending&&$("#modeseg .on").dataset.m!==st.mode){
 $$("#modeseg button").forEach(x=>x.classList.toggle("on",x.dataset.m===st.mode));
@@ -1531,11 +1550,72 @@ static void handle_home()
     ok_json();
 }
 
+/* Selbsttest (Spez. 7.3, #47): POST startet, GET liefert Stand/Ergebnis. */
+static bool selftest_begin(const char *who)
+{
+    if (busmaster_enum_busy(&g_bus) ||
+        !selftest_start(&g_selftest, &g_bus, effective_module_count(), millis())) {
+        return false;
+    }
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "test", "Selbsttest gestartet (%s)", who);
+    return true;
+}
+
 static void handle_selftest()
 {
+    if (web.method() == HTTP_GET) {
+        static char out[64 + BUSMASTER_MAX_MODULES * 112];
+        if (selftest_json(&g_selftest, &g_bus, out, sizeof(out)) == 0) {
+            send_json(500, "{\"error\":\"buf\"}");
+            return;
+        }
+        send_json(200, out);
+        return;
+    }
     if (!write_allowed() || !mu_free()) return;
-    busmaster_home(&g_bus, PROTO_ADDR_BROADCAST);
+    if (!selftest_begin("Web/REST")) {
+        send_json(409, "{\"error\":\"Selbsttest laeuft, Enumeration aktiv oder keine Module\"}");
+        return;
+    }
     ok_json();
+}
+
+static String topic(const char *suffix);   /* Definition im MQTT-Abschnitt */
+
+/* Abschluss: je Modul eine Logzeile, Zusammenfassung per MQTT. */
+static void selftest_report()
+{
+    unsigned bad = 0;
+    for (uint8_t i = 0; i < g_selftest.count; ++i) {
+        const bm_module_t &m = g_bus.mod[i];
+        const selftest_result_t r = (selftest_result_t)g_selftest.result[i];
+        if (r != ST_RES_OK) bad++;
+        evlog_push(&g_log, uptime_ms(), r == ST_RES_OK ? EVLOG_INFO : EVLOG_WARN, "test",
+                   "Adr %u: %s, %u Blatt, Umlauf %u ms, Schritt %u..%u ms, Fehler 0x%02X",
+                   (unsigned)(i + 1u), selftest_result_name(r), (unsigned)m.test_blattzahl,
+                   (unsigned)m.test_rot_ms, (unsigned)m.test_min_ms, (unsigned)m.test_max_ms,
+                   (unsigned)m.test_error);
+    }
+    evlog_push(&g_log, uptime_ms(), bad ? EVLOG_WARN : EVLOG_INFO, "test",
+               "Selbsttest beendet: %u von %u Modulen in Ordnung",
+               (unsigned)(g_selftest.count - bad), (unsigned)g_selftest.count);
+    if (mqtt.connected()) {
+        /* knapp halten (MQTT-Puffer 1 KiB): Zahlen plus die auffaelligen Module */
+        JsonDocument d;
+        d["ok"]    = g_selftest.count - bad;
+        d["total"] = g_selftest.count;
+        JsonArray a = d["bad"].to<JsonArray>();
+        for (uint8_t i = 0; i < g_selftest.count; ++i) {
+            const selftest_result_t r = (selftest_result_t)g_selftest.result[i];
+            if (r == ST_RES_OK) continue;
+            JsonObject o = a.add<JsonObject>();
+            o["addr"] = i + 1;
+            o["res"]  = selftest_result_name(r);
+        }
+        String out;
+        serializeJson(d, out);
+        mqtt.publish(topic("selftest/result").c_str(), out.c_str(), false);
+    }
 }
 
 /* Zahlfeld aus dem JSON lesen und gegen [lo, hi] pruefen. */
@@ -2321,6 +2401,7 @@ static void web_begin()
     web.on("/api/mode",      HTTP_POST, guard(handle_mode));
     web.on("/api/home",      HTTP_POST, guard(handle_home));
     web.on("/api/selftest",  HTTP_POST, guard(handle_selftest));
+    web.on("/api/selftest",  HTTP_GET,  guard(handle_selftest));
     web.on("/api/module",    HTTP_POST, guard(handle_module));
     web.on("/api/module/config", HTTP_GET, guard(handle_module_config));
     web.on("/api/enumerate", HTTP_POST, guard(handle_enumerate));
@@ -2424,7 +2505,7 @@ static void mqtt_callback(char *t, uint8_t *payload, unsigned int len)
     } else if (tp == topic("home/press")) {
         busmaster_home(&g_bus, PROTO_ADDR_BROADCAST);
     } else if (tp == topic("selftest/press")) {
-        busmaster_home(&g_bus, PROTO_ADDR_BROADCAST);
+        if (!moduleupdate_busy(&g_mu)) (void)selftest_begin("MQTT");
     }
 }
 
@@ -2780,6 +2861,7 @@ void setup()
     Serial.begin(115200);
     settings_load();
     evlog_init(&g_log);
+    selftest_init(&g_selftest);
     evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "sys", "Start, Firmware %s", FW_BUILD);
     esp_register_freertos_idle_hook(idle_hook);
 
@@ -2866,6 +2948,9 @@ void loop()
         }
     } else {
         busmaster_tick(&g_bus, bus_now);
+        if (selftest_tick(&g_selftest, &g_bus, bus_now)) {
+            selftest_report();
+        }
     }
     /* g_bus.mod[].ver_known bleibt sonst fuer immer auf dem zuerst gelernten
      * Stand stehen (busmaster.h: "0 = unbekannt", danach nie zurueckgesetzt

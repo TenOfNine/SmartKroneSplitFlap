@@ -238,9 +238,11 @@ static bm_tx_kind_t kind_for(uint8_t cmd, uint8_t addr)
     case CMD_GET_VERSION: return BM_TX_VERSION;
     case CMD_GET_CONFIG:  return BM_TX_CONFIG;
     case CMD_GET_UID:     return BM_TX_UID;
+    case CMD_GET_TEST:    return BM_TX_TEST;
     case CMD_SET:
     case CMD_STOP:
     case CMD_HOME:
+    case CMD_SELFTEST:
     case CMD_IDENTIFY:
     case CMD_SET_CONFIG:  return BM_TX_ACK;
     default:              return BM_TX_NONE;
@@ -582,6 +584,8 @@ static bool frame_matches(const busmaster_t *bm, const proto_frame_t *f)
                f->payload_len >= 1u;
     case BM_TX_ENUM_PROBE:
         return f->cmd == CMD_PING && f->addr == a && f->payload_len >= 1u;
+    case BM_TX_TEST:
+        return f->cmd == CMD_GET_TEST && f->addr == a && f->payload_len >= 7u;
     case BM_TX_NONE:
     default:
         return false;
@@ -600,7 +604,7 @@ static void complete(busmaster_t *bm, const proto_frame_t *f, uint32_t now)
         if (f != NULL) {
             m->last_seen_ms = now;
         } else if (kind == BM_TX_STATUS || kind == BM_TX_VERSION || kind == BM_TX_CONFIG ||
-                   kind == BM_TX_ACK || kind == BM_TX_UID) {
+                   kind == BM_TX_ACK || kind == BM_TX_UID || kind == BM_TX_TEST) {
             sat_inc16(&m->timeouts_total);
         }
     }
@@ -724,6 +728,20 @@ static void complete(busmaster_t *bm, const proto_frame_t *f, uint32_t now)
         }
         break;
     }
+
+    case BM_TX_TEST:
+        if (f == NULL) {
+            bm->timeouts++;   /* ohne Offline-Zaehlung; Karte vor 1.19 kennt GET_TEST nicht */
+        } else if (m != NULL) {
+            m->test_state     = f->payload[0];
+            m->test_blattzahl = f->payload[1];
+            m->test_rot_ms    = (uint16_t)(f->payload[2] | (f->payload[3] << 8));
+            m->test_min_ms    = f->payload[4];
+            m->test_max_ms    = f->payload[5];
+            m->test_error     = f->payload[6];
+            m->test_known     = true;
+        }
+        break;
 
     case BM_TX_ENUM_PROBE:
         if (f != NULL && addr >= PROTO_ADDR_MIN && addr <= BUSMASTER_MAX_MODULES) {
@@ -1006,6 +1024,29 @@ void busmaster_poll_config(busmaster_t *bm, uint8_t addr, uint32_t now_ms)
         return;
     }
     (void)q_push(bm, CMD_GET_CONFIG, addr, NULL, 0, 0);
+}
+
+void busmaster_selftest(busmaster_t *bm, uint8_t addr)
+{
+    if (addr != PROTO_ADDR_BROADCAST && !valid_unicast(addr)) {
+        return;
+    }
+    for (uint8_t i = 0; i < BUSMASTER_MAX_MODULES; ++i) {
+        if (addr == PROTO_ADDR_BROADCAST || addr == i + 1u) {
+            bm->mod[i].test_known = false;
+            bm->mod[i].rc_tries = 0;      /* danach das Soll wieder anfahren */
+            bm->mod[i].rc_stopped = false;
+        }
+    }
+    (void)q_push(bm, CMD_SELFTEST, addr, NULL, 0, 0);
+}
+
+void busmaster_poll_test(busmaster_t *bm, uint8_t addr)
+{
+    if (!valid_unicast(addr)) {
+        return;
+    }
+    (void)q_push(bm, CMD_GET_TEST, addr, NULL, 0, 0);
 }
 
 void busmaster_invalidate_version(busmaster_t *bm, uint8_t addr)
