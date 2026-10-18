@@ -76,7 +76,7 @@
  * und firmware/CHANGELOG.md fortschreiben (siehe dort). */
 #define FW_VERSION        1u
 #define APP_VERSION_MAJOR 1u
-#define APP_VERSION_MINOR 18u
+#define APP_VERSION_MINOR 19u
 
 /* --- kleine Pin-Helfer ------------------------------------------- */
 static inline void pin_high(PORT_t *port, uint8_t bm) { port->OUTSET = bm; }

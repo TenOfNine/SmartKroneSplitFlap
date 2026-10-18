@@ -69,7 +69,7 @@ Hardwareunabhängige C-Bibliothek unter `firmware/module/lib/`:
 
 Zustandsautomat nach Kapitel 6 der Spezifikation. USART im RS-485-Modus über XDIR. Impulsauswertung auf **fallende** Flanke mit 20 ms Sperrzeit. Automatische Blattzahlerkennung. Abschaltvorhalt, Blatt-Offset und Triac-Polarität als EEPROM-Parameter. Watchdog und Laufzeitüberwachung.
 
-**Fertig, wenn:** `pio run` fehlerfrei kompiliert und der Flash-Verbrauch unter 8 KB liegt.
+**Fertig, wenn:** `pio run` fehlerfrei kompiliert und der Flash-Verbrauch unter 8 KB liegt. *(Erfüllt bis 1.18. Seit dem Bootloader (5.7) gilt als Grenze der Platz hinter der Boot-Sektion, 13 312 B (`APP_MAX`); ab 1.19 – Selbsttest, Fehlercode 0x07, Parser-Neuaufsatz – liegt die App bei rund 8,6 KB, die CI prüft die 13 312 B.)*
 
 ---
 

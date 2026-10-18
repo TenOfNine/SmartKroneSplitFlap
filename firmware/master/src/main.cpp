@@ -86,7 +86,7 @@ static constexpr uint32_t LOOP_WDT_TIMEOUT_S = 30;
  * __DATE__/__TIME__ im Image: der Build ist bytegleich reproduzierbar (#43),
  * die Zuordnung ergibt sich aus Version und Release-Tag. */
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
-static constexpr uint8_t FW_VERSION_MINOR = 18;
+static constexpr uint8_t FW_VERSION_MINOR = 19;
 
 /* --- Zustand -------------------------------------------------------- */
 

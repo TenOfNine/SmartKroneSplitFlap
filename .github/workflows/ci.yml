@@ -57,10 +57,12 @@ jobs:
       - run: pip install platformio==6.1.19   # gepinnt wie lokal (#43)
       - name: Modul-Firmware (ATtiny1616)
         run: pio run -e attiny1616 -d firmware/module
-      - name: Flash-Verbrauch < 8 KB
-        run: python tools/check_flash.py firmware/module/.pio/build/attiny1616/firmware.elf 8192
       - name: Modul-Firmware hinter Bootloader (attiny1616_boot)
         run: pio run -e attiny1616_boot -d firmware/module
+      - name: App passt hinter den Bootloader (< 13 312 B, APP_MAX)
+        # Frueher 8 KB (T7-Abnahmekriterium); verbindlich ist der Platz ab
+        # 0x0C00 bis Flash-Ende (firmware/bootloader/src/board.h APP_MAX).
+        run: python tools/check_flash.py firmware/module/.pio/build/attiny1616_boot/firmware.elf 13312
       - name: Modul-Bootloader (< 3 KiB Boot-Sektion)
         run: |
           pio run -e bootloader -d firmware/bootloader
