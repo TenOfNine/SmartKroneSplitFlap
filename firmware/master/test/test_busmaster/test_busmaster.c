@@ -324,6 +324,47 @@ static void test_status_timeout_retries_then_offline(void)
     TEST_ASSERT_FALSE(bm.mod[0].online);
 }
 
+/* Diagnose je Modul (#54): Wiederholungen, Timeouts, CRC, zuletzt gesehen. */
+static void test_per_module_diagnostics(void)
+{
+    poll_and_time_out(2, 0);
+    TEST_ASSERT_EQUAL_UINT16(2, bm.mod[1].retries_total);
+    TEST_ASSERT_EQUAL_UINT16(1, bm.mod[1].timeouts_total);
+    TEST_ASSERT_EQUAL_UINT32(0, bm.mod[1].last_seen_ms);
+
+    /* verfaelschte Antwort waehrend einer Anfrage an Adresse 2 */
+    busmaster_poll_status(&bm, 2, 100);
+    const uint8_t st[8] = { 5, 9, 0, 0, 40, 0, 0, 1 };
+    proto_frame_t f = { .cmd = CMD_GET_STATUS, .addr = 2, .payload_len = 8 };
+    memcpy(f.payload, st, 8);
+    uint8_t buf[PROTO_MAX_FRAME];
+    const size_t n = proto_encode(&f, buf, sizeof(buf));
+    buf[n - 1] ^= 0x01u;                          /* CRC kaputt */
+    for (size_t i = 0; i < n; ++i) busmaster_on_rx_byte(&bm, buf[i], 101);
+    TEST_ASSERT_EQUAL_UINT16(1, bm.mod[1].crc_total);
+    TEST_ASSERT_TRUE(bm.awaiting);
+    inject(CMD_GET_STATUS, 2, st, 8, 102);
+    TEST_ASSERT_FALSE(bm.awaiting);
+    TEST_ASSERT_EQUAL_UINT32(102, bm.mod[1].last_seen_ms);
+    TEST_ASSERT_EQUAL_UINT16(1, bm.mod[1].timeouts_total);   /* unveraendert */
+
+    /* andere Module unberuehrt */
+    TEST_ASSERT_EQUAL_UINT16(0, bm.mod[0].retries_total);
+    TEST_ASSERT_EQUAL_UINT16(0, bm.mod[0].crc_total);
+}
+
+static void test_tx_collision_counted_per_module(void)
+{
+    busmaster_note_tx_collision(&bm, 3);
+    busmaster_note_tx_collision(&bm, PROTO_ADDR_BROADCAST);
+    busmaster_note_tx_collision(&bm, PROTO_ADDR_SERVICE);
+    TEST_ASSERT_EQUAL_UINT32(3, bm.tx_collisions);
+    TEST_ASSERT_EQUAL_UINT16(1, bm.mod[2].tx_coll);
+    for (uint8_t i = 0; i < BUSMASTER_MAX_MODULES; ++i) {
+        if (i != 2) TEST_ASSERT_EQUAL_UINT16(0, bm.mod[i].tx_coll);
+    }
+}
+
 static void test_timeout_measured_from_tx_end_with_clock(void)
 {
     busmaster_set_clock(&bm, fake_clock, NULL);
@@ -1498,6 +1539,8 @@ int main(void)
     RUN_TEST(test_poll_status_updates_table);
     RUN_TEST(test_own_echo_does_not_swallow_response);
     RUN_TEST(test_status_timeout_retries_then_offline);
+    RUN_TEST(test_per_module_diagnostics);
+    RUN_TEST(test_tx_collision_counted_per_module);
     RUN_TEST(test_timeout_measured_from_tx_end_with_clock);
     RUN_TEST(test_rx_timestamp_from_clock);
     RUN_TEST(test_retry_deferred_while_frame_in_progress);

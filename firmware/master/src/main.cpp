@@ -233,6 +233,54 @@ static void busmaster_log_cb(void *, const char *event, uint8_t cmd, uint8_t add
            (unsigned long)real_now, (long)(real_now - now_ms));
 }
 
+/* Byte, das beim Echo-Abgleich gelesen wurde, aber nicht zum Echo gehoert;
+ * bus_pump() verarbeitet es zuerst. */
+static int16_t g_rx_pushback = -1;
+
+/*
+ * Echo des eigenen Rahmens abholen (#50). Der Transceiver liest bei /RE = GND
+ * die eigene Sendung zurueck. Mit den niedrigen RX-Schwellen (bus_begin)
+ * steht das Echo beim Ende der Sendung bis auf hoechstens das letzte Byte im
+ * Ringpuffer; den Rest loescht der IDF-Treiber im RS485-Halbduplexmodus bei
+ * TX_DONE zusammen mit dem Hardware-FIFO (TX_DONE-Zweig der UART-ISR in
+ * libdriver.a: uart_hal_rxfifo_rst, dann sw_rts = DE aus). Ein Modul
+ * antwortet fruehestens 500 us nach Rahmenende -- was jetzt gepuffert ist,
+ * ist Echo. Abgleich Byte fuer Byte; das erste abweichende Byte gehoert nicht
+ * zum Echo und geht an den Empfang. Weicht es mitten im Rahmen ab, hat
+ * waehrend der eigenen Sendung jemand anderes getrieben (Sendekollision).
+ * Ersetzt den frueheren uart_flush_input(), der den Anfang einer Antwort
+ * mitloeschen konnte, wenn loop() nach dem Senden verdraengt wurde.
+ */
+static void bus_take_echo(const uint8_t *data, size_t len)
+{
+    size_t avail = 0;
+    if (uart_get_buffered_data_len(RS485_UART, &avail) != ESP_OK) {
+        return;
+    }
+    if (avail > len) {
+        avail = len;
+    }
+    for (size_t i = 0; i < avail; ++i) {
+        uint8_t b;
+        if (uart_read_bytes(RS485_UART, &b, 1, 0) != 1) {
+            return;
+        }
+        if (b == data[i]) {
+            continue;
+        }
+        g_rx_pushback = b;
+        /* Fehlendes Echo-Ende (vom Treiber geloescht) gefolgt vom Beginn einer
+         * Antwort ist keine Kollision. */
+        const bool reply_start = (b == PROTO_PREAMBLE_0) && (i + 2u >= len);
+        if (!reply_start) {
+            busmaster_note_tx_collision(&g_bus, len > 4u ? data[4] : 0u);
+            dbg_log("[bus] Sendekollision: Echo-Byte %u ist 0x%02X statt 0x%02X",
+                    (unsigned)i, b, data[i]);
+        }
+        return;
+    }
+}
+
 static void bus_tx(void *, const uint8_t *data, size_t len)
 {
     if (cfg.debug_enabled) {
@@ -245,7 +293,7 @@ static void bus_tx(void *, const uint8_t *data, size_t len)
     }
     uart_write_bytes(RS485_UART, reinterpret_cast<const char *>(data), len);
     uart_wait_tx_done(RS485_UART, pdMS_TO_TICKS(20));
-    uart_flush_input(RS485_UART);
+    bus_take_echo(data, len);
 }
 
 static void bus_begin()
@@ -263,6 +311,13 @@ static void bus_begin()
     uart_param_config(RS485_UART, &uc);
     uart_set_pin(RS485_UART, RS485_TX_PIN, RS485_RX_PIN, RS485_DE_PIN, UART_PIN_NO_CHANGE);
     uart_set_mode(RS485_UART, UART_MODE_RS485_HALF_DUPLEX);
+    /* Empfangene Bytes sofort an die Software geben (#50). Mit den IDF-
+     * Vorgaben (120 Byte FIFO bzw. 10 Zeichenzeiten Pause) waere eine
+     * laufende Antwort erst nach ihrem Ende sichtbar und die Busruhe-
+     * Pruefung des busmaster blind. Werte wie uartSetFastReading() im
+     * Arduino-Kern (esp32-hal-uart.c). */
+    uart_set_rx_full_threshold(RS485_UART, 2);
+    uart_set_rx_timeout(RS485_UART, 1);
 
     pinMode(CHAIN_PIN, OUTPUT);
     digitalWrite(CHAIN_PIN, LOW);
@@ -342,7 +397,13 @@ static void bus_pump(uint32_t now)
     if (cfg.debug_enabled) {
         rxoff = snprintf(rxline, sizeof(rxline), "[bus] RX:");
     }
-    while (uart_read_bytes(RS485_UART, &b, 1, 0) == 1) {
+    for (;;) {
+        if (g_rx_pushback >= 0) {
+            b = (uint8_t)g_rx_pushback;
+            g_rx_pushback = -1;
+        } else if (uart_read_bytes(RS485_UART, &b, 1, 0) != 1) {
+            break;
+        }
         if (cfg.debug_enabled && rxoff < (int)sizeof(rxline) - 4) {
             any_rx = true;
             rxoff += snprintf(rxline + rxoff, sizeof(rxline) - rxoff, " %02X", b);
@@ -681,7 +742,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <button class="btn sm" id=enumbtn>Enumeration neu starten</button></div>
 <div class=tw><table><thead><tr>
 <th>Adr</th><th>Status</th><th>Ist</th><th>Ziel</th><th>Fehler</th><th>Korr.</th>
-<th>Erk.&nbsp;Blatt</th><th>FW</th><th>Verpasst</th><th></th></tr></thead>
+<th>Erk.&nbsp;Blatt</th><th>FW</th><th>Verpasst</th><th title="seit Start: Wiederholungen / Timeouts / CRC-Fehler / Sendekollisionen">Bus&nbsp;W/T/C/K</th><th></th></tr></thead>
 <tbody id=modtb></tbody></table></div>
 <p class=hint>Ist/Ziel als Blattnummer und Zeichen. „Verpasst" = ausgebliebene Statusantworten in Folge (ab 3 gilt das Modul als offline).</p>
 </section>
@@ -903,7 +964,7 @@ const t=[
 ["Sammelfehler",errs.length?`<span class="v err">${errs.length}</span>`:`<span class="v ok">0</span>`,errs.length?"Adr "+errs.join(", "):"keine"],
 ["Uhrzeit",`<span class=v>${(sys.time||"—").slice(0,5)}</span>`,st.time_valid?(sys.time_src||"NTP"):"nicht gesetzt"],
 ["WLAN",`<span class=v>${sys.rssi??"—"}<span style="font-size:13px;color:var(--faint)"> dBm</span></span>`,esc(sys.ssid||"—")],
-["Bus CRC-Fehler",`<span class="v ${sys.crc_err?'warn':'ok'}">${sys.crc_err??0}</span>`,"Timeouts "+(sys.timeouts??0)],
+["Bus CRC-Fehler",`<span class="v ${sys.crc_err?'warn':'ok'}">${sys.crc_err??0}</span>`,"Timeouts "+(sys.timeouts??0)+" · Sendekoll. "+(sys.tx_coll??0)],
 ["Freier Heap",`<span class=v>${Math.round((sys.heap_free||0)/1024)}<span style="font-size:13px;color:var(--faint)"> KB</span></span>`,"min "+Math.round((sys.heap_min||0)/1024)+" KB"],
 ];
 $("#tiles").innerHTML=t.map(x=>`<div class="card tile"><span class=lbl>${x[0]}</span><div>${x[1]}</div><div class=sub>${x[2]}</div></div>`).join("");
@@ -923,8 +984,9 @@ const cell=n=>m.online?`${n} <span class=cm>${blattChar(n)||"␣"}</span>`:"–"
 const ec=m.error?`0x0${m.error} · ${ERRTXT[m.error]||""}`:"–";
 return `<tr><td class=mono>${m.addr}</td><td>${p}</td><td class=mono>${cell(m.ist)}</td><td class=mono>${cell(m.ziel)}</td>
 <td>${ec}</td><td class=mono>${m.corr}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.fw?"v"+m.fw:"–"}</td><td class=mono>${m.miss}</td>
+<td class=mono title="${m.seen?"letzte Antwort "+dur(Math.max(0,(sys.uptime_s||0)-m.seen))+" her":"noch keine Antwort"}">${m.rt??0}/${m.to??0}/${m.crc??0}/${m.txc??0}</td>
 <td><div class=ra><button class="btn sm" data-h=${m.addr}>Homing</button><button class="btn sm" data-i=${m.addr}>Identify</button></div></td></tr>`}).join("")
-:`<tr><td colspan=10 class=hint style=padding:14px>Keine Module. ${st.enum_busy?"Enumeration läuft …":"Karten anschließen oder unten neu enumerieren."}</td></tr>`;
+:`<tr><td colspan=11 class=hint style=padding:14px>Keine Module. ${st.enum_busy?"Enumeration läuft …":"Karten anschließen oder unten neu enumerieren."}</td></tr>`;
 }
 $("#modtb").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 if(b.dataset.h){P("/api/module",{addr:+b.dataset.h,action:"home"});toast("HOME Adr "+b.dataset.h)}
@@ -1406,6 +1468,7 @@ static void handle_system()
     d["enum_busy"]      = busmaster_enum_busy(&g_bus);
     d["crc_err"]        = g_bus.crc_errors;
     d["timeouts"]       = g_bus.timeouts;
+    d["tx_coll"]        = g_bus.tx_collisions;
     d["hostname"]       = cfg.node_id;
     d["cpu_load"]       = g_cpu_load;
     d["heap_total"]     = ESP.getHeapSize();
@@ -2347,6 +2410,40 @@ static void mqtt_ensure()
     }
 }
 
+/* Busdiagnose (#54) als ein JSON-Objekt, nicht retained; selten, damit sie
+ * den Broker nicht belastet. */
+static void mqtt_publish_bus_stats()
+{
+    JsonDocument d;
+    d["crc"]      = g_bus.crc_errors;
+    d["timeouts"] = g_bus.timeouts;
+    d["tx_coll"]  = g_bus.tx_collisions;
+    JsonArray a = d["modules"].to<JsonArray>();
+    const uint8_t mcount = effective_module_count();
+    for (uint8_t i = 0; i < mcount && i < BUSMASTER_MAX_MODULES; ++i) {
+        const bm_module_t *m = &g_bus.mod[i];
+        if ((m->retries_total | m->timeouts_total | m->crc_total | m->tx_coll |
+             m->collisions) == 0u) {
+            continue;   /* nur auffaellige Module, haelt die Nachricht klein */
+        }
+        JsonObject o = a.add<JsonObject>();
+        o["addr"] = i + 1;
+        o["rt"]   = m->retries_total;
+        o["to"]   = m->timeouts_total;
+        o["crc"]  = m->crc_total;
+        o["txc"]  = m->tx_coll;
+        o["coll"] = m->collisions;
+    }
+    const String t = topic("bus/stats");
+    if (measureJson(d) + t.length() + 16u > mqtt.getBufferSize()) {
+        d.remove("modules");             /* passt nicht in den MQTT-Puffer */
+        d["truncated"] = true;
+    }
+    String out;
+    serializeJson(d, out);
+    mqtt.publish(t.c_str(), out.c_str(), false);
+}
+
 static void mqtt_publish_state()
 {
     bool any_error = false;
@@ -2797,6 +2894,11 @@ void loop()
         if (busmaster_service_poll(&g_bus, effective_module_count(), bus_now) &&
             mqtt.connected()) {
             mqtt_publish_state();
+            static uint32_t s_stats_ms = 0;
+            if (now - s_stats_ms >= 60000UL) {
+                s_stats_ms = now;
+                mqtt_publish_bus_stats();
+            }
         }
     }
 

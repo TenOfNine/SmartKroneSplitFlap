@@ -465,6 +465,8 @@ static void test_status_json_max_covers_worst_case(void)
         m->korrektur = 0xFFFF;
         m->collisions = 0xFFFF;
         m->uid_dup = m->uid_changed = true;
+        m->retries_total = m->timeouts_total = m->crc_total = m->tx_coll = 0xFFFF;
+        m->last_seen_ms = 0xFFFFFFFFu;
     }
     char text[APP_TEXT_MAX + 1];
     memset(text, 0x01, APP_TEXT_MAX);

@@ -38,7 +38,7 @@ typedef enum {
  * Eintrag mit Hoechstwerten, Abschluss. Per Host-Test gegen den
  * tatsaechlichen Worst Case geprueft. */
 #define MASTERAPP_JSON_HEAD_MAX   (176u + 6u * APP_TEXT_MAX)
-#define MASTERAPP_JSON_MODULE_MAX 160u
+#define MASTERAPP_JSON_MODULE_MAX 224u
 #define MASTERAPP_STATUS_JSON_MAX(n) \
     ((size_t)MASTERAPP_JSON_HEAD_MAX + (size_t)(n) * MASTERAPP_JSON_MODULE_MAX + 4u)
 
@@ -101,7 +101,10 @@ void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out);
  * Felder: mode, sep, text, time_valid, align, detected, enum_busy,
  * warn (BM_WARN_*), modules[] mit addr, online, ist, ziel (vom Modul gemeldet),
  * soll (vom Master gesetzt, 0 = keins), state, error, corr, blatt, fw, miss,
- * coll (gemeldete 0x06), uidw (Bit 0 UID-Dublette, Bit 1 UID gewechselt).
+ * coll (gemeldete 0x06), uidw (Bit 0 UID-Dublette, Bit 1 UID gewechselt),
+ * Diagnose seit Start (#54): rt (Wiederholungen), to (Timeouts), crc
+ * (CRC-Fehler), txc (Echo-Abweichungen beim Senden), seen (letzte Antwort,
+ * s seit Start, 0 = nie).
  */
 size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size);
 

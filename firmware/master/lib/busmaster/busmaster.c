@@ -50,6 +50,13 @@ static void bm_log(busmaster_t *bm, const char *event, uint8_t cmd, uint8_t addr
     }
 }
 
+static void sat_inc16(uint16_t *v)
+{
+    if (*v < 0xFFFFu) {
+        (*v)++;
+    }
+}
+
 static void raise_warn(busmaster_t *bm, uint8_t bit)
 {
     bm->warn |= bit;
@@ -561,6 +568,14 @@ static void complete(busmaster_t *bm, const proto_frame_t *f, uint32_t now)
     bm_module_t *m = mod_of(bm, addr);
 
     bm_log(bm, f != NULL ? "match" : "give_up", bm->pending_cmd, addr, now);
+    if (m != NULL) {
+        if (f != NULL) {
+            m->last_seen_ms = now;
+        } else if (kind == BM_TX_STATUS || kind == BM_TX_VERSION || kind == BM_TX_CONFIG ||
+                   kind == BM_TX_ACK || kind == BM_TX_UID) {
+            sat_inc16(&m->timeouts_total);
+        }
+    }
     if (f != NULL && bm->retries > 0u) {
         /* Antwort auf die fruehere Anfrage? Dann kommt die auf die
          * Wiederholung womoeglich noch. */
@@ -704,6 +719,12 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
     const proto_parse_result_t pr = proto_parser_feed(&bm->parser, byte);
     if (pr == PARSE_ERR_CRC) {
         bm->crc_errors++;
+        if (bm->awaiting) {
+            bm_module_t *m = mod_of(bm, bm->pending_addr);
+            if (m != NULL) {
+                sat_inc16(&m->crc_total);
+            }
+        }
         return;
     }
     if (pr != PARSE_FRAME_OK) {
@@ -721,6 +742,15 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
     }
     if (frame_matches(bm, f)) {
         complete(bm, f, now);
+    }
+}
+
+void busmaster_note_tx_collision(busmaster_t *bm, uint8_t frame_addr)
+{
+    bm->tx_collisions++;
+    bm_module_t *m = mod_of(bm, frame_addr);
+    if (m != NULL) {
+        sat_inc16(&m->tx_coll);
     }
 }
 
@@ -754,6 +784,12 @@ static void handle_timeout(busmaster_t *bm, uint32_t now)
 
     if (bm->retries < bm->pending_max_retries) {
         bm->retries++;
+        {
+            bm_module_t *m = mod_of(bm, bm->pending_addr);
+            if (m != NULL) {
+                sat_inc16(&m->retries_total);
+            }
+        }
         bm_log(bm, "retry", bm->pending_cmd, bm->pending_addr, now);
         proto_parser_reset(&bm->parser);
         tx_frame(bm, bm->pending_cmd, bm->pending_addr, bm->pending_payload,

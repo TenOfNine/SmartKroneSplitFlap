@@ -112,6 +112,12 @@ typedef struct {
     bool     uid_dup;      /* dieselbe UID auch auf einer anderen Adresse */
     bool     uid_changed;  /* UID weicht vom vorigen Lauf ab          */
     uint16_t collisions;   /* gemeldete Fehlercodes 0x06 seit Start   */
+    /* Diagnose je Modul seit Start, saettigend (#54) */
+    uint16_t retries_total;   /* gesendete Wiederholungen an dieses Modul        */
+    uint16_t timeouts_total;  /* Anfragen endgueltig ohne Antwort                */
+    uint16_t crc_total;       /* CRC-Fehler waehrend einer Anfrage an das Modul  */
+    uint16_t tx_coll;         /* Echo-Abweichung beim Senden an dieses Modul     */
+    uint32_t last_seen_ms;    /* letzte gueltige Antwort (Uhrzeit), 0 = nie      */
 } bm_module_t;
 
 typedef enum {
@@ -232,6 +238,7 @@ typedef struct {
     uint32_t crc_errors;             /* CRC-Fehler auf dem Bus seit Start */
     uint32_t timeouts;               /* ausgebliebene Antworten (nach Retries) */
     uint32_t reconciles;             /* gesendete Soll/Ist-Korrekturen */
+    uint32_t tx_collisions;          /* Echo-Abweichungen beim eigenen Senden */
 
     uint32_t led_sync_ms;            /* Sendeende des letzten CMD_LED_SYNC */
 } busmaster_t;
@@ -247,6 +254,12 @@ void busmaster_set_log(busmaster_t *bm, busmaster_log_fn fn, void *log_ctx);
 
 /* Ein empfangenes Byte verarbeiten (Antwortrahmen). */
 void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms);
+
+/* Das Echo eines gesendeten Rahmens wich ab: jemand anderes hat waehrend der
+ * eigenen Sendung getrieben (#50). frame_addr = Zieladresse des Rahmens;
+ * zaehlt global und bei Unicast 1..32 je Modul (#54). Darf aus der tx-
+ * Funktion heraus aufgerufen werden. */
+void busmaster_note_tx_collision(busmaster_t *bm, uint8_t frame_addr);
 
 /* Fremden Busverkehr melden (z. B. Bytes, die waehrend eines Modul-Updates an
  * lib/moduleupdate gehen): zaehlt fuer die Busruhe wie ein empfangenes Byte. */
