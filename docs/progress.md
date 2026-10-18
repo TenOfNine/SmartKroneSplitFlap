@@ -6,6 +6,19 @@ seit 19.09.2026). Die vollständige historische Aufgabenliste T1–T20 steht in
 `firmware/CHANGELOG.md`. Diese Datei ist der schnelle Überblick für die
 laufende Fehlersuche — bei jeder Sitzung oben ergänzen, nicht umschreiben.
 
+**Stand 18.10.2026 (abends) — Firmware v1.18 (Korrektur Echo-Annahme, am Gerät noch nicht verifiziert):**
+Erster Gerätetest der 1.17 mit einer Karte: Spalte „Bus W/T/C/K“ zeigte
+50/0/0/37 – Wiederholungen ohne endgültige Timeouts und ohne CRC-Fehler, dazu
+scheinbare Sendekollisionen. Ursache im Master: Der UART des ESP32-C3 empfängt
+im RS485-Halbduplexmodus während der eigenen Sendung nicht (IDF-HAL
+`tx_rx_en = 0`), es gibt also kein Echo. Der Echo-Abgleich der 1.17 hat
+stattdessen den Anfang der Modulantwort verworfen, sobald `loop()` nach dem
+Senden länger als der Antwortverzug verdrängt war (WLAN-Task). Behoben: kein
+Abgleich mehr, gesendet und wiederholt wird nur, wenn der Treiber keine
+unverarbeiteten Empfangsbytes hält (#50). „K“ zeigt jetzt die vom Modul
+gemeldeten Kollisionen (0x06), die FW-Spalte die App-Version. Erwartung am
+Gerät: W/T/C/K bleiben im Ruhebetrieb bei 0.
+
 **Stand 18.10.2026 — Firmware v1.17 (Verbindungsstabilität, am Gerät noch nicht verifiziert):**
 Software-Review der Busverbindung Master ↔ Daughter Cards. Behoben: Bus-UART
 lief mit IDF-RX-Schwellen (laufende Antwort erst nach ihrem Ende sichtbar,
