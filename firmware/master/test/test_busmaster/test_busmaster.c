@@ -87,6 +87,15 @@ static uint32_t fake_clock(void *ctx)
     return g_clk;
 }
 
+/* Treiber haelt noch nicht eingespeiste Empfangsbytes (#50). */
+static bool g_rx_pending;
+
+static bool fake_rx_pending(void *ctx)
+{
+    (void)ctx;
+    return g_rx_pending;
+}
+
 static void inject(uint8_t cmd, uint8_t addr, const uint8_t *pl, uint8_t len, uint32_t now)
 {
     proto_frame_t f;
@@ -126,6 +135,7 @@ void setUp(void)
     g_ntxf = 0;
     g_clk = 0;
     g_tx_cost_ms = 0;
+    g_rx_pending = false;
     sim_clear();
     busmaster_init(&bm, fake_tx, NULL);
 }
@@ -353,16 +363,45 @@ static void test_per_module_diagnostics(void)
     TEST_ASSERT_EQUAL_UINT16(0, bm.mod[0].crc_total);
 }
 
-static void test_tx_collision_counted_per_module(void)
+/* Steckt die Antwort schon im Treiber, wird nicht wiederholt: erst
+ * einspeisen, dann passt sie zur ausstehenden Anfrage (#50). */
+static void test_rx_pending_defers_retry(void)
 {
-    busmaster_note_tx_collision(&bm, 3);
-    busmaster_note_tx_collision(&bm, PROTO_ADDR_BROADCAST);
-    busmaster_note_tx_collision(&bm, PROTO_ADDR_SERVICE);
-    TEST_ASSERT_EQUAL_UINT32(3, bm.tx_collisions);
-    TEST_ASSERT_EQUAL_UINT16(1, bm.mod[2].tx_coll);
-    for (uint8_t i = 0; i < BUSMASTER_MAX_MODULES; ++i) {
-        if (i != 2) TEST_ASSERT_EQUAL_UINT16(0, bm.mod[i].tx_coll);
-    }
+    busmaster_set_rx_pending(&bm, fake_rx_pending, NULL);
+    busmaster_poll_status(&bm, 2, 0);
+    TEST_ASSERT_EQUAL_size_t(1, g_ntxf);
+    g_rx_pending = true;
+    tick_range(1, 10);
+    TEST_ASSERT_EQUAL_size_t(1, g_ntxf);          /* keine Wiederholung */
+    TEST_ASSERT_TRUE(bm.defer_active);
+    g_rx_pending = false;
+    inject_status(2, 4, 4, 0, 0, 10);
+    TEST_ASSERT_FALSE(bm.awaiting);
+    TEST_ASSERT_EQUAL_UINT8(4, bm.mod[1].ist_blatt);
+    TEST_ASSERT_EQUAL_UINT16(0, bm.mod[1].retries_total);
+    tick_range(11, 30);
+    TEST_ASSERT_EQUAL_size_t(1, g_ntxf);
+}
+
+/* Keine neue Anfrage und keine Warteschlange, solange Bytes anstehen. */
+static void test_rx_pending_blocks_new_requests(void)
+{
+    busmaster_set_rx_pending(&bm, fake_rx_pending, NULL);
+    g_rx_pending = true;
+    busmaster_poll_status(&bm, 1, 200);
+    (void)busmaster_service_poll(&bm, 1, 200);
+    TEST_ASSERT_TRUE(busmaster_led_sync(&bm, 200));
+    tick_range(200, 210);
+    TEST_ASSERT_EQUAL_size_t(0, g_ntxf);
+    TEST_ASSERT_FALSE(busmaster_idle(&bm, 210));
+
+    g_rx_pending = false;
+    busmaster_tick(&bm, 211);
+    TEST_ASSERT_EQUAL_size_t(1, g_ntxf);          /* LED_SYNC aus der Warteschlange */
+    TEST_ASSERT_EQUAL_HEX8(CMD_LED_SYNC, g_txf[0].cmd);
+    (void)busmaster_service_poll(&bm, 1, 212);
+    TEST_ASSERT_EQUAL_size_t(2, g_ntxf);
+    TEST_ASSERT_EQUAL_HEX8(CMD_GET_STATUS, g_txf[1].cmd);
 }
 
 static void test_timeout_measured_from_tx_end_with_clock(void)
@@ -1172,6 +1211,20 @@ static void sim_tx(void *ctx, const uint8_t *d, size_t n)
     sim_cards_on_frame(d, n, end);
 }
 
+/* Antworten, deren Empfang begonnen hat, die aber noch nicht zugestellt sind:
+ * Abfrage wie bus_rx_pending() in main.cpp (#50). */
+static bool sim_rx_pending(void *ctx)
+{
+    (void)ctx;
+    for (int i = 0; i < g_nresp; ++i) {
+        const sim_resp_t *r = &g_resp[i];
+        if (!r->delivered && !r->lost && r->start + SIM_US_PER_BYTE <= g_us) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /* Bereits zugestellte Antworten an den busmaster (wie bus_pump). */
 static void sim_pump(void)
 {
@@ -1223,6 +1276,7 @@ static void sim_setup(int ncards, uint32_t delay_us)
     g_us = 1000000u;   /* 1 s nach Start */
     busmaster_init(&bm, sim_tx, NULL);
     busmaster_set_clock(&bm, sim_clock, NULL);
+    busmaster_set_rx_pending(&bm, sim_rx_pending, NULL);
 }
 
 static uint32_t g_last_led;
@@ -1469,6 +1523,30 @@ static void test_sim_version_slot_does_not_starve(void)
     TEST_ASSERT_EQUAL_UINT(0, g_collisions);
 }
 
+/* Antwort steckt beim Timeout schon im Treiber (spaeter Antwortbeginn, wie
+ * bei einem nach dem Senden verdraengten loop()): wird eingespeist statt
+ * wiederholt; ohne Abfrage gaebe es Wiederholungen (#50). */
+static void test_sim_reply_in_driver_not_retried(void)
+{
+    sim_setup(1, 4200);
+    busmaster_start_enumeration(&bm, 1000);
+    sim_run(NULL, 0, 700, 1000);
+    TEST_ASSERT_EQUAL_UINT8(1, bm.module_count);
+    const unsigned n0 = g_card[0].n_status;
+    const uint16_t rt0 = bm.mod[0].retries_total;
+    sim_run(NULL, 0, 700, 5000);
+    TEST_ASSERT_TRUE(g_card[0].n_status - n0 >= 45);
+    TEST_ASSERT_TRUE(bm.mod[0].online);
+    TEST_ASSERT_EQUAL_UINT16(rt0, bm.mod[0].retries_total);
+    TEST_ASSERT_EQUAL_UINT16(0, bm.mod[0].timeouts_total);
+    TEST_ASSERT_EQUAL_UINT(0, g_collisions);
+
+    /* Gegenprobe ohne Abfrage */
+    busmaster_set_rx_pending(&bm, NULL, NULL);
+    sim_run(NULL, 0, 700, 2000);
+    TEST_ASSERT_TRUE(bm.mod[0].retries_total > rt0);
+}
+
 /* Modul verliert seinen Inhalt (Neustart/Homing): Abgleich stellt ihn wieder
  * her, ohne Kollision (#26). */
 static void test_sim_reconcile_restores_content(void)
@@ -1540,7 +1618,8 @@ int main(void)
     RUN_TEST(test_own_echo_does_not_swallow_response);
     RUN_TEST(test_status_timeout_retries_then_offline);
     RUN_TEST(test_per_module_diagnostics);
-    RUN_TEST(test_tx_collision_counted_per_module);
+    RUN_TEST(test_rx_pending_defers_retry);
+    RUN_TEST(test_rx_pending_blocks_new_requests);
     RUN_TEST(test_timeout_measured_from_tx_end_with_clock);
     RUN_TEST(test_rx_timestamp_from_clock);
     RUN_TEST(test_retry_deferred_while_frame_in_progress);
@@ -1576,6 +1655,7 @@ int main(void)
     RUN_TEST(test_sim_service_address_warning);
     RUN_TEST(test_sim_two_cards_on_service_address);
     RUN_TEST(test_sim_version_slot_does_not_starve);
+    RUN_TEST(test_sim_reply_in_driver_not_retried);
     RUN_TEST(test_sim_reconcile_restores_content);
     RUN_TEST(test_sim_dead_card_gap_probed);
     return UNITY_END();

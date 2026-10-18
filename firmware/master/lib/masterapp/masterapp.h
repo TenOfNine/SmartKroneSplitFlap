@@ -103,8 +103,8 @@ void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out);
  * soll (vom Master gesetzt, 0 = keins), state, error, corr, blatt, fw, miss,
  * coll (gemeldete 0x06), uidw (Bit 0 UID-Dublette, Bit 1 UID gewechselt),
  * Diagnose seit Start (#54): rt (Wiederholungen), to (Timeouts), crc
- * (CRC-Fehler), txc (Echo-Abweichungen beim Senden), seen (letzte Antwort,
- * s seit Start, 0 = nie).
+ * (CRC-Fehler), seen (letzte Antwort, s seit Start, 0 = nie); ver
+ * (App-Version MAJOR<<8|MINOR aus GET_VERSION, 0 = unbekannt).
  */
 size_t masterapp_status_json(const masterapp_t *app, char *out, size_t out_size);
 

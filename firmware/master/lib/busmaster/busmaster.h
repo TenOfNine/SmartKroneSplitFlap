@@ -9,7 +9,8 @@
  * _poll_version und busmaster_service_poll sendet nur busmaster_tick, und nur
  * bei freiem Bus: keine Antwort ausstehend, keine Enumeration (ausser deren
  * eigenen Schritten), Busruhe seit dem letzten empfangenen Byte, Parser nicht
- * mitten in einem Rahmen. Kommandos aus Web/MQTT/Anwendung gehen in eine
+ * mitten in einem Rahmen, keine Empfangsbytes, die der Treiber noch haelt
+ * (busmaster_set_rx_pending). Kommandos aus Web/MQTT/Anwendung gehen in eine
  * kleine Warteschlange.
  *
  * Zeitbasis: Mit busmaster_set_clock liest der busmaster die Zeit selbst; das
@@ -116,7 +117,6 @@ typedef struct {
     uint16_t retries_total;   /* gesendete Wiederholungen an dieses Modul        */
     uint16_t timeouts_total;  /* Anfragen endgueltig ohne Antwort                */
     uint16_t crc_total;       /* CRC-Fehler waehrend einer Anfrage an das Modul  */
-    uint16_t tx_coll;         /* Echo-Abweichung beim Senden an dieses Modul     */
     uint32_t last_seen_ms;    /* letzte gueltige Antwort (Uhrzeit), 0 = nie      */
 } bm_module_t;
 
@@ -168,6 +168,11 @@ typedef void (*busmaster_log_fn)(void *log_ctx, const char *event, uint8_t cmd,
 /* Uhr in ms (monoton, darf ueberlaufen). */
 typedef uint32_t (*busmaster_clock_fn)(void *ctx);
 
+/* Haelt der Treiber empfangene Bytes, die noch nicht ueber
+ * busmaster_on_rx_byte() eingespeist sind? Dann laeuft eine Antwort ein, die
+ * busmaster noch nicht sieht: kein Senden, keine Wiederholung (#50). */
+typedef bool (*busmaster_rx_pending_fn)(void *ctx);
+
 typedef struct {
     void (*tx)(void *ctx, const uint8_t *data, size_t len);
     void  *tx_ctx;
@@ -175,6 +180,8 @@ typedef struct {
     void              *log_ctx;
     busmaster_clock_fn now_fn;   /* NULL = uebergebene Zeitstempel */
     void              *now_ctx;
+    busmaster_rx_pending_fn rx_pending_fn;   /* NULL = nur last_rx_ms */
+    void                   *rx_pending_ctx;
 
     uint8_t     module_count;    /* Ergebnis der letzten Enumeration */
     bm_module_t mod[BUSMASTER_MAX_MODULES];
@@ -238,7 +245,6 @@ typedef struct {
     uint32_t crc_errors;             /* CRC-Fehler auf dem Bus seit Start */
     uint32_t timeouts;               /* ausgebliebene Antworten (nach Retries) */
     uint32_t reconciles;             /* gesendete Soll/Ist-Korrekturen */
-    uint32_t tx_collisions;          /* Echo-Abweichungen beim eigenen Senden */
 
     uint32_t led_sync_ms;            /* Sendeende des letzten CMD_LED_SYNC */
 } busmaster_t;
@@ -252,14 +258,13 @@ void busmaster_set_clock(busmaster_t *bm, busmaster_clock_fn now_fn, void *ctx);
 /* Diagnose-Log registrieren/abschalten (fn=NULL). Siehe busmaster_log_fn. */
 void busmaster_set_log(busmaster_t *bm, busmaster_log_fn fn, void *log_ctx);
 
+/* Abfrage noch nicht eingespeister Empfangsbytes setzen (NULL = aus). Siehe
+ * busmaster_rx_pending_fn. */
+void busmaster_set_rx_pending(busmaster_t *bm, busmaster_rx_pending_fn fn, void *ctx);
+
 /* Ein empfangenes Byte verarbeiten (Antwortrahmen). */
 void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms);
 
-/* Das Echo eines gesendeten Rahmens wich ab: jemand anderes hat waehrend der
- * eigenen Sendung getrieben (#50). frame_addr = Zieladresse des Rahmens;
- * zaehlt global und bei Unicast 1..32 je Modul (#54). Darf aus der tx-
- * Funktion heraus aufgerufen werden. */
-void busmaster_note_tx_collision(busmaster_t *bm, uint8_t frame_addr);
 
 /* Fremden Busverkehr melden (z. B. Bytes, die waehrend eines Modul-Updates an
  * lib/moduleupdate gehen): zaehlt fuer die Busruhe wie ein empfangenes Byte. */

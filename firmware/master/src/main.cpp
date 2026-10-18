@@ -35,6 +35,7 @@
 #include <time.h>
 
 #include "driver/uart.h"
+#include "hal/uart_ll.h"
 #include "esp_freertos_hooks.h"
 #include "esp_timer.h"
 #include "lwip/apps/sntp.h"
@@ -233,52 +234,26 @@ static void busmaster_log_cb(void *, const char *event, uint8_t cmd, uint8_t add
            (unsigned long)real_now, (long)(real_now - now_ms));
 }
 
-/* Byte, das beim Echo-Abgleich gelesen wurde, aber nicht zum Echo gehoert;
- * bus_pump() verarbeitet es zuerst. */
-static int16_t g_rx_pushback = -1;
-
 /*
- * Echo des eigenen Rahmens abholen (#50). Der Transceiver liest bei /RE = GND
- * die eigene Sendung zurueck. Mit den niedrigen RX-Schwellen (bus_begin)
- * steht das Echo beim Ende der Sendung bis auf hoechstens das letzte Byte im
- * Ringpuffer; den Rest loescht der IDF-Treiber im RS485-Halbduplexmodus bei
- * TX_DONE zusammen mit dem Hardware-FIFO (TX_DONE-Zweig der UART-ISR in
- * libdriver.a: uart_hal_rxfifo_rst, dann sw_rts = DE aus). Ein Modul
- * antwortet fruehestens 500 us nach Rahmenende -- was jetzt gepuffert ist,
- * ist Echo. Abgleich Byte fuer Byte; das erste abweichende Byte gehoert nicht
- * zum Echo und geht an den Empfang. Weicht es mitten im Rahmen ab, hat
- * waehrend der eigenen Sendung jemand anderes getrieben (Sendekollision).
- * Ersetzt den frueheren uart_flush_input(), der den Anfang einer Antwort
- * mitloeschen konnte, wenn loop() nach dem Senden verdraengt wurde.
+ * Kein Echo-Abgleich (#50, korrigiert in 1.18). Im RS485-Halbduplexmodus
+ * stellt der IDF-HAL den Empfaenger waehrend der eigenen Sendung ab
+ * (uart_ll_set_mode_rs485_half_duplex: rs485_conf.tx_rx_en = 0) und laesst
+ * den Sender nicht anlaufen, solange der Empfaenger belegt ist
+ * (rx_busy_tx_en = 0). Trotz /RE = GND kommt also kein Echo im Treiber an.
+ * Alles, was nach dem Senden im Puffer steht, ist bereits die Antwort eines
+ * Moduls und gehoert ungekuerzt dem Parser. Der fruehere Abgleich hat genau
+ * das verworfen, wenn loop() nach dem Senden laenger als der Antwortverzug
+ * verdraengt war (WLAN-Task): Antwortanfang weg, Wiederholung, scheinbare
+ * Sendekollision.
  */
-static void bus_take_echo(const uint8_t *data, size_t len)
+static bool bus_rx_pending(void *)
 {
-    size_t avail = 0;
-    if (uart_get_buffered_data_len(RS485_UART, &avail) != ESP_OK) {
-        return;
+    size_t n = 0;
+    if (uart_get_buffered_data_len(RS485_UART, &n) == ESP_OK && n > 0) {
+        return true;
     }
-    if (avail > len) {
-        avail = len;
-    }
-    for (size_t i = 0; i < avail; ++i) {
-        uint8_t b;
-        if (uart_read_bytes(RS485_UART, &b, 1, 0) != 1) {
-            return;
-        }
-        if (b == data[i]) {
-            continue;
-        }
-        g_rx_pushback = b;
-        /* Fehlendes Echo-Ende (vom Treiber geloescht) gefolgt vom Beginn einer
-         * Antwort ist keine Kollision. */
-        const bool reply_start = (b == PROTO_PREAMBLE_0) && (i + 2u >= len);
-        if (!reply_start) {
-            busmaster_note_tx_collision(&g_bus, len > 4u ? data[4] : 0u);
-            dbg_log("[bus] Sendekollision: Echo-Byte %u ist 0x%02X statt 0x%02X",
-                    (unsigned)i, b, data[i]);
-        }
-        return;
-    }
+    /* Ein Einzelbyte bleibt bis zum RX-Timeout (1 Zeichen) im Hardware-FIFO. */
+    return uart_ll_get_rxfifo_len(UART_LL_GET_HW(RS485_UART)) > 0;
 }
 
 static void bus_tx(void *, const uint8_t *data, size_t len)
@@ -293,7 +268,6 @@ static void bus_tx(void *, const uint8_t *data, size_t len)
     }
     uart_write_bytes(RS485_UART, reinterpret_cast<const char *>(data), len);
     uart_wait_tx_done(RS485_UART, pdMS_TO_TICKS(20));
-    bus_take_echo(data, len);
 }
 
 static void bus_begin()
@@ -397,13 +371,7 @@ static void bus_pump(uint32_t now)
     if (cfg.debug_enabled) {
         rxoff = snprintf(rxline, sizeof(rxline), "[bus] RX:");
     }
-    for (;;) {
-        if (g_rx_pushback >= 0) {
-            b = (uint8_t)g_rx_pushback;
-            g_rx_pushback = -1;
-        } else if (uart_read_bytes(RS485_UART, &b, 1, 0) != 1) {
-            break;
-        }
+    while (uart_read_bytes(RS485_UART, &b, 1, 0) == 1) {
         if (cfg.debug_enabled && rxoff < (int)sizeof(rxline) - 4) {
             any_rx = true;
             rxoff += snprintf(rxline + rxoff, sizeof(rxline) - rxoff, " %02X", b);
@@ -742,7 +710,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <button class="btn sm" id=enumbtn>Enumeration neu starten</button></div>
 <div class=tw><table><thead><tr>
 <th>Adr</th><th>Status</th><th>Ist</th><th>Ziel</th><th>Fehler</th><th>Korr.</th>
-<th>Erk.&nbsp;Blatt</th><th>FW</th><th>Verpasst</th><th title="seit Start: Wiederholungen / Timeouts / CRC-Fehler / Sendekollisionen">Bus&nbsp;W/T/C/K</th><th></th></tr></thead>
+<th>Erk.&nbsp;Blatt</th><th>FW</th><th>Verpasst</th><th title="seit Start: Wiederholungen / Timeouts / CRC-Fehler / vom Modul gemeldete Kollisionen (0x06)">Bus&nbsp;W/T/C/K</th><th></th></tr></thead>
 <tbody id=modtb></tbody></table></div>
 <p class=hint>Ist/Ziel als Blattnummer und Zeichen. „Verpasst" = ausgebliebene Statusantworten in Folge (ab 3 gilt das Modul als offline).</p>
 </section>
@@ -964,7 +932,7 @@ const t=[
 ["Sammelfehler",errs.length?`<span class="v err">${errs.length}</span>`:`<span class="v ok">0</span>`,errs.length?"Adr "+errs.join(", "):"keine"],
 ["Uhrzeit",`<span class=v>${(sys.time||"—").slice(0,5)}</span>`,st.time_valid?(sys.time_src||"NTP"):"nicht gesetzt"],
 ["WLAN",`<span class=v>${sys.rssi??"—"}<span style="font-size:13px;color:var(--faint)"> dBm</span></span>`,esc(sys.ssid||"—")],
-["Bus CRC-Fehler",`<span class="v ${sys.crc_err?'warn':'ok'}">${sys.crc_err??0}</span>`,"Timeouts "+(sys.timeouts??0)+" · Sendekoll. "+(sys.tx_coll??0)],
+["Bus CRC-Fehler",`<span class="v ${sys.crc_err?'warn':'ok'}">${sys.crc_err??0}</span>`,"Timeouts "+(sys.timeouts??0)],
 ["Freier Heap",`<span class=v>${Math.round((sys.heap_free||0)/1024)}<span style="font-size:13px;color:var(--faint)"> KB</span></span>`,"min "+Math.round((sys.heap_min||0)/1024)+" KB"],
 ];
 $("#tiles").innerHTML=t.map(x=>`<div class="card tile"><span class=lbl>${x[0]}</span><div>${x[1]}</div><div class=sub>${x[2]}</div></div>`).join("");
@@ -983,8 +951,8 @@ m.state===1?`<span class="pill warn"><i></i>Homing</span>`:`<span class="pill ok
 const cell=n=>m.online?`${n} <span class=cm>${blattChar(n)||"␣"}</span>`:"–";
 const ec=m.error?`0x0${m.error} · ${ERRTXT[m.error]||""}`:"–";
 return `<tr><td class=mono>${m.addr}</td><td>${p}</td><td class=mono>${cell(m.ist)}</td><td class=mono>${cell(m.ziel)}</td>
-<td>${ec}</td><td class=mono>${m.corr}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.fw?"v"+m.fw:"–"}</td><td class=mono>${m.miss}</td>
-<td class=mono title="${m.seen?"letzte Antwort "+dur(Math.max(0,(sys.uptime_s||0)-m.seen))+" her":"noch keine Antwort"}">${m.rt??0}/${m.to??0}/${m.crc??0}/${m.txc??0}</td>
+<td>${ec}</td><td class=mono>${m.corr}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.ver?verStr(m.ver):m.fw?"v"+m.fw:"–"}</td><td class=mono>${m.miss}</td>
+<td class=mono title="${m.seen?"letzte Antwort "+dur(Math.max(0,(sys.uptime_s||0)-m.seen))+" her":"noch keine Antwort"}">${m.rt??0}/${m.to??0}/${m.crc??0}/${m.coll??0}</td>
 <td><div class=ra><button class="btn sm" data-h=${m.addr}>Homing</button><button class="btn sm" data-i=${m.addr}>Identify</button></div></td></tr>`}).join("")
 :`<tr><td colspan=11 class=hint style=padding:14px>Keine Module. ${st.enum_busy?"Enumeration läuft …":"Karten anschließen oder unten neu enumerieren."}</td></tr>`;
 }
@@ -1468,7 +1436,6 @@ static void handle_system()
     d["enum_busy"]      = busmaster_enum_busy(&g_bus);
     d["crc_err"]        = g_bus.crc_errors;
     d["timeouts"]       = g_bus.timeouts;
-    d["tx_coll"]        = g_bus.tx_collisions;
     d["hostname"]       = cfg.node_id;
     d["cpu_load"]       = g_cpu_load;
     d["heap_total"]     = ESP.getHeapSize();
@@ -2417,12 +2384,11 @@ static void mqtt_publish_bus_stats()
     JsonDocument d;
     d["crc"]      = g_bus.crc_errors;
     d["timeouts"] = g_bus.timeouts;
-    d["tx_coll"]  = g_bus.tx_collisions;
     JsonArray a = d["modules"].to<JsonArray>();
     const uint8_t mcount = effective_module_count();
     for (uint8_t i = 0; i < mcount && i < BUSMASTER_MAX_MODULES; ++i) {
         const bm_module_t *m = &g_bus.mod[i];
-        if ((m->retries_total | m->timeouts_total | m->crc_total | m->tx_coll |
+        if ((m->retries_total | m->timeouts_total | m->crc_total |
              m->collisions) == 0u) {
             continue;   /* nur auffaellige Module, haelt die Nachricht klein */
         }
@@ -2431,7 +2397,6 @@ static void mqtt_publish_bus_stats()
         o["rt"]   = m->retries_total;
         o["to"]   = m->timeouts_total;
         o["crc"]  = m->crc_total;
-        o["txc"]  = m->tx_coll;
         o["coll"] = m->collisions;
     }
     const String t = topic("bus/stats");
@@ -2735,6 +2700,7 @@ void setup()
     busmaster_init(&g_bus, bus_tx, nullptr);
     /* Sendeende als Zeitbezug: bus_tx() blockiert bis zum letzten Bit (#21). */
     busmaster_set_clock(&g_bus, [](void *) -> uint32_t { return millis(); }, nullptr);
+    busmaster_set_rx_pending(&g_bus, bus_rx_pending, nullptr);
     busmaster_set_log(&g_bus, busmaster_log_cb, nullptr);
     busmaster_set_enum_hint(&g_bus, cfg.module_count);
     masterapp_init(&g_app, &g_bus, effective_module_count());

@@ -267,7 +267,7 @@ static void emit_status(jw_t *w, const masterapp_t *app)
                   "%s{\"addr\":%u,\"online\":%s,\"ist\":%u,\"ziel\":%u,\"soll\":%u,"
                   "\"state\":%u,\"error\":%u,\"corr\":%u,\"blatt\":%u,\"fw\":%u,"
                   "\"miss\":%u,\"coll\":%u,\"uidw\":%u,"
-                  "\"rt\":%u,\"to\":%u,\"crc\":%u,\"txc\":%u,\"seen\":%lu}",
+                  "\"rt\":%u,\"to\":%u,\"crc\":%u,\"ver\":%u,\"seen\":%lu}",
                   (i == 0) ? "" : ",", (unsigned)(i + 1u),
                   m->online ? "true" : "false", (unsigned)m->ist_blatt,
                   (unsigned)m->ziel_blatt, m->soll_valid ? (unsigned)m->soll : 0u,
@@ -275,7 +275,7 @@ static void emit_status(jw_t *w, const masterapp_t *app)
                   (unsigned)m->blattzahl, (unsigned)m->fw_version,
                   (unsigned)m->miss_count, (unsigned)m->collisions, uidw,
                   (unsigned)m->retries_total, (unsigned)m->timeouts_total,
-                  (unsigned)m->crc_total, (unsigned)m->tx_coll,
+                  (unsigned)m->crc_total, m->ver_known ? (unsigned)m->app_ver : 0u,
                   (unsigned long)(m->last_seen_ms / 1000u));
     }
     jw_puts(w, "]}");

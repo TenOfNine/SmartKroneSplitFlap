@@ -65,10 +65,14 @@ static void raise_warn(busmaster_t *bm, uint8_t bit)
 
 /* --- Busbelegung ---------------------------------------------------- */
 
-/* Busruhe: seit dem letzten Byte mindestens BUSMASTER_QUIET_MS und kein
- * angefangener Rahmen (ausser einem abgerissenen, siehe FRAME_STALE). */
+/* Busruhe: keine Bytes mehr beim Treiber, seit dem letzten Byte mindestens
+ * BUSMASTER_QUIET_MS und kein angefangener Rahmen (ausser einem abgerissenen,
+ * siehe FRAME_STALE). */
 static bool line_quiet(const busmaster_t *bm, uint32_t now)
 {
+    if (bm->rx_pending_fn != NULL && bm->rx_pending_fn(bm->rx_pending_ctx)) {
+        return false;
+    }
     if (!bm->rx_seen) {
         return true;
     }
@@ -745,15 +749,6 @@ void busmaster_on_rx_byte(busmaster_t *bm, uint8_t byte, uint32_t now_ms)
     }
 }
 
-void busmaster_note_tx_collision(busmaster_t *bm, uint8_t frame_addr)
-{
-    bm->tx_collisions++;
-    bm_module_t *m = mod_of(bm, frame_addr);
-    if (m != NULL) {
-        sat_inc16(&m->tx_coll);
-    }
-}
-
 void busmaster_note_activity(busmaster_t *bm, uint32_t now_ms)
 {
     bm->last_rx_ms = bm_now(bm, now_ms);
@@ -910,6 +905,12 @@ void busmaster_set_log(busmaster_t *bm, busmaster_log_fn fn, void *log_ctx)
 {
     bm->log_fn = fn;
     bm->log_ctx = log_ctx;
+}
+
+void busmaster_set_rx_pending(busmaster_t *bm, busmaster_rx_pending_fn fn, void *ctx)
+{
+    bm->rx_pending_fn = fn;
+    bm->rx_pending_ctx = ctx;
 }
 
 void busmaster_show(busmaster_t *bm, const uint8_t *blaetter, uint8_t count)
