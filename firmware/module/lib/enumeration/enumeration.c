@@ -30,6 +30,8 @@ void enum_fsm_init(enum_fsm_t *fsm, uint8_t eeprom_address, uint8_t t_enum_secon
     fsm->want_ack = false;
     fsm->is_service_addr = false;
     fsm->collision_wait = false;
+    fsm->echo_strikes = 0;
+    fsm->strike_age_ms = 0;
 
     if (eeprom_addr_valid(eeprom_address)) {
         fsm->state = ENUM_ADDRESSED;
@@ -54,6 +56,7 @@ static void apply_fallback(enum_fsm_t *fsm)
     fsm->state = ENUM_ADDRESSED;
     fsm->elapsed_ms = 0;
     fsm->collision_wait = false;
+    fsm->echo_strikes = 0;
 }
 
 static void on_enum_reset(enum_fsm_t *fsm)
@@ -63,6 +66,7 @@ static void on_enum_reset(enum_fsm_t *fsm)
     fsm->is_service_addr = false;
     fsm->chain_out_active = false;
     fsm->collision_wait = false;
+    fsm->echo_strikes = 0;
     fsm->elapsed_ms = 0;
     /* last_error und Mechanik bleiben unberuehrt. */
 }
@@ -99,13 +103,23 @@ void enum_fsm_on_ack_sent(enum_fsm_t *fsm, bool echo_ok)
         return;  /* keine offene Zuweisung */
     }
     if (!echo_ok) {
-        enum_fsm_on_echo_mismatch(fsm);
+        /* Zuweisung verwerfen, aber an der Enumeration teilnehmen bleiben:
+         * Der Master prueft per PING und wiederholt ENUM_ASSIGN, wenn niemand
+         * die Adresse uebernommen hat (#51). Zwei Karten mit aktivem CHAIN_IN
+         * kollidieren dabei erneut und fallen nach ENUM_DONE bzw. T_enum auf
+         * ihre EEPROM-Adresse zurueck. elapsed_ms laeuft seit ENUM_RESET weiter. */
+        fsm->state = ENUM_ENUMERATING;
+        fsm->address = 0;
+        fsm->is_service_addr = false;
+        fsm->chain_out_active = false;
+        fsm->last_error = ENUM_ERR_COLLISION;
         return;
     }
     fsm->eeprom_address = fsm->address;
     fsm->want_eeprom_write = true;
     fsm->chain_out_active = true;    /* gibt die naechste Karte frei */
     fsm->last_error = ENUM_ERR_NONE; /* eine frische Zuweisung loest eine Kollision auf */
+    fsm->echo_strikes = 0;
 }
 
 void enum_fsm_on_frame(enum_fsm_t *fsm, uint8_t cmd, uint8_t addr,
@@ -125,6 +139,12 @@ void enum_fsm_on_frame(enum_fsm_t *fsm, uint8_t cmd, uint8_t addr,
         if (fsm->state == ENUM_ENUMERATING) {
             apply_fallback(fsm);  /* greift sofort, siehe 4.5.2 */
         }
+        /* CHAIN wird nur waehrend der Enumeration gebraucht. Bliebe CHAIN_OUT
+         * aktiv, saehe die Folgekarte bei der naechsten Enumeration schon bei
+         * ENUM_ASSIGN(1) ein aktives CHAIN_IN, falls diese Karte beide
+         * ENUM_RESET verpasst -- zwei Karten uebernaehmen dieselbe Adresse
+         * mit byte-gleichem ACK (#53). */
+        fsm->chain_out_active = false;
         break;
     default:
         /* Alle anderen Kommandos aendern den Enumerationszustand nicht. */
@@ -134,6 +154,13 @@ void enum_fsm_on_frame(enum_fsm_t *fsm, uint8_t cmd, uint8_t addr,
 
 void enum_fsm_on_tick(enum_fsm_t *fsm, uint16_t dt_ms)
 {
+    if (fsm->echo_strikes != 0u) {
+        if ((uint32_t)fsm->strike_age_ms + dt_ms >= ENUM_STRIKE_WINDOW_MS) {
+            fsm->echo_strikes = 0;   /* Fenster abgelaufen: Einzelereignis */
+        } else {
+            fsm->strike_age_ms = (uint16_t)(fsm->strike_age_ms + dt_ms);
+        }
+    }
     const bool waiting = (fsm->state == ENUM_ENUMERATING) ||
                          (fsm->state == ENUM_UNADDRESSED && fsm->collision_wait);
     if (!waiting) {
@@ -152,6 +179,14 @@ void enum_fsm_on_echo_mismatch(enum_fsm_t *fsm)
     if (fsm->state != ENUM_ADDRESSED) {
         return;
     }
+    fsm->last_error = ENUM_ERR_COLLISION;   /* wird in jedem Fall gemeldet */
+    if (fsm->echo_strikes == 0u) {
+        /* Erste Abweichung: moeglicherweise nur ein Stoerimpuls (#51). */
+        fsm->echo_strikes = 1;
+        fsm->strike_age_ms = 0;
+        return;
+    }
+    fsm->echo_strikes = 0;
     fsm->address = 0;
     fsm->is_service_addr = false;
     fsm->chain_out_active = false;
@@ -163,6 +198,11 @@ void enum_fsm_on_echo_mismatch(enum_fsm_t *fsm)
      * zeitlich, statt sofort erneut zu kollidieren. */
     fsm->collision_wait = true;
     fsm->elapsed_ms = 0;
+}
+
+void enum_fsm_on_reply_ok(enum_fsm_t *fsm)
+{
+    fsm->echo_strikes = 0;
 }
 
 uint8_t enum_fsm_take_error(enum_fsm_t *fsm)

@@ -26,6 +26,14 @@ static void send(uint8_t cmd, const uint8_t *pl, uint8_t len, bool chain_in)
     enum_fsm_on_frame(&fsm, cmd, PROTO_ADDR_BROADCAST, pl, len, chain_in);
 }
 
+/* Echte Adresskollision: zwei Abweichungen ohne fehlerfreie Antwort dazwischen
+ * (eine einzelne gilt als Stoerimpuls, #51). */
+static void collide(void)
+{
+    enum_fsm_on_echo_mismatch(&fsm);
+    enum_fsm_on_echo_mismatch(&fsm);
+}
+
 /* --- Start / Grundzustand ------------------------------------------------ */
 
 static void test_init_empty_eeprom_is_unaddressed(void)
@@ -92,8 +100,9 @@ static void test_first_card_takes_assignment(void)
     TEST_ASSERT_FALSE(fsm.want_eeprom_write);
 }
 
-/* Echo-Abweichung beim ACK (Feldfehler Position 1, #20): kein EEPROM-Eintrag,
- * kein CHAIN_OUT, Rueckfall auf die alte EEPROM-Adresse nach T_enum. */
+/* Echo-Abweichung beim ACK (#20, #51): kein EEPROM-Eintrag, kein CHAIN_OUT,
+ * aber zurueck nach ENUMERATING -- die Karte nimmt an der Wiederholung des
+ * ENUM_ASSIGN teil; bleibt diese aus, greift ENUM_DONE wie 4.5.2. */
 static void test_assign_ack_collision_keeps_eeprom_and_chain(void)
 {
     reset(5, 10);
@@ -102,21 +111,52 @@ static void test_assign_ack_collision_keeps_eeprom_and_chain(void)
     send(CMD_ENUM_ASSIGN, a, 1, true);
     enum_fsm_on_ack_sent(&fsm, false);
 
-    TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
+    TEST_ASSERT_EQUAL(ENUM_ENUMERATING, fsm.state);
     TEST_ASSERT_EQUAL_UINT8(0, enum_fsm_address(&fsm));
     TEST_ASSERT_FALSE(fsm.chain_out_active);
     TEST_ASSERT_FALSE(fsm.want_eeprom_write);
     TEST_ASSERT_EQUAL_UINT8(5, fsm.eeprom_address);
     TEST_ASSERT_EQUAL_HEX8(ENUM_ERR_COLLISION, fsm.last_error);
 
-    /* ENUM_DONE gilt nur fuer ENUMERATING; die Karte wartet T_enum ab. */
     send(CMD_ENUM_DONE, NULL, 0, false);
-    TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
-    enum_fsm_on_tick(&fsm, 10000);
     TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
     TEST_ASSERT_EQUAL_UINT8(5, enum_fsm_address(&fsm));
     TEST_ASSERT_FALSE(fsm.chain_out_active);
     TEST_ASSERT_FALSE(fsm.want_eeprom_write);
+}
+
+/* Stoerimpuls auf dem ACK, Master wiederholt ENUM_ASSIGN (#51). */
+static void test_assign_ack_collision_then_repeat_succeeds(void)
+{
+    reset(0, 10);
+    send(CMD_ENUM_RESET, NULL, 0, false);
+    const uint8_t a[1] = { 3 };
+    send(CMD_ENUM_ASSIGN, a, 1, true);
+    enum_fsm_on_ack_sent(&fsm, false);
+    enum_fsm_clear_outputs(&fsm);
+
+    send(CMD_ENUM_ASSIGN, a, 1, true);            /* Wiederholung */
+    TEST_ASSERT_TRUE(fsm.want_ack);
+    enum_fsm_on_ack_sent(&fsm, true);
+    TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
+    TEST_ASSERT_EQUAL_UINT8(3, enum_fsm_address(&fsm));
+    TEST_ASSERT_TRUE(fsm.chain_out_active);
+    TEST_ASSERT_TRUE(fsm.want_eeprom_write);
+    TEST_ASSERT_EQUAL_HEX8(ENUM_ERR_NONE, fsm.last_error);
+}
+
+/* T_enum laeuft nach einem gescheiterten ACK ab ENUM_RESET weiter. */
+static void test_assign_ack_collision_t_enum_continues(void)
+{
+    reset(7, 10);
+    send(CMD_ENUM_RESET, NULL, 0, false);
+    enum_fsm_on_tick(&fsm, 6000);
+    const uint8_t a[1] = { 1 };
+    send(CMD_ENUM_ASSIGN, a, 1, true);
+    enum_fsm_on_ack_sent(&fsm, false);
+    enum_fsm_on_tick(&fsm, 4000);
+    TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
+    TEST_ASSERT_EQUAL_UINT8(7, enum_fsm_address(&fsm));
 }
 
 static void test_ack_result_ignored_without_assignment(void)
@@ -189,6 +229,30 @@ static void test_enum_done_keeps_assigned_card(void)
     TEST_ASSERT_FALSE(fsm.is_service_addr);
 }
 
+/* CHAIN_OUT nach ENUM_DONE aus (#53): verpasst die Karte bei der naechsten
+ * Enumeration beide ENUM_RESET, sieht die Folgekarte kein aktives CHAIN_IN. */
+static void test_enum_done_releases_chain_out(void)
+{
+    reset(0, 10);
+    send(CMD_ENUM_RESET, NULL, 0, false);
+    const uint8_t a1[1] = { 2 };
+    send(CMD_ENUM_ASSIGN, a1, 1, true);
+    enum_fsm_on_ack_sent(&fsm, true);
+    enum_fsm_clear_outputs(&fsm);
+    TEST_ASSERT_TRUE(fsm.chain_out_active);
+    send(CMD_ENUM_DONE, NULL, 0, false);
+    TEST_ASSERT_FALSE(fsm.chain_out_active);
+    TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
+    TEST_ASSERT_EQUAL_UINT8(2, enum_fsm_address(&fsm));
+
+    /* Naechste Runde: ENUM_RESET verpasst, ENUM_ASSIGN an andere Karten */
+    const uint8_t a2[1] = { 1 };
+    send(CMD_ENUM_ASSIGN, a2, 1, true);
+    TEST_ASSERT_FALSE(fsm.want_ack);
+    TEST_ASSERT_FALSE(fsm.chain_out_active);
+    TEST_ASSERT_EQUAL_UINT8(2, enum_fsm_address(&fsm));
+}
+
 /* --- Rueckfall auf die EEPROM-Adresse (Backlog T6) --------------------- */
 
 static void test_fallback_eeprom_on_timeout(void)
@@ -256,13 +320,54 @@ static void test_collision_drops_address(void)
     reset(5, 10);   /* ADDRESSED unter Adresse 5 */
     TEST_ASSERT_TRUE(enum_fsm_responds_to(&fsm, 5));
 
-    enum_fsm_on_echo_mismatch(&fsm);
+    collide();
 
     TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
     TEST_ASSERT_EQUAL_UINT8(0, enum_fsm_address(&fsm));
     TEST_ASSERT_EQUAL_HEX8(ENUM_ERR_COLLISION, fsm.last_error);
     TEST_ASSERT_EQUAL_HEX8(0x06, fsm.last_error);
     TEST_ASSERT_FALSE(enum_fsm_responds_to(&fsm, 5));
+}
+
+/* Einzelne Abweichung = Stoerimpuls: Adresse bleibt, 0x06 wird gemeldet (#51). */
+static void test_single_mismatch_keeps_address(void)
+{
+    reset(5, 10);
+    enum_fsm_on_echo_mismatch(&fsm);
+    TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
+    TEST_ASSERT_EQUAL_UINT8(5, enum_fsm_address(&fsm));
+    TEST_ASSERT_FALSE(fsm.collision_wait);
+    TEST_ASSERT_EQUAL_HEX8(0x06, enum_fsm_take_error(&fsm));
+    TEST_ASSERT_EQUAL_HEX8(ENUM_ERR_NONE, enum_fsm_take_error(&fsm));
+}
+
+static void test_good_reply_between_mismatches_keeps_address(void)
+{
+    reset(5, 10);
+    for (int i = 0; i < 5; ++i) {
+        enum_fsm_on_echo_mismatch(&fsm);
+        enum_fsm_on_reply_ok(&fsm);
+    }
+    TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
+    TEST_ASSERT_EQUAL_UINT8(5, enum_fsm_address(&fsm));
+}
+
+static void test_mismatches_outside_window_keep_address(void)
+{
+    reset(5, 10);
+    enum_fsm_on_echo_mismatch(&fsm);
+    enum_fsm_on_tick(&fsm, ENUM_STRIKE_WINDOW_MS - 1u);
+    TEST_ASSERT_EQUAL_UINT8(1, fsm.echo_strikes);
+    enum_fsm_on_tick(&fsm, 1);
+    TEST_ASSERT_EQUAL_UINT8(0, fsm.echo_strikes);
+    enum_fsm_on_echo_mismatch(&fsm);
+    TEST_ASSERT_EQUAL(ENUM_ADDRESSED, fsm.state);
+
+    /* innerhalb des Fensters: zweite Abweichung verwirft die Adresse */
+    enum_fsm_on_tick(&fsm, ENUM_STRIKE_WINDOW_MS - 1u);
+    enum_fsm_on_echo_mismatch(&fsm);
+    TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
+    TEST_ASSERT_TRUE(fsm.collision_wait);
 }
 
 static void test_collision_ignored_when_not_addressed(void)
@@ -276,7 +381,7 @@ static void test_collision_ignored_when_not_addressed(void)
 static void test_collision_recovers_via_new_enumeration(void)
 {
     reset(5, 10);
-    enum_fsm_on_echo_mismatch(&fsm);
+    collide();
     TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
 
     /* Der Master merkt die Kollision und enumeriert neu. */
@@ -294,7 +399,7 @@ static void test_collision_recovers_via_new_enumeration(void)
 static void test_collision_falls_back_after_t_enum(void)
 {
     reset(5, 10);
-    enum_fsm_on_echo_mismatch(&fsm);
+    collide();
     TEST_ASSERT_TRUE(fsm.collision_wait);
     enum_fsm_on_tick(&fsm, 9999);
     TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
@@ -317,7 +422,7 @@ static void test_collision_on_service_address_falls_back_to_service(void)
     send(CMD_ENUM_RESET, NULL, 0, false);
     enum_fsm_on_tick(&fsm, 2000);                 /* -> 250 */
     TEST_ASSERT_TRUE(fsm.is_service_addr);
-    enum_fsm_on_echo_mismatch(&fsm);
+    collide();
     TEST_ASSERT_EQUAL(ENUM_UNADDRESSED, fsm.state);
     enum_fsm_on_tick(&fsm, 2000);
     TEST_ASSERT_EQUAL_UINT8(PROTO_ADDR_SERVICE, enum_fsm_address(&fsm));
@@ -327,7 +432,7 @@ static void test_collision_on_service_address_falls_back_to_service(void)
 static void test_enum_reset_during_collision_wait(void)
 {
     reset(5, 10);
-    enum_fsm_on_echo_mismatch(&fsm);
+    collide();
     enum_fsm_on_tick(&fsm, 8000);
     send(CMD_ENUM_RESET, NULL, 0, false);
     TEST_ASSERT_EQUAL(ENUM_ENUMERATING, fsm.state);
@@ -351,7 +456,7 @@ static void test_take_error_reports_once(void)
 {
     reset(5, 10);
     TEST_ASSERT_EQUAL_HEX8(ENUM_ERR_NONE, enum_fsm_take_error(&fsm));
-    enum_fsm_on_echo_mismatch(&fsm);
+    collide();
     enum_fsm_on_tick(&fsm, 10000);
     TEST_ASSERT_EQUAL_HEX8(0x06, enum_fsm_take_error(&fsm));
     TEST_ASSERT_EQUAL_HEX8(ENUM_ERR_NONE, enum_fsm_take_error(&fsm));
@@ -383,17 +488,23 @@ int main(void)
     RUN_TEST(test_enum_reset_enters_enumerating);
     RUN_TEST(test_first_card_takes_assignment);
     RUN_TEST(test_assign_ack_collision_keeps_eeprom_and_chain);
+    RUN_TEST(test_assign_ack_collision_then_repeat_succeeds);
+    RUN_TEST(test_assign_ack_collision_t_enum_continues);
     RUN_TEST(test_ack_result_ignored_without_assignment);
     RUN_TEST(test_card_without_chain_in_ignores_assignment);
     RUN_TEST(test_second_assignment_is_not_taken_twice);
     RUN_TEST(test_enum_assign_bad_address_ignored);
     RUN_TEST(test_enum_done_keeps_assigned_card);
+    RUN_TEST(test_enum_done_releases_chain_out);
     RUN_TEST(test_fallback_eeprom_on_timeout);
     RUN_TEST(test_fallback_eeprom_on_enum_done);
     RUN_TEST(test_fallback_service_on_timeout);
     RUN_TEST(test_fallback_service_on_enum_done);
     RUN_TEST(test_no_timeout_outside_enumerating);
     RUN_TEST(test_collision_drops_address);
+    RUN_TEST(test_single_mismatch_keeps_address);
+    RUN_TEST(test_good_reply_between_mismatches_keeps_address);
+    RUN_TEST(test_mismatches_outside_window_keep_address);
     RUN_TEST(test_collision_ignored_when_not_addressed);
     RUN_TEST(test_collision_recovers_via_new_enumeration);
     RUN_TEST(test_collision_falls_back_after_t_enum);

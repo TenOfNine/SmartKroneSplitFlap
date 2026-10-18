@@ -45,7 +45,10 @@
 #define TICK_CMP         ((uint16_t)(F_CPU / 1000UL) - 1u)
 
 /* --- Zeitverhalten Bus (Spezifikation 5.6) ------------------------- */
-#define RESPONSE_DELAY_US 200u   /* Mindest-Antwortverzug nach Rahmenende */
+/* Mindest-Antwortverzug nach Rahmenende. Der Master (ESP32-C3, RS485-
+ * Halbduplex) schaltet DE per Software in der UART-ISR ab, die nicht im IRAM
+ * liegt; 500 us geben Reserve gegen deren Latenz (#52). Spez. 5.6: 0,5..3 ms. */
+#define RESPONSE_DELAY_US 500u
 /* Inter-Byte-Timeout des Empfangs: ein Rahmen laeuft bei 115200 Bd ohne
  * Pause durch (87 us je Byte). Mehr als 2 ms ohne Folgebyte -> Rahmen
  * verwerfen (Vergleich in ganzen ms, wirksam nach 2..3 ms). */

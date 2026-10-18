@@ -31,6 +31,13 @@ typedef enum {
 #define ENUM_ERR_NONE      0x00u
 #define ENUM_ERR_COLLISION 0x06u  /* Fehlercode 0x06, Abschnitt 6.4 */
 
+/* Echo-Abweichungen beim Antworten (4.5.3, #51): Die Adresse wird erst bei
+ * der zweiten Abweichung ohne dazwischenliegende fehlerfreie Antwort
+ * verworfen, sofern beide innerhalb dieses Fensters liegen. Ein einzelner
+ * Stoerimpuls (Triac/Motor) macht die Karte so nicht taub; doppelt vergebene
+ * Adressen kollidieren bei jeder Antwort und werden weiter erkannt. */
+#define ENUM_STRIKE_WINDOW_MS 5000u
+
 /* T_enum-Grenzen aus Abschnitt 4.5.2 (1..60 s). */
 #define ENUM_T_ENUM_MIN_S 1u
 #define ENUM_T_ENUM_MAX_S 60u
@@ -44,6 +51,8 @@ typedef struct {
     uint16_t elapsed_ms;      /* seit ENUM_RESET bzw. seit der Kollision */
     bool     chain_out_active;
     bool     collision_wait;  /* UNADDRESSED nach Kollision, Rueckfall nach T_enum */
+    uint8_t  echo_strikes;    /* Echo-Abweichungen ohne fehlerfreie Antwort dazwischen */
+    uint16_t strike_age_ms;   /* seit der ersten dieser Abweichungen */
     uint8_t  last_error;      /* 0x06 bis zur Meldung ueber enum_fsm_take_error */
 
     /* Ausgaben: nach jedem Schritt pruefen, ausfuehren, dann quittieren. */
@@ -76,11 +85,14 @@ void enum_fsm_on_frame(enum_fsm_t *fsm, uint8_t cmd, uint8_t addr,
                        bool chain_in_active);
 
 /*
- * Ergebnis der ENUM_ASSIGN-Bestaetigung (#20).
+ * Ergebnis der ENUM_ASSIGN-Bestaetigung (#20, #51).
  *   echo_ok = true   Zuweisung festschreiben: eeprom_address, want_eeprom_write,
  *                    CHAIN_OUT aktiv (Spez. 4.5.1 Schritt 3).
- *   echo_ok = false  Kollision wie enum_fsm_on_echo_mismatch; EEPROM und
- *                    CHAIN_OUT bleiben unberuehrt.
+ *   echo_ok = false  Zuweisung verwerfen und zurueck nach ENUMERATING (ohne
+ *                    Adresse, CHAIN_OUT aus, Fehlercode 0x06). Die Karte nimmt
+ *                    damit an der Wiederholung des ENUM_ASSIGN teil, die der
+ *                    Master nach einem ausgebliebenen ACK sendet; EEPROM bleibt
+ *                    unberuehrt, der T_enum-Rueckfall laeuft weiter.
  */
 void enum_fsm_on_ack_sent(enum_fsm_t *fsm, bool echo_ok);
 
@@ -89,13 +101,19 @@ void enum_fsm_on_ack_sent(enum_fsm_t *fsm, bool echo_ok);
 void enum_fsm_on_tick(enum_fsm_t *fsm, uint16_t dt_ms);
 
 /*
- * Meldet, dass ein zurueckgelesenes Sendebyte vom gesendeten abweicht
- * (Kollision, Abschnitt 4.5.3). Verwirft die Laufzeitadresse, Zustand
- * UNADDRESSED, Fehlercode 0x06. Kommt binnen T_enum keine Enumeration, faellt
- * die Karte wie nach 4.5.2 auf ihre EEPROM-Adresse (bzw. 250) zurueck, statt
- * dauerhaft taub zu bleiben (#20). Die Mechanik bleibt unberuehrt.
+ * Meldet, dass beim Senden einer Antwort ein zurueckgelesenes Byte vom
+ * gesendeten abwich (Abschnitt 4.5.3). Immer: Fehlercode 0x06 merken.
+ * Erste Abweichung: Adresse bleibt (moeglicher Stoerimpuls, #51).
+ * Zweite Abweichung ohne fehlerfreie Antwort dazwischen innerhalb von
+ * ENUM_STRIKE_WINDOW_MS: Laufzeitadresse verwerfen, Zustand UNADDRESSED;
+ * kommt binnen T_enum keine Enumeration, Rueckfall auf die EEPROM-Adresse
+ * (bzw. 250) wie nach 4.5.2 (#20). Die Mechanik bleibt unberuehrt.
  */
 void enum_fsm_on_echo_mismatch(enum_fsm_t *fsm);
+
+/* Eine Antwort wurde mit fehlerfreiem Echo gesendet: Abweichungszaehler
+ * zuruecksetzen (#51). */
+void enum_fsm_on_reply_ok(enum_fsm_t *fsm);
 
 /* Gemerkten Fehlercode (0x06 oder 0) liefern und zuruecksetzen; fuer
  * Statusbyte 3, wenn kein Motorfehler ansteht (#28). */

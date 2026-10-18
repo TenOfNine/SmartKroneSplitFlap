@@ -386,10 +386,14 @@ static uint8_t         g_identify_active;
 static uint32_t        g_identify_until_ms;
 static uint32_t        g_led_sync_ms;   /* now-Bezugspunkt fuer synchrones Blinken */
 
-/* Antwort senden; eine Echo-Abweichung verwirft die Laufzeitadresse (4.5.3). */
+/* Antwort senden. Eine Echo-Abweichung wird gemeldet; die Laufzeitadresse
+ * geht erst bei der zweiten ohne fehlerfreie Antwort dazwischen verloren
+ * (4.5.3, #51). */
 static void reply(uint8_t cmd, uint8_t own_addr, const uint8_t *payload, uint8_t len)
 {
-    if (!send_frame(cmd, own_addr, payload, len)) {
+    if (send_frame(cmd, own_addr, payload, len)) {
+        enum_fsm_on_reply_ok(&g_enum);
+    } else {
         enum_fsm_on_echo_mismatch(&g_enum);
     }
 }

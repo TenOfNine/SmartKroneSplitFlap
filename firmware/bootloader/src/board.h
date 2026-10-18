@@ -20,8 +20,9 @@
 /* Byte 4 der GET_VERSION-Antwort im Bootloader. Bei jeder Aenderung am
  * Bootloader erhoehen (erreicht die Karten nur per UPDI-Werksflash).
  *   1  bis v1.15 (inkl. DI-Pin-Fix 3d65464)
- *   2  App-Gueltigkeit nach Abbruch, wiederaufsetzbare Uebertragung, TCB0-Zeitbasis */
-#define BL_VERSION        2u
+ *   2  App-Gueltigkeit nach Abbruch, wiederaufsetzbare Uebertragung, TCB0-Zeitbasis
+ *   3  Antwortverzug 500 us statt 200 us (#52) */
+#define BL_VERSION        3u
 
 /* --- Flash-Aufteilung (Fuse BOOTEND = 0x0C) ---------------------- */
 #ifndef BOOT_APP_BASE
@@ -49,7 +50,7 @@
 #define USART_BAUD_REG    ((uint16_t)((4UL * F_CPU) / BUS_BAUD))
 /* 1-ms-Zeitbasis: TCB0 periodisch wie in der App, hier ohne Interrupt gepollt. */
 #define TICK_CMP          ((uint16_t)(F_CPU / 1000UL) - 1u)
-#define RESPONSE_DELAY_US 200u    /* Mindest-Antwortverzug nach Rahmenende (Spez. 5.6) */
+#define RESPONSE_DELAY_US 500u    /* Mindest-Antwortverzug nach Rahmenende (Spez. 5.6, #52) */
 #define ECHO_DRAIN_LOOPS  4000u   /* eigenes Echo nach dem Senden verwerfen */
 
 /* --- Watchdog ---------------------------------------------------- */
