@@ -14,6 +14,8 @@ static void good_header(uint8_t *b)
     memset(b, 0, OTA_HEADER_LEN);
     memcpy(b, OTA_MAGIC, 4);
     b[4] = OTA_FORMAT_VER;
+    b[5] = OTA_TARGET_MASTER;
+    b[6] = 1; b[7] = 19;                                     /* Version 1.19 */
     b[8] = 0x00; b[9] = 0x10; b[10] = 0x00; b[11] = 0x00;   /* 4096 LE */
     for (int i = 0; i < 32; i++) b[12 + i] = (uint8_t)(i + 1);
     for (int i = 0; i < 64; i++) b[44 + i] = (uint8_t)(0x80 + i);
@@ -55,7 +57,7 @@ static void test_bad_version(void)
     uint8_t b[OTA_HEADER_LEN];
     ota_header_t h;
     good_header(b);
-    b[4] = 2;
+    b[4] = 2;                                               /* unbekanntes Format */
     TEST_ASSERT_EQUAL_INT(OTA_HDR_BAD_VERSION,
                           otaverify_parse_header(b, sizeof(b), 0x100000, &h));
 }
@@ -90,6 +92,43 @@ static void test_max_img_zero_skips_check(void)
     TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_parse_header(b, sizeof(b), 0, &h));
 }
 
+/* Byte 5..7 tragen Ziel und Version; Container bis 1.18 haben dort 0. */
+static void test_target_and_version_fields(void)
+{
+    uint8_t b[OTA_HEADER_LEN];
+    ota_header_t h;
+    good_header(b);
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_parse_header(b, sizeof(b), 0, &h));
+    TEST_ASSERT_EQUAL_UINT8(OTA_TARGET_MASTER, h.target);
+    TEST_ASSERT_EQUAL_HEX16(0x0113, h.version);
+    b[5] = b[6] = b[7] = 0;
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_parse_header(b, sizeof(b), 0, &h));
+    TEST_ASSERT_EQUAL_UINT8(OTA_TARGET_UNKNOWN, h.target);
+    TEST_ASSERT_EQUAL_HEX16(0, h.version);
+}
+
+/* Anti-Rollback (#38). */
+static void test_check_target_rules(void)
+{
+    uint8_t b[OTA_HEADER_LEN];
+    ota_header_t h;
+    good_header(b);
+    otaverify_parse_header(b, sizeof(b), 0, &h);                  /* Master 1.19 */
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_check_target(&h, OTA_TARGET_MASTER, 0x0112, false));
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_check_target(&h, OTA_TARGET_MASTER, 0x0113, false));
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_DOWNGRADE,
+                          otaverify_check_target(&h, OTA_TARGET_MASTER, 0x0114, false));
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_check_target(&h, OTA_TARGET_MASTER, 0x0114, true));
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_WRONG_TARGET,
+                          otaverify_check_target(&h, OTA_TARGET_MODULE, 0x0112, true));
+    b[5] = b[6] = b[7] = 0;                                       /* alter Container */
+    otaverify_parse_header(b, sizeof(b), 0, &h);
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_DOWNGRADE,
+                          otaverify_check_target(&h, OTA_TARGET_MASTER, 0x0113, false));
+    TEST_ASSERT_EQUAL_INT(OTA_HDR_OK, otaverify_check_target(&h, OTA_TARGET_MASTER, 0x0113, true));
+    TEST_ASSERT_NOT_NULL(otaverify_strerror(OTA_HDR_DOWNGRADE));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -100,5 +139,7 @@ int main(void)
     RUN_TEST(test_zero_length);
     RUN_TEST(test_length_over_partition);
     RUN_TEST(test_max_img_zero_skips_check);
+    RUN_TEST(test_target_and_version_fields);
+    RUN_TEST(test_check_target_rules);
     return UNITY_END();
 }

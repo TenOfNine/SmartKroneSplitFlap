@@ -66,11 +66,17 @@ def _sign_mota(elf: Path, out: Path) -> bool:
         Path.home() / ".config" / "krone" / "ota-signing.pem")
     if not (env and "BEGIN" in env) and not key.is_file():
         raw.unlink(missing_ok=True)
+        out.unlink(missing_ok=True)   # keine veraltete .mota liegen lassen (#41)
         print(f"WARNUNG: kein OTA-Signaturschluessel ({key}); {out.name} wird nicht "
-              f"erzeugt.", file=sys.stderr)
+              f"erzeugt (alte Datei entfernt).", file=sys.stderr)
         return False
+    import re
+    board = (MODULE / "src" / "board.h").read_text()
+    ver = (re.search(r"APP_VERSION_MAJOR\s+(\d+)", board).group(1) + "." +
+           re.search(r"APP_VERSION_MINOR\s+(\d+)", board).group(1))
     r = subprocess.run([sys.executable, str(REPO / "tools" / "ota_keys.py"),
-                        "sign", "--raw", str(raw), str(out)])
+                        "sign", "--raw", str(raw), str(out),
+                        "--target", "module", "--version", ver])
     raw.unlink(missing_ok=True)
     if r.returncode != 0:
         sys.exit("Signieren der .mota fehlgeschlagen.")

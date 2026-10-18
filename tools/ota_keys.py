@@ -6,7 +6,13 @@ Container `.kota` (KRONE-OTA, Little-Endian):
     Offset  Laenge  Inhalt
     0       4       Magic "KRN1"
     4       1       Formatversion (=1)
-    5       3       reserviert (0)
+    5       1       Ziel: 1 Zentralsteuerung, 2 Modul (0 = unbekannt, bis 1.18)
+    6       1       Version MAJOR (bis 1.18: 0)
+    7       1       Version MINOR (bis 1.18: 0)
+
+Byte 5..7 waren bis Firmware 1.18 reserviert (0). Sie liegen im signierten
+Teil; aeltere Zentralsteuerungen ignorieren sie, deshalb bleibt die
+Formatversion 1 und ein 1.18-Master nimmt auch neue Container an (#38).
     8       4       img_len  -- Laenge des App-Images
     12      32      SHA-256 des App-Images
     44      64      ECDSA-P-256-Signatur (r||s, je 32 Byte) ueber Byte 0..43
@@ -19,7 +25,8 @@ Der private Schluessel liegt NIE im Repo. Standardpfad:
 
     python tools/ota_keys.py init [--force]      Schluesselpaar anlegen + Header
     python tools/ota_keys.py pubkey              Header aus vorhandenem Key neu schreiben
-    python tools/ota_keys.py sign IN.bin OUT.kota
+    python tools/ota_keys.py sign IN.bin OUT.kota --target master --version 1.19
+    python tools/ota_keys.py sign --raw IN.bin OUT.mota --target module --version 1.19
     python tools/ota_keys.py verify IN.kota      Container gegen ota_pubkey.h pruefen (kein privater Key noetig)
 """
 from __future__ import annotations
@@ -42,6 +49,7 @@ DEFAULT_KEY = Path.home() / ".config" / "krone" / "ota-signing.pem"
 
 MAGIC = b"KRN1"
 FORMAT_VERSION = 1
+TARGETS = {"master": 1, "module": 2}
 HEADER_LEN = 108
 SIGNED_LEN = 44
 
@@ -126,6 +134,12 @@ def cmd_sign(args: argparse.Namespace) -> int:
     header = bytearray(HEADER_LEN)
     header[0:4] = MAGIC
     header[4] = FORMAT_VERSION
+    major, minor = (int(x) for x in args.version.split("."))
+    if not (0 <= major <= 255 and 0 <= minor <= 255):
+        sys.exit(f"Version {args.version} ausserhalb 0..255.0..255")
+    header[5] = TARGETS[args.target]
+    header[6] = major
+    header[7] = minor
     struct.pack_into("<I", header, 8, len(image))
     header[12:44] = digest
 
@@ -169,7 +183,9 @@ def cmd_verify(args: argparse.Namespace) -> int:
             utils.encode_dss_signature(r, s), bytes(blob[:SIGNED_LEN]), ECDSA(SHA256()))
     except Exception:
         sys.exit("Signatur ungueltig (passt nicht zu ota_pubkey.h).")
-    print(f"OK: {args.infile} — Signatur gueltig, Image {img_len} B, "
+    tgt = {1: "Zentralsteuerung", 2: "Modul"}.get(blob[5], "unbekannt")
+    ver = f"{blob[6]}.{blob[7]}" if blob[5] else "unbekannt (bis 1.18)"
+    print(f"OK: {args.infile} — Signatur gueltig, {tgt}, Version {ver}, Image {img_len} B, "
           f"sha256 {blob[12:44].hex()[:12]}…")
     return 0
 
@@ -186,6 +202,9 @@ def main() -> int:
     p.add_argument("outfile")
     p.add_argument("--raw", action="store_true",
                    help="Rohbinaer ohne ESP-Magic (z. B. ATtiny-App fuer .mota)")
+    p.add_argument("--target", choices=sorted(TARGETS), required=True,
+                   help="Zielgeraet, steht im signierten Header")
+    p.add_argument("--version", required=True, help="MAJOR.MINOR, steht im signierten Header")
     p.set_defaults(fn=cmd_sign)
     p = sub.add_parser("verify", help="Container gegen ota_pubkey.h pruefen")
     p.add_argument("infile")

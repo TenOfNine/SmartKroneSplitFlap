@@ -57,17 +57,29 @@ def _esptool() -> list[str]:
     return [sys.executable, str(et)]
 
 
+def _master_version() -> str:
+    import re
+    src = (FW / "src" / "main.cpp").read_text()
+    mj = re.search(r"FW_VERSION_MAJOR\s*=\s*(\d+)", src).group(1)
+    mn = re.search(r"FW_VERSION_MINOR\s*=\s*(\d+)", src).group(1)
+    return f"{mj}.{mn}"
+
+
 def _sign_ota(image: Path, out: Path) -> bool:
     """firmware.bin -> signierter .kota-Container. True, wenn signiert."""
     env = os.environ.get("KRONE_OTA_KEY", "")
     key_path = Path(env) if (env and "BEGIN" not in env) else (
         Path.home() / ".config" / "krone" / "ota-signing.pem")
     if not (env and "BEGIN" in env) and not key_path.is_file():
+        # Keinen alten, zur Quelle nicht mehr passenden Container liegen lassen (#41).
+        out.unlink(missing_ok=True)
         print(f"WARNUNG: kein OTA-Signaturschluessel ({key_path}); {out.name} wird "
-              f"nicht erzeugt. 'python tools/ota_keys.py init' anlegen.", file=sys.stderr)
+              f"nicht erzeugt (alte Datei entfernt). 'python tools/ota_keys.py init' anlegen.",
+              file=sys.stderr)
         return False
     r = subprocess.run([sys.executable, str(REPO / "tools" / "ota_keys.py"),
-                        "sign", str(image), str(out)])
+                        "sign", str(image), str(out),
+                        "--target", "master", "--version", _master_version()])
     if r.returncode != 0:
         sys.exit("Signieren fehlgeschlagen.")
     return True
@@ -95,6 +107,13 @@ def _embed_module_fw() -> None:
     minr = int(re.search(r"APP_VERSION_MINOR\s+(\d+)", board).group(1))
     hdr = FW / "src" / "module_fw.h"
     data = mota.read_bytes() if mota.is_file() else b""
+    # Nur einbetten, wenn der signierte Header genau diese Modulversion traegt;
+    # eine liegengebliebene aeltere .mota meldete sonst die neue Version (#41).
+    if data and (len(data) < 8 or data[5] != 2 or (data[6], data[7]) != (maj, minr)):
+        print(f"WARNUNG: {mota.name} passt nicht zu v{maj}.{minr} (Header "
+              f"{data[4:8].hex() if len(data) >= 8 else '?'}); leerer Blob eingebettet.",
+              file=sys.stderr)
+        data = b""
     body = ",\n    ".join(
         ", ".join(f"0x{b:02x}" for b in data[i:i + 16]) for i in range(0, len(data), 16)
     ) or "0x00"

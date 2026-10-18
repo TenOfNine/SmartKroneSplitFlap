@@ -52,6 +52,7 @@ extern "C" {
 #include "protocol.h"
 #include "selftest.h"
 }
+#include "ca_bundle.h"   /* generiert von tools/gen_ca_bundle.py */
 #include "module_fw.h"   /* generiert von tools/build_master_firmware.py */
 #include "ota_sign.h"
 
@@ -343,6 +344,22 @@ static void module_fw_verify()
     if (!ota_sign_verify_header(MODULE_FW_MOTA, OTA_SIGNED_LEN, h.sig)) {
         evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "modfw", "Signatur ungueltig");
         return;
+    }
+    /* Ziel/Version aus dem signierten Teil und Image-Hash pruefen (#38). */
+    if (h.target != OTA_TARGET_MODULE || h.version != MODULE_FW_VER ||
+        MODULE_FW_LEN != OTA_HEADER_LEN + h.img_len) {
+        evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "modfw", "Container passt nicht (Ziel/Version/Laenge)");
+        return;
+    }
+    {
+        uint8_t sha[OTA_SHA_LEN];
+        ota_sha256_begin();
+        ota_sha256_update(MODULE_FW_MOTA + OTA_HEADER_LEN, h.img_len);
+        ota_sha256_finish(sha);
+        if (memcmp(sha, h.img_sha256, OTA_SHA_LEN) != 0) {
+            evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "modfw", "Image-Hash stimmt nicht");
+            return;
+        }
     }
     g_module_img     = MODULE_FW_MOTA + OTA_HEADER_LEN;
     g_module_img_len = h.img_len;
@@ -837,9 +854,11 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 
 <details class=grp><summary>Firmware</summary><div class=grpbody>
 <div class=sect><h3>Firmware aktualisieren</h3>
-<p class=hint>Signierten Container <code>krone-master-esp32c3.kota</code> hochladen. Das Modul prüft <b>Herkunft (Signatur)</b> und Prüfsumme, schreibt dann in die zweite App-Partition und startet neu. Fremde, manipulierte oder beschädigte Dateien werden abgewiesen; die laufende Firmware bleibt aktiv.</p>
+<p class=hint>Signierten Container <code>krone-master-esp32c3.kota</code> hochladen. Das Modul prüft <b>Herkunft (Signatur)</b>, Zielgerät, Version und Prüfsumme, schreibt dann in die zweite App-Partition und startet neu. Fremde, manipulierte oder beschädigte Dateien werden abgewiesen; die laufende Firmware bleibt aktiv. Ein älterer Stand (auch jeder Container bis 1.18) nur mit ausdrücklicher Freigabe.</p>
 <div class="row mt"><label class="btn" style=cursor:pointer>Datei wählen<input type=file id=fw accept=".kota,application/octet-stream" hidden></label>
 <span id=fwname class=hint style=margin:0>keine Datei</span></div>
+<div class=trow><label class=switch><input type=checkbox id=fwdown><span class=t></span></label>
+<div class=tx><b>Älteren Stand erlauben</b><span>Nur für ein bewusstes Zurückgehen auf eine frühere Version.</span></div></div>
 <div id=fwbar style="display:none;margin-top:12px;height:6px;background:var(--p2);border:1px solid var(--line);border-radius:4px;overflow:hidden">
 <div id=fwfill style="height:100%;width:0;background:var(--amber);transition:width .15s"></div></div>
 <div class="row mt"><button class="btn primary" id=fwgo disabled>Update starten</button>
@@ -895,7 +914,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class="row mt"><button class=btn id=backup>Einstellungen sichern</button>
 <label class=btn style=cursor:pointer>Wiederherstellen<input type=file id=restore accept="application/json,.json" hidden></label>
 <button class="btn danger" id=reboot>Neu starten</button></div>
-<p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen.</p>
+<p class=hint>Alle Einstellungen (auch WLAN &amp; MQTT) liegen im NVS und <b>überstehen OTA-Updates</b>. Nur beim Flashen per USB mit „Erase" gehen sie verloren — dann die Sicherung wieder einspielen. Passwörter und den WLAN-Schlüssel enthält die Sicherung nur, wenn unter Zugriffsschutz ein Admin-Passwort gesetzt ist; sonst bleiben sie beim Wiederherstellen unverändert.</p>
 </div>
 </div></details>
 
@@ -1140,7 +1159,7 @@ $("#fwgo").onclick=()=>{if(!_fw)return;
 if(!/\.kota$/i.test(_fw.name)&&!confirm("Die Datei endet nicht auf .kota — das signierte App-Image wird erwartet. Trotzdem hochladen?"))return;
 if(!confirm(`Firmware „${_fw.name}“ prüfen und einspielen?`))return;
 const fd=new FormData();fd.append("firmware",_fw,_fw.name);
-const x=new XMLHttpRequest();x.open("POST","/api/update");x.setRequestHeader("X-Krone-Request","1");
+const x=new XMLHttpRequest();x.open("POST","/api/update"+($("#fwdown").checked?"?downgrade=1":""));x.setRequestHeader("X-Krone-Request","1");
 $("#fwbar").style.display="block";$("#fwfill").style.width="0";$("#fwgo").disabled=true;
 x.upload.onprogress=ev=>{if(ev.lengthComputable)$("#fwfill").style.width=Math.round(100*ev.loaded/ev.total)+"%"};
 x.onload=()=>{if(x.status===200){$("#fwfill").style.width="100%";toast("Update geschrieben — Neustart …")}
@@ -2136,9 +2155,11 @@ static void handle_backup()
             return;
         }
         apply_config_doc(doc);
-        if (doc["wifi_ssid"].is<const char *>()) {
+        /* Ohne Schluessel (Sicherung ohne Anmeldung) das WLAN nicht anfassen,
+         * sonst verbaende sich die Karte ohne Passwort. */
+        if (doc["wifi_ssid"].is<const char *>() && doc["wifi_psk"].is<const char *>()) {
             const char *ssid = doc["wifi_ssid"];
-            const char *psk  = doc["wifi_psk"] | "";
+            const char *psk  = doc["wifi_psk"];
             if (strlen(ssid) > 0) {
                 WiFi.begin(ssid, psk);
                 evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "wifi",
@@ -2154,10 +2175,18 @@ static void handle_backup()
 
     JsonDocument d;
     config_to_json(d);
-    d["admin_pass"] = cfg.admin_pass;   /* in der Sicherung, nicht ueber /api/config */
-    d["mqtt_pass"]  = cfg.mqtt_pass;
     d["wifi_ssid"]  = WiFi.SSID();
-    d["wifi_psk"]   = WiFi.psk();
+    /* Passwoerter und WLAN-Schluessel nur ueber eine angemeldete Verbindung
+     * (Admin-Passwort gesetzt, guard() hat geprueft). Ohne Anmeldung koennte
+     * sonst jeder im erlaubten Netz sie abrufen (#38). */
+    if (auth_required()) {
+        d["admin_pass"] = cfg.admin_pass;   /* in der Sicherung, nicht ueber /api/config */
+        d["mqtt_pass"]  = cfg.mqtt_pass;
+        d["wifi_psk"]   = WiFi.psk();
+        d["secrets"]    = true;
+    } else {
+        d["secrets"]    = false;
+    }
     String out;
     serializeJson(d, out);
     web.sendHeader("Content-Disposition", "attachment; filename=\"krone-backup.json\"");
@@ -2186,7 +2215,8 @@ static size_t       g_ota_hdr_have = 0;
 static uint8_t      g_ota_hdr[OTA_HEADER_LEN];
 static ota_header_t g_ota_h;
 static uint32_t     g_ota_img_seen = 0;
-static char         g_ota_err[56]  = "";
+static char         g_ota_err[96]  = "";
+static bool         g_ota_allow_downgrade = false;   /* nur Browser-Upload mit Freigabe (#38) */
 
 static void ota_fail(const char *why)
 {
@@ -2233,6 +2263,16 @@ static void ota_feed(const uint8_t *p, size_t n)
         if (!ota_sign_verify_header(g_ota_hdr, OTA_SIGNED_LEN, g_ota_h.sig)) {
             ota_fail("Signatur ungueltig"); return;
         }
+        /* Zielgeraet und Version stehen im signierten Teil (#38). */
+        const uint16_t cur = (uint16_t)(FW_VERSION_MAJOR << 8 | FW_VERSION_MINOR);
+        const ota_hdr_result_t tr =
+            otaverify_check_target(&g_ota_h, OTA_TARGET_MASTER, cur, g_ota_allow_downgrade);
+        if (tr != OTA_HDR_OK) { ota_fail(otaverify_strerror(tr)); return; }
+        if (g_ota_h.version < cur) {
+            evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "ota", "Downgrade freigegeben: %s auf %u.%u",
+                       g_ota_h.target == OTA_TARGET_UNKNOWN ? "unbekannter Stand" : "aelterer Stand",
+                       (unsigned)(g_ota_h.version >> 8), (unsigned)(g_ota_h.version & 0xFF));
+        }
         if (!Update.begin(g_ota_h.img_len)) { ota_fail(Update.errorString()); return; }
         g_ota_begun = true;
         ota_sha256_begin();
@@ -2278,6 +2318,7 @@ static void handle_update_upload()
 
     if (up.status == UPLOAD_FILE_START) {
         ota_reset();
+        g_ota_allow_downgrade = web.hasArg("downgrade") && web.arg("downgrade") == "1";
         if (!host_ok() || !client_is_local() || !auth_ok() || !csrf_ok()) {
             strlcpy(g_ota_err, "kein Zugriff", sizeof(g_ota_err));
             return;
@@ -2327,9 +2368,9 @@ static void handle_update_done()
  * ein wie der Browser-Upload (ota_feed()/ota_finish() -- gleiche Signatur-
  * und Hash-Pruefung). Braucht Internetzugriff der Steuerung selbst, nicht
  * nur des Geraets, von dem aus die Web-UI aufgerufen wird -- daher der
- * Hinweistext in den Einstellungen. TLS-Zertifikat wird nicht geprueft
- * (setInsecure()): unnoetig, der Inhalt ist ohnehin ECDSA-signiert und wird
- * unabhaengig von der Transportverschluesselung verifiziert. */
+ * Hinweistext in den Einstellungen. Das TLS-Zertifikat wird gegen die
+ * eingebetteten Wurzel-CAs (tools/gen_ca_bundle.py) geprueft; der Inhalt ist
+ * zusaetzlich ECDSA-signiert, Ziel und Version werden geprueft (#38). */
 static const char GITHUB_KOTA_URL[] =
     "https://raw.githubusercontent.com/TenOfNine/SmartKroneSplitFlap/main/"
     "firmware/master/prebuilt/krone-master-esp32c3.kota";
@@ -2343,8 +2384,12 @@ static void handle_update_github()
     ota_reset();
     evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "ota", "GitHub-Abruf gestartet");
 
+    g_ota_allow_downgrade = false;   /* GitHub nie rueckwaerts (#38) */
     WiFiClientSecure client;
-    client.setInsecure();
+    /* Server gegen die eingebetteten Wurzel-CAs pruefen (#38); der Inhalt
+     * ist zusaetzlich signiert. mbedTLS prueft hier keine Gueltigkeitsdaten
+     * (MBEDTLS_HAVE_TIME_DATE aus), eine fehlende NTP-Zeit stoert nicht. */
+    client.setCACertBundle(CA_BUNDLE);
     HTTPClient http;
     http.setTimeout(15000);
     if (!http.begin(client, GITHUB_KOTA_URL)) {
