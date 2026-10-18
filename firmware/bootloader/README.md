@@ -22,7 +22,8 @@ Wiederaufsetzen) trifft `lib/fwupdate/fwboot` — hardwareunabhängig und mit
 NVMCTRL, EEPROM. Hardwarenahe Konstanten stehen ausschließlich in
 `src/board.h`.
 
-Verhalten (BL_VERSION 3; BL 3 = BL 2 mit 500 µs Antwortverzug):
+Verhalten (BL_VERSION 4; BL 3 = BL 2 mit 500 µs Antwortverzug, BL 4 = BL 3 mit
+Parser-Neuaufsatz nach CRC-/Längenfehlern und verworfenen Rahmenfehlern, #56):
 
 - App startbar = erstes App-Wort ≠ `0xFFFF` **und** EEPROM-Byte 8 = `0xA5`
   (Bus-Update fertig) oder `0xFF` (Werksflash).

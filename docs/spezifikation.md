@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.31 |
-| Datum | 18.10.2026 |
+| Version | 0.32 |
+| Datum | 19.10.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -262,7 +262,7 @@ Bleibt `ENUM_ASSIGN` aus, weil die CHAIN-Leitung gestört ist oder der Master au
 | EEPROM enthält eine gültige Adresse aus einer früheren Enumeration | diese Adresse |
 | EEPROM leer, Karte war noch nie enumeriert | Serviceadresse 250 |
 
-T_enum beträgt 10 s, parametrierbar von 1 bis 60 s. Wird `ENUM_DONE` empfangen, greift der Rückfall sofort; der Timeout wirkt also nur, wenn der Master während der Enumeration ausfällt.
+T_enum beträgt 10 s, parametrierbar von 1 bis 60 s (EEPROM-Byte 5, ab Firmware 1.19 auch per `SET_CONFIG` mit fünftem Byte). Wird `ENUM_DONE` empfangen, greift der Rückfall sofort; der Timeout wirkt also nur, wenn der Master während der Enumeration ausfällt.
 
 **Begründung der zweistufigen Lösung.** Eine für alle Karten identische, fest einkompilierte Rückfalladresse wäre nur so lange brauchbar, wie höchstens eine Karte am Bus hängt. Scheitert die Enumeration im fertigen Anzeigenfeld, meldeten sich sonst zehn Karten gleichzeitig auf derselben Adresse und der Bus wäre unbrauchbar — also genau in dem Fall unbrauchbar, für den der Rückfall gedacht ist. Die im EEPROM abgelegte letzte Zuweisung ist dagegen je Karte eindeutig, überlebt Spannungsausfälle und kostet ein Byte. Die feste Serviceadresse 250 bleibt für den einzigen Fall erhalten, in dem sie eindeutig ist: eine fabrikneue Karte allein am Bus.
 
@@ -361,18 +361,22 @@ Offset  Länge  Feld
 
 CRC16/MODBUS wurde gewählt, damit Standardwerkzeuge und Logic-Analyzer-Dekoder verwendet werden können.
 
+Scheitert ein Rahmen an CRC oder Länge, sucht der Parser (Master, Modul und Bootloader) in den schon gelesenen Bytes ab dem zweiten erneut nach der Präambel. Ein verstümmelter Rahmen, der den Anfang des folgenden echten Rahmens als Nutzlast verschluckt hat, kostet so nur sich selbst. Bytes mit Rahmenfehler (fehlendes Stoppbit) verwirft das Modul schon in der Empfangs-ISR.
+
 ### 5.4 Kommandos
 
 | CMD | Name | Adressierung | Payload | Antwort |
 |---|---|---|---|---|
-| 0x01 | SET | einzeln | 1 B Zielblatt (1–40) | ACK |
+| 0x01 | SET | einzeln | 1 B Zielblatt (1–Blattzahl) | ACK (nicht bei ungültigem Ziel) |
 | 0x02 | SET_ALL | Broadcast | n B, Index = Adresse − 1 | keine |
 | 0x03 | GO | Broadcast | — | keine |
 | 0x04 | STOP | beides | — | ACK |
 | 0x10 | GET_STATUS | einzeln | — | 8 B, siehe 5.5 |
 | 0x20 | HOME | beides | — | ACK |
-| 0x30 | SET_CONFIG | einzeln | 4 B, siehe 6.3 | ACK |
-| 0x31 | GET_CONFIG | einzeln | — | 4 B |
+| 0x21 | SELFTEST | beides | — | ACK (einzeln); volle Umdrehung mit Messung, siehe 7.3 |
+| 0x22 | GET_TEST | einzeln | — | 7 B: Zustand (0 nie, 1 läuft, 2 fertig), erkannte Blattzahl, Umlaufzeit in ms (16 Bit, LE), kürzester und längster Blattabstand in ms, Fehlercode |
+| 0x30 | SET_CONFIG | einzeln | 4 B (Byte 0–3 nach 6.3) oder 5 B (zusätzlich T_enum) | ACK (nicht bei Werten außerhalb 6.3) |
+| 0x31 | GET_CONFIG | einzeln | — | 5 B (Byte 0–3 und T_enum); Karten vor 1.19: 4 B |
 | 0x40 | IDENTIFY | einzeln | 1 B Dauer in s | ACK |
 | 0x41 | LED_SYNC | Broadcast | — | keine |
 | 0x50 | ENUM_RESET | Broadcast | — | keine |
@@ -390,7 +394,7 @@ CRC16/MODBUS wurde gewählt, damit Standardwerkzeuge und Logic-Analyzer-Dekoder 
 Bootloader beantwortet die App nur `GET_VERSION` (Flag Bit 0 = 0) und
 `ENTER_BOOTLOADER` (= einfacher Neustart).
 
-**Das zentrale Muster für Display-Updates** ist `SET_ALL` gefolgt von `GO`. Der Broadcast enthält die Zielwerte aller Module in einem Rahmen, jedes Modul entnimmt das Byte an der Stelle seiner eigenen Adresse und puffert es. Erst `GO` löst die Bewegung aus, sodass alle Module synchron starten. `SET`/`SET_ALL` ändern nur das gepufferte Ziel, nie eine laufende Fahrt. Ein `GO` während einer Fahrt oder eines Homings wird vorgemerkt und beim Erreichen von IDLE ausgeführt. `SET_CONFIG` wirkt sofort; ändern sich Blattzahl oder Offset, geht das Modul mit Motor aus in IDLE, meldet 0x04 und braucht ein `HOME`. Das Flags-Byte kennt nur Bit 0 und Bit 1.
+**Das zentrale Muster für Display-Updates** ist `SET_ALL` gefolgt von `GO`. Der Broadcast enthält die Zielwerte aller Module in einem Rahmen, jedes Modul entnimmt das Byte an der Stelle seiner eigenen Adresse und puffert es. Erst `GO` löst die Bewegung aus, sodass alle Module synchron starten. `SET`/`SET_ALL` ändern nur das gepufferte Ziel, nie eine laufende Fahrt. Ein `GO` während einer Fahrt oder eines Homings wird vorgemerkt und beim Erreichen von IDLE ausgeführt. `SET_CONFIG` wirkt sofort; ändern sich Blattzahl oder Offset, geht das Modul mit Motor aus in IDLE, meldet 0x04 und braucht ein `HOME` (die Zentralsteuerung fordert es selbst an, 6.4). Das Flags-Byte kennt nur Bit 0 und Bit 1. Ein `SET` mit ungültigem Ziel und ein `SET_CONFIG` mit einem Wert außerhalb 6.3 (auch einem gesetzten Bit 2–7 im Flags-Byte) verwirft das Modul vollständig und bestätigt es nicht; der Master sieht einen Timeout.
 
 `LED_SYNC` sendet der Master periodisch (~1 s) als Broadcast, damit die Status-LED-Blinkphase (Identify 4 Hz, Fehler 1 Hz) auf allen Karten und dem Master synchron läuft, statt seit dem jeweils eigenen Boot-Zeitpunkt zu zählen. Reine Kosmetik, kein Einfluss auf Mechanik oder Timing-kritische Abläufe.
 
@@ -441,8 +445,11 @@ in keinem Pfad (auch nicht nach Busstille). Die Übertragung ist
 wiederaufsetzbar: die Wiederholung des zuletzt angenommenen Chunks wird
 quittiert, `FW_BEGIN` startet jederzeit neu; der Master wiederholt je Schritt
 bis zu dreimal und beginnt danach einmal neu, ein verlorenes `FW_END`-ACK prüft
-er per `GET_VERSION`. Bootloader-Version 3 (Byte 4 der `GET_VERSION`-Antwort des
-Bootloaders); Änderungen am Bootloader erreichen Karten nur per Werksflash. Der Bootloader kann von App-Code
+er per `GET_VERSION`. Bootloader-Version 4 (Byte 4 der `GET_VERSION`-Antwort des
+Bootloaders; 4 = Parser-Neuaufsatz nach 5.3); Änderungen am Bootloader erreichen
+Karten nur per Werksflash. Eine Karte, die im Bootloader hängt, antwortet auf
+ihrer gespeicherten Adresse; die Zentralsteuerung führt seit dem Start gesehene
+Adressen weiter und erlaubt ein Update an jede Adresse 1–32. Der Bootloader kann von App-Code
 nicht überschrieben werden.
 
 Der Bootloader schaltet den Triac-Treiberpin nie aktiv → der Motor kann während
@@ -450,10 +457,10 @@ eines Updates nicht bestromt werden; er hat einen eigenen Watchdog.
 
 **Status.** Der Erstflash (Bootloader + App + Fuse) läuft über UPDI/J6 —
 Browser-Werksflasher oder `pymcuprog`; **dieser Werksflash inkl. der
-Bootloader→App-Übergabe ist am Gerät verifiziert** (10.09.2026). Die
-**Firmware-Verteilung über den Bus** selbst ist noch nicht verifiziert (braucht
-die Master-Hardware). `pio run -e attiny1616 -t upload` (App @ 0x0000, ohne
-Bootloader) bleibt bis dahin der abgesicherte Weg für Firmware-Änderungen.
+Bootloader→App-Übergabe ist am Gerät verifiziert** (10.09.2026), die
+**Firmware-Verteilung über den Bus** erstmals am 21.09.2026 vollständig
+übertragen und seither mehrfach genutzt. `pio run -e attiny1616 -t upload` (App
+@ 0x0000, ohne Bootloader) bleibt der Ausweichweg.
 Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 
 ---
@@ -483,11 +490,13 @@ Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 
 ### 6.2 Ablauf im Einzelnen
 
-**HOMING.** Motor einschalten, auf Leerbildimpuls warten. Bei Empfang wird der Blattzähler auf den konfigurierten Blatt-Offset gesetzt. Der Zustand gilt danach als synchronisiert. Timeout 4 s, das entspricht rund 1,7 vollen Umdrehungen.
+**HOMING.** Motor einschalten, auf Leerbildimpuls warten. Bis dahin ist das Ist-Blatt unbekannt (0). Bei Empfang wird der Blattzähler auf den konfigurierten Blatt-Offset gesetzt. Der Zustand gilt danach als synchronisiert. Timeout rund 1,7 Umdrehungen: Blattzahl × 100 ms, also 4 s bei 40, 6,4 s bei 64 und 8 s bei 80 Blatt. Ein `STOP` vor dem Leerbild lässt die Karte unsynchronisiert.
 
-**Blattzahlerkennung.** Beim ersten Homing nach einem Kaltstart läuft der Motor bis zum zweiten Leerbildimpuls weiter und zählt die dazwischenliegenden Blattimpulse. Das Ergebnis wird gegen die konfigurierte Blattzahl geprüft und im Statusbyte gemeldet. Damit ist die Karte selbstkonfigurierend und für 40, 64 und 80 Blatt gleichermaßen verwendbar.
+**Blattzahlerkennung.** Beim ersten Homing nach einem Kaltstart (und beim Selbsttest, 7.3) läuft der Motor bis zum zweiten Leerbildimpuls weiter und zählt die dazwischenliegenden Blattimpulse; das Zeitfenster dafür ist noch einmal so lang wie der Homing-Timeout. Das Ergebnis wird im Statusbyte gemeldet und muss der konfigurierten Blattzahl entsprechen, sonst Fehler 0x03 mit Motor aus. Während der Erkennung läuft die Lage mit; bricht sie ab (Timeout, `STOP`), gilt die mitgezählte Position, die Erkennung wiederholt sich beim nächsten Homing. Die Karte ist so für 40, 64 und 80 Blatt verwendbar (Einstellung per `SET_CONFIG`) und erkennt eine falsch eingestellte Blattzahl.
 
-**MOVING.** Wegstrecke = (Ziel − Ist) mod Blattzahl. Der Fallblattsatz läuft ausschließlich vorwärts. Motor einschalten, Blattimpulse zählen, bei Erreichen des Ziels abzüglich des Abschaltvorhalts das Gate abschalten.
+**Sperrzeit.** Die 20 ms nach 4.3 gelten ab der letzten angenommenen Flanke desselben Eingangs, nicht ab dem Motorstart; ein Impuls kurz nach dem Anlaufen zählt.
+
+**MOVING.** Wegstrecke = (Ziel − Ist) mod Blattzahl. Der Fallblattsatz läuft ausschließlich vorwärts. Motor einschalten, Blattimpulse zählen, bei Erreichen des Ziels abzüglich des Abschaltvorhalts das Gate abschalten. Bleibt ein Blattimpuls 200 ms aus, läuft der Motor weiter und das Zeitfenster beginnt neu (Korrekturzähler +1); nach drei solchen Wiederholungen ohne Impuls Fehler 0x01.
 
 **Abschaltvorhalt.** Der Triac löscht erst beim nächsten Stromnulldurchgang, bis zu 10 ms nach Wegnahme des Gate-Signals. Dazu kommt mechanischer Nachlauf. Der Vorhalt wird als Parameter in Millisekunden geführt und einmalig empirisch ermittelt.
 
@@ -502,7 +511,7 @@ Details, Bausteine und Bench-Test-Checkliste: `docs/module-bootloader.md`.
 | 2 | Abschaltvorhalt in ms | 0–60 | ⚠️ zu ermitteln |
 | 3 | Flags: Bit 0 Positionsspeicherung, Bit 1 Autohoming beim Start; Bit 2–7 reserviert (0) | — | 0x03 |
 | 4 | Zuletzt zugewiesene Busadresse | 0 = keine, 1–250 | 0 |
-| 5 | T_enum in Sekunden | 1–60 | 10 |
+| 5 | T_enum in Sekunden (ab 1.19 auch per `SET_CONFIG`, fünftes Byte) | 1–60 | 10 |
 
 Enthält das Flags-Byte Bits außerhalb 0x07 (z. B. 0xFF eines gelöschten EEPROMs), gilt das Abbild als ungültig: Blattzahl, Offset, Vorhalt, Flags und T_enum werden auf die Vorgaben gesetzt, eine gültige Busadresse bleibt erhalten. Bit 2 wird immer gelöscht, ein Vorhalt über 60 ms auf 0 gesetzt; korrigierte Werte schreibt die Firmware zurück.
 
@@ -510,14 +519,15 @@ Enthält das Flags-Byte Bits außerhalb 0x07 (z. B. 0xFF eines gelöschten EEPRO
 
 | Code | Bedeutung | Reaktion |
 |---|---|---|
-| 0x01 | Kein Blattimpuls innerhalb 200 ms bei laufendem Motor | Abbruch, bis zu 3 Wiederholungen, dann Fehler |
-| 0x02 | Kein Leerbildimpuls innerhalb 4 s beim Homing | Motor aus, Fehler |
-| 0x03 | Erkannte Blattzahl unplausibel | Motor aus, Fehler |
-| 0x04 | Position verloren, nicht synchronisiert | Homing anfordern |
-| 0x05 | Laufzeitüberwachung ausgelöst (> 4 s durchgehend) | Motor aus, Fehler |
+| 0x01 | Kein Blattimpuls innerhalb 200 ms bei laufendem Motor | Zeitfenster bis zu dreimal neu (Korrekturzähler), dann Motor aus, Fehler |
+| 0x02 | Kein Leerbildimpuls beim Homing innerhalb Blattzahl × 100 ms (40 Blatt: 4 s) | Motor aus, Fehler |
+| 0x03 | Erkannte Blattzahl unplausibel oder ungleich der konfigurierten | Motor aus, Fehler |
+| 0x04 | Position verloren, nicht synchronisiert (z. B. nach geänderter Blattzahl/Offset) | Modul fährt nicht; die Zentralsteuerung fordert im Stillstand bei vorhandenem Anzeigeinhalt ein Homing an (`HOME`, Ziel, `GO`; wie die Soll/Ist-Korrektur höchstens dreimal je Inhalt) |
+| 0x05 | Laufzeitüberwachung: Fahrt länger als Blattzahl × 100 ms durchgehend (40 Blatt: > 4 s), Homing samt Erkennung länger als das Doppelte | Motor aus, Fehler |
 | 0x06 | Abweichung im Sendeecho erkannt | Sendung abbrechen, 0x06 einmalig im Status melden, Mechanik unberührt; Adresse verwerfen (UNADDRESSED, nach T_enum Rückfall auf die EEPROM-Adresse) erst bei der zweiten Abweichung ohne fehlerfreie Antwort dazwischen innerhalb von 5 s (4.5.3) |
+| 0x07 | Motorlauf ohne Ansteuerung: drei Blattimpulse binnen 1 s bei abgeschaltetem Motor (IDLE/ERROR) | Fehler; deutet auf einen durchgesteuerten Triac oder eine gedrehte Trommel. Einzelne Nachlaufimpulse lösen nichts aus |
 
-Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung.
+Die dreifache Wiederholung entspricht dem Verhalten der Originalsteuerung. Nach jedem Motorfehler (0x01, 0x02, 0x03, 0x05, 0x07) gilt die Karte als nicht synchronisiert (Ist-Blatt 0); das nächste `GO` quittiert den Fehler und startet ein Homing, statt aus einer unsicheren Lage zu fahren.
 
 **Fail-Safe.** Ein hängender Controller darf den Motor nicht dauerhaft bestromen. Absicherung durch den internen Watchdog (Zeitbasis 1 s) sowie durch die Laufzeitüberwachung nach Code 0x05. Der Watchdog wird nur gefüttert, solange die 1-ms-Zeitbasis läuft (stehen die Interrupts, folgt ein Reset); nach einem Watchdog-Reset startet die Karte mit Motor aus in ERROR 0x05 statt zu homen. In IDLE, ERROR und nach STOP ist PA7 immer low. Die App ohne Bootloader setzt bei `BOOTEND ≠ 0` das Bit IVSEL, damit ihre Interruptvektoren gefunden werden (sonst stünden die Interrupts still). Schließt eine vorgemerkte Fahrt direkt an eine laufende an, zählt die Laufzeit durch. Optional lässt sich ein retriggerbares Monoflop in Hardware ergänzen, das den Transistorschalter nach 4 s zwangsweise sperrt.
 
@@ -575,8 +585,8 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | WLAN-Konfiguration | Access-Point mit Captive Portal beim Erststart, danach über die Web-UI änderbar |
 | Modulverwaltung | Anzahl per Enumeration automatisch erkannt (Vorgabe). Solange keine Karte antwortet, scannt der Master alle ~10 s neu; angesteckte Karten tauchen von selbst auf. Die Feldbreite folgt der Erkennung. *Einstellungen › Anzeige* erlaubt bei Bedarf eine **feste Feldbreite** (Override, z. B. Text über mehr Stellen als angeschlossen). `cfg.module_count = 0` = automatisch, `1…32` = fest. |
 | Freitext | Eingabe über Web-UI, REST und MQTT; Umlaute und Kleinbuchstaben werden gemappt, unbekannte Zeichen auf Leerbild |
-| Uhrzeit | NTP-gestützt (Server frei, Zeitzone als Städteliste + Sommerzeit-Schalter), Format `hh:mm` oder `hh:mm:ss`, Trennzeichen wählbar. Ohne erreichbaren NTP-Server auch manuell stellbar (freilaufend, keine gepufferte RTC). |
-| Selbsttest | jedes Modul fährt eine volle Umdrehung, prüft die Zahl der Blattimpulse zwischen zwei Leerbildimpulsen und meldet Timing-Abweichungen |
+| Uhrzeit | NTP-gestützt (Server frei, Zeitzone als Städteliste + Sommerzeit-Schalter), Format `hh:mm` oder `hh:mm:ss`, Trennzeichen `.` oder `-` (`:` kennt der Blattsatz nicht). Bei schmalem Feld entfallen die Trennzeichen statt die Ziffern abzuschneiden: `hhmm` bei 4 Modulen, darunter nur die Minuten; Sekunden ab 6 Modulen (ab 8 mit Trennzeichen). Ohne erreichbaren NTP-Server auch manuell stellbar (freilaufend, keine gepufferte RTC). |
+| Selbsttest | jedes Modul fährt eine volle Umdrehung (`SELFTEST`), zählt die Blattimpulse zwischen zwei Leerbildimpulsen und misst Umlaufzeit sowie kürzesten und längsten Blattabstand (`GET_TEST`). Die Zentralsteuerung bewertet: Blattzahl 40/64/80 und gleich der Konfiguration, Umlaufzeit ±20 % von Blattzahl × 60 ms, kein Blattschritt über 120 ms. Ergebnis in der Modulansicht, je Modul im Ereignislog und per MQTT; Karten ohne Antwort (vor 1.19, offline) nach vier Abfragen als „keine Antwort“, Gesamtgrenze 25 s. Danach fährt der Soll/Ist-Abgleich den Anzeigeinhalt wieder an. |
 | Statusabfrage | Ist-Zeichen, Zustand, Fehlerzähler je Modul in der UI und über REST |
 | Diagnose | Modul-Detailtabelle (erkannte Blattzahl, FW-Version, verpasste Antworten), Ereignis-Log (Ringpuffer), Bus-CRC-/Timeout-Zähler in der Web-UI |
 | Homing | einzeln oder für alle Module; einzeln auch Stop und Identify |
@@ -599,14 +609,15 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 |---|---|---|
 | GET | `/api/status` | Anzeige- und Modulstatus als JSON (mode, Zielzeichen, je Modul Ist/Ziel/Zustand/Fehler/Korrekturen/erkannte Blattzahl/FW/verpasste Antworten sowie Busdiagnose seit Start: `rt` Wiederholungen, `to` Timeouts, `crc` CRC-Fehler, `seen` letzte Antwort in s seit Start, `ver` App-Version aus GET_VERSION mit 0 = unbekannt; erkannte Modulzahl, Enumerationsstatus) |
 | GET | `/api/system` | Uptime, Heap (frei/gesamt/min), grobe CPU-Last, Chiptemperatur, belegter/freier Programmspeicher, Hostname, SSID/IP/RSSI/MAC, Uhrzeit + Quelle, NTP-Server/Zeitzone, MQTT-/OTA-/mDNS-Status, Zugriffsschutz (`net_scope`, `auth_on`, `ota_signed`), Modulzahl (`detected`, `field_width`, `auto_modules`, `enum_busy`), Bus-CRC-Fehler und -Timeouts, Firmware-Build |
-| GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`) |
-| GET/POST | `/api/backup` | Vollsicherung inkl. WLAN- und Admin-Zugangsdaten (Herunterladen / Wiederherstellen); POST übernimmt und startet neu |
-| POST | `/api/update` | Signiertes OTA aus dem Browser: Container `krone-master-esp32c3.kota` hochladen (Feld `firmware`); das Modul prüft Signatur + SHA-256, flasht die zweite App-Partition und startet neu. Fehlerfall: `500` mit Grund, laufende Firmware bleibt aktiv |
+| GET | `/api/log` | Ereignis-Ringpuffer (`?sev=info\|warn\|err`); Zeitstempel `t` in ms seit Start (64 Bit). Passen nicht alle Einträge in den Puffer, kommen die neuesten und `"more":true` |
+| GET/POST | `/api/backup` | Vollsicherung (Herunterladen / Wiederherstellen); WLAN-Schlüssel, MQTT- und Admin-Passwort nur, wenn ein Admin-Passwort gesetzt ist (angemeldete Verbindung, `"secrets":true`). POST prüft wie `/api/config`, übernimmt und startet neu; ohne `wifi_psk` bleibt das WLAN unverändert |
+| POST | `/api/update` | Signiertes OTA aus dem Browser: Container `krone-master-esp32c3.kota` hochladen (Feld `firmware`); das Modul prüft Signatur + SHA-256, flasht die zweite App-Partition und startet neu. Fehlerfall: `500` mit Grund, laufende Firmware bleibt aktiv. Der Header trägt Zielgerät und Version (signiert): ein Container für ein anderes Gerät wird abgelehnt, ein älterer oder einer ohne Angaben (bis 1.18) nur mit `?downgrade=1` |
 | POST | `/api/log/clear` | Log leeren |
 | POST | `/api/text` | `{"text":"HALLO"}` |
 | POST | `/api/mode` | `{"mode":"clock_hm","sep":".","align":1}` |
 | POST | `/api/home` | optional `{"addr":3}` |
-| POST | `/api/selftest` | startet den Selbsttest |
+| POST | `/api/selftest` | startet den Selbsttest (7.3); `409`, solange einer läuft, eine Enumeration aktiv ist oder keine Module da sind |
+| GET | `/api/selftest` | Stand und Ergebnis: `running`, `done`, je Modul `addr`, `res` (`ok`, `keine_antwort`, `unvollstaendig`, `blattzahl`, `timing`), `blatt`, `rot`, `min`, `max`, `err`, `state` |
 | POST | `/api/module` | `{"addr":3,"action":"home\|stop\|identify"}` (addr 0 = Broadcast) |
 | POST | `/api/enumerate` | Enumeration neu starten |
 | POST | `/api/time` | `{"iso":"2026-09-01T14:07:00"}` — Uhr manuell stellen |
@@ -638,7 +649,12 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 Während eines Modul-Updates antworten OTA, GitHub-Update, Neustart,
 Wiederherstellung, Portal, Enumeration und Modulkommandos mit `409`.
 `/api/config` liefert das MQTT-Passwort nicht aus (nur `mqtt_set`); ein leeres
-Feld beim Speichern lässt es unverändert. Betriebsart und Text überdauern einen
+Feld beim Speichern lässt es unverändert. Beim Schreiben prüft die Steuerung jedes
+mitgeschickte Feld vor der Übernahme und antwortet bei einem Fehler mit `400` und
+dem Feldnamen (`{"error":"base_topic"}`): Zeichenketten passen ungekürzt in ihren
+Puffer, `base_topic` 1–47 Zeichen aus `[A-Za-z0-9_.-/]` ohne `/` am Rand, `node_id`
+1–31 Zeichen aus `[A-Za-z0-9_-]`, IP-Felder leer oder IPv4, `mqtt_port` 1–65535,
+Modulzahl 0–32, `hms_timeout_s` 60–14 400, Ausrichtung 0–2, Trennzeichen `.`/`-`. Betriebsart und Text überdauern einen
 Neustart (NVS, 30 s nach der letzten Änderung gesichert).
 
 Zusätzlich lassen sich die schreibenden Steuer-Endpunkte (`/api/text`,
@@ -687,6 +703,10 @@ werden retained veröffentlicht; die MQTT-Client-ID ist der Hostname (Kapitel 7.
 | Sammelfehler | `binary_sensor` | `error/state` |
 | Modul online | `binary_sensor` | `module/<n>/online` |
 
+**Selbsttest:** Nach jedem Lauf sendet die Karte `<base_topic>/selftest/result`
+(nicht retained) mit `ok`, `total` und den auffälligen Modulen (`bad`: `addr`,
+`res`).
+
 **Verfügbarkeit (LWT):** Beim Verbinden meldet die Karte `<base_topic>/status` =
 `online` (retained) und hinterlegt `offline` als Last Will. Jede Entity trägt
 dieses Topic als `availability_topic`, sodass sie in Home Assistant „nicht
@@ -715,7 +735,7 @@ Bei `hh:mm:ss` springt der Sekunden-Einer alle zehn Sekunden von `9` auf `0`. De
 
 Zum Vergleich: Der Minuten-Einer im Format `hh:mm` kommt auf 144 Umdrehungen je Tag, also knapp 28 Jahre.
 
-Festlegung: `hh:mm` ist die Vorgabe. `hh:mm:ss` ist verfügbar, wird in der Web-UI mit einem Hinweis versehen und kehrt nach einer konfigurierbaren Zeit (Vorgabe 10 Minuten) automatisch auf `hh:mm` zurück.
+Festlegung: `hh:mm` ist die Vorgabe. `hh:mm:ss` ist verfügbar, wird in der Web-UI mit einem Hinweis versehen und kehrt nach einer konfigurierbaren Zeit (1 Minute bis 4 Stunden, Vorgabe 10 Minuten) automatisch auf `hh:mm` zurück. Der Rückfall lässt sich nicht abschalten.
 
 ---
 
@@ -923,3 +943,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.29 | 02.10.2026 | **Review-Fixes, Firmware v1.16** (Issues #18–#43). 4.4/6.3: Flag-Bit 2 (Triac-Polarität) entfällt und ist reserviert – laut Netzliste schaltet PA7 high in beiden Zweigen den Motor ein; ungültige EEPROM-Abbilder werden auf die Vorgaben migriert. 4.5.1/4.5.3: Busadresse und CHAIN_OUT erst nach fehlerfreiem ACK-Echo; Sendung bricht bei Echo-Abweichung ab; nach einer Kollision Rückfall auf die EEPROM-Adresse nach T_enum, 0x06 einmalig im Status. 4.5.2/4.5.4: Verifikationslauf (GET_UID) und Warnung bei Serviceadresse 250 umgesetzt, Nachsondierung hinter einem Kettenende. 5.4/5.5: SET puffert nur, GO während Fahrt/Homing wird vorgemerkt, SET_CONFIG wirkt sofort (Blattzahl/Offset → 0x04, HOME nötig); Statusbyte 1 = gepuffertes Ziel. 5.6: Timeout ab Rahmenende, Wiederholung nur bei Busruhe, Sendewarteschlange, Inter-Byte-Timeout 2 ms im Modul. 5.7: Bootloader startet nach Abbruch nie die halbe App, Übertragung wiederaufsetzbar, BL-Version 2. 6.2/6.4: Positionsspeicherung nur ohne Autohoming (Ungültig-Eintrag bei Fahrtbeginn); Watchdog nur bei laufender Zeitbasis, nach WDT-Reset Start in ERROR 0x05; Plain-App setzt IVSEL bei BOOTEND≠0. 7.3/7.5: Bus und Anzeige vor dem WLAN, WLAN nicht blockierend, Portal ohne Firmware-Upload; Host-Prüfung und JSON/X-Krone-Request-Pflicht für schreibende Anfragen; Betriebsart/Text dauerhaft; Sperre während Modul-Updates. 8.2: Verpolschutz Q1 auf Rev. 0.2 wirkungslos (Einbaulage, #36). |
 | 0.30 | 18.10.2026 | **Verbindungsstabilität, Firmware v1.17** (Issues #50–#54, #21). 4.5.1: CHAIN_OUT wird bei `ENUM_DONE` abgeschaltet; eine Echo-Abweichung auf dem `ENUM_ASSIGN`-ACK führt zurück nach ENUMERATING (Teilnahme an der Wiederholung). 4.5.3/6.4: Eine einzelne Echo-Abweichung beim Antworten (Störimpuls) verwirft die Adresse nicht mehr, erst die zweite ohne fehlerfreie Antwort dazwischen innerhalb von 5 s; 0x06 wird in jedem Fall gemeldet. 5.6: Antwortverzug min. 500 µs (Master schaltet DE per Software in einer nicht im IRAM liegenden ISR ab), Master gibt Empfangsbytes sofort weiter (FIFO-Schwelle 2 Byte, Timeout 1 Zeichen) und gleicht das eigene Echo ab statt den Empfang zu löschen. 5.7: Bootloader-Version 3 (500 µs Antwortverzug). 7.5/7.6: Busdiagnose je Modul in `/api/status`, `tx_coll` in `/api/system`, MQTT `bus/stats`. |
 | 0.31 | 18.10.2026 | **Korrektur Echo-Annahme, Firmware v1.18** (Issue #50). 5.1/5.6: Der Master-UART empfängt im RS485-Halbduplexmodus während der eigenen Sendung nicht (IDF-HAL `rs485_conf.tx_rx_en = 0`) und beginnt keine Sendung, solange ein Byte eintrifft (`rx_busy_tx_en = 0`); am Master gibt es daher kein Echo. Der Echo-Abgleich aus v0.30 verwarf stattdessen den Anfang von Modulantworten, wenn die Firmware nach dem Senden verdrängt war (Wiederholungen, scheinbare Sendekollisionen); er entfällt. Neu: gesendet und wiederholt wird nur, wenn der Treiber keine unverarbeiteten Empfangsbytes hält. 7.5/7.6: `txc`/`tx_coll` entfallen; `/api/status` liefert je Modul `ver` (App-Version aus GET_VERSION). |
+| 0.32 | 19.10.2026 | **Offene Software-Issues, Firmware v1.19** (#16, #17, #38–#41, #43, #47, #48, #56). 4.5.2/6.3: T_enum per `SET_CONFIG` (fünftes Byte) setzbar, `GET_CONFIG` liefert es mit. 5.3: Parser setzt nach CRC-/Längenfehlern in den schon gelesenen Bytes neu auf; Rahmenfehler im Modul verworfen. 5.4: neue Kommandos `SELFTEST` (0x21) und `GET_TEST` (0x22); ungültiges `SET`/`SET_CONFIG` wird nicht bestätigt. 5.7: Bootloader-Version 4; Busverteilung am Gerät bestätigt. 6.2/6.4: Homing-Timeout und Laufzeitgrenze skalieren mit der Blattzahl, 0x05 deckt das Homing ab, erkannte Blattzahl muss zur Konfiguration passen, Lage läuft während der Erkennung mit, Sperrzeit ab der letzten Flanke, nach Motorfehlern unsynchronisiert, neu 0x07 (Motorlauf ohne Ansteuerung), 0x04 fordert über den Master ein Homing an. 7.3: Selbsttest mit Auswertung; Uhr passt sich der Feldbreite an. 7.5/7.6: `GET /api/selftest`, OTA mit Ziel/Version und Anti-Rollback (`?downgrade=1`), Eingabeprüfung `/api/config`, Log ohne 500 und mit 64-Bit-Zeit, Sicherung gibt Geheimnisse nur angemeldet heraus, MQTT `selftest/result`. 7.7: Rückfall der Sekundenanzeige 1 min bis 4 h, nicht abschaltbar. |

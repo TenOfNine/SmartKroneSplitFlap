@@ -40,6 +40,15 @@
 > ein verlorenes `FW_END`-ACK per `GET_VERSION`. **Bootloader-Änderungen
 > erreichen Bestandskarten nur per Browser-Werksflash** – die vier Karten im
 > Feld laufen bis dahin mit BL 1.
+>
+> **Stand 1.19 (#41, #48, #56, #17):** BL 4 setzt den Parser nach CRC-/
+> Längenfehlern neu auf und verwirft Bytes mit Rahmenfehler. Der
+> Browser-Werksflasher prüft die Geräte-ID vor dem Chip-Erase, markiert die App
+> (EEPROM-Byte 8) bis zum erfolgreichen Verify als ungültig, prüft OSCCFG/WDTCFG,
+> protokolliert SYSCFG0 (EESAVE) und schaltet UPDI am Ende ab – am Gerät noch
+> nicht bestätigt. Eine im Bootloader hängende Karte bleibt nach einer
+> Neu-Enumeration in der Modul-Firmware-Tabelle (seit dem Start gesehene
+> Adressen); „Adresse direkt aktualisieren" erreicht jede Adresse 1–32.
 
 ## Ziel
 

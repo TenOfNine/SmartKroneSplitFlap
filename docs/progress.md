@@ -6,6 +6,22 @@ seit 19.09.2026). Die vollständige historische Aufgabenliste T1–T20 steht in
 `firmware/CHANGELOG.md`. Diese Datei ist der schnelle Überblick für die
 laufende Fehlersuche — bei jeder Sitzung oben ergänzen, nicht umschreiben.
 
+**Stand 19.10.2026 — Firmware v1.19 (offene Software-Issues, am Gerät noch nicht verifiziert):**
+1.18 läuft am Gerät (Master + eine Karte) unauffällig. Abgearbeitet: Bewegungs-
+automat (#39: Sperrzeit ab letzter Flanke, Lage während der Blattzahlerkennung,
+Zeitgrenzen für 64/80 Blatt, 0x05 auch im Homing, Blattzahl gegen Konfiguration,
+neu 0x07 Motorlauf ohne Ansteuerung, ungültige SET/SET_CONFIG ohne ACK, T_enum
+per Bus), Parser-Neuaufsatz und RX-Fehlerbits (#56, Bootloader 4), Selbsttest
+nach 7.3 (#47), Master-Kleinkram (#40: loop-WDT, Log, HA-Discovery,
+Eingabeprüfung, Uhr bei schmalem Feld, Ausrichtung), Bootloader-Karte nach
+Neu-Enumeration erreichbar (#17), Update-Vertrauenskette (#38: Ziel/Version im
+signierten Header, Anti-Rollback, TLS für GitHub, Image-Hash der .mota,
+Sicherung ohne Geheimnisse ohne Anmeldung), Werksflasher (#41/#48: ID vor Erase,
+App-Marker, Fuse-Prüfung, UPDI aus), CI/Build (#43: reproduzierbarer Master,
+PCB-DRC, gepinnte Actions, ESP Web Tools selbst ausgeliefert, board.h). Offen
+mit Entscheidung: Klartext im NVS (#38, Flash-Verschlüsselung = eFuse), eigener
+Bus-Task (#55). Neue Prüfpunkte in #49.
+
 **Stand 18.10.2026 (abends) — Firmware v1.18 (Korrektur Echo-Annahme, am Gerät noch nicht verifiziert):**
 Erster Gerätetest der 1.17 mit einer Karte: Spalte „Bus W/T/C/K“ zeigte
 50/0/0/37 – Wiederholungen ohne endgültige Timeouts und ohne CRC-Fehler, dazu
