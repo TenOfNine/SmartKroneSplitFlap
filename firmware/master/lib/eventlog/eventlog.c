@@ -16,7 +16,7 @@ void evlog_clear(evlog_t *lg)
     /* seq laeuft weiter -- die UI erkennt daran, dass etwas passiert ist */
 }
 
-void evlog_push(evlog_t *lg, uint32_t t_ms, evlog_sev_t sev,
+void evlog_push(evlog_t *lg, uint64_t t_ms, evlog_sev_t sev,
                 const char *src, const char *fmt, ...)
 {
     evlog_entry_t *e = &lg->buf[lg->head];
@@ -90,16 +90,33 @@ static size_t json_str(const char *s, char *out, size_t out_size)
     return o;
 }
 
+/* uint64 dezimal ohne %llu (nicht jede printf-Variante kann es). */
+static void u64_dec(uint64_t v, char *out)
+{
+    char tmp[21];
+    size_t n = 0;
+    do {
+        tmp[n++] = (char)('0' + (unsigned)(v % 10u));
+        v /= 10u;
+    } while (v != 0u);
+    for (size_t i = 0; i < n; ++i) {
+        out[i] = tmp[n - 1u - i];
+    }
+    out[n] = '\0';
+}
+
 size_t evlog_json(const evlog_t *lg, evlog_sev_t min_sev,
                   char *out, size_t out_size)
 {
+    static const char tail_more[] = "],\"more\":true}";
     int n = snprintf(out, out_size, "{\"seq\":%lu,\"entries\":[",
                      (unsigned long)lg->seq);
-    if (n < 0 || (size_t)n >= out_size) {
+    if (n < 0 || (size_t)n + sizeof(tail_more) > out_size) {
         return 0;
     }
     size_t pos = (size_t)n;
     bool first = true;
+    bool more = false;
 
     /* neueste zuerst: vom zuletzt geschriebenen Platz rueckwaerts */
     for (uint16_t k = 0; k < lg->count; ++k) {
@@ -109,23 +126,26 @@ size_t evlog_json(const evlog_t *lg, evlog_sev_t min_sev,
             continue;
         }
 
-        char msg_json[EVLOG_MSG_MAX * 2u + 4u];
+        /* schlimmster Fall: jedes Zeichen als \u00XX */
+        char msg_json[(EVLOG_MSG_MAX - 1u) * 6u + 4u];
         if (json_str(e->msg, msg_json, sizeof(msg_json)) == 0) {
-            return 0;
+            continue;
         }
+        char t[21];
+        u64_dec(e->t_ms, t);
 
         n = snprintf(out + pos, out_size - pos,
-                     "%s{\"t\":%lu,\"sev\":%d,\"src\":\"%s\",\"msg\":%s}",
-                     first ? "" : ",", (unsigned long)e->t_ms, (int)e->sev,
-                     e->src, msg_json);
-        if (n < 0 || pos + (size_t)n >= out_size) {
-            return 0;
+                     "%s{\"t\":%s,\"sev\":%d,\"src\":\"%s\",\"msg\":%s}",
+                     first ? "" : ",", t, (int)e->sev, e->src, msg_json);
+        if (n < 0 || pos + (size_t)n + sizeof(tail_more) > out_size) {
+            more = true;   /* aeltere Eintraege passen nicht mehr */
+            break;
         }
         pos += (size_t)n;
         first = false;
     }
 
-    n = snprintf(out + pos, out_size - pos, "]}");
+    n = snprintf(out + pos, out_size - pos, "%s", more ? tail_more : "]}");
     if (n < 0 || pos + (size_t)n >= out_size) {
         return 0;
     }

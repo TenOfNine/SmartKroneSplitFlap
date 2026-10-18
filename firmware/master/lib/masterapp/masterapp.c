@@ -116,8 +116,26 @@ void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out)
             return;
         }
         char buf[12];
-        const bool sec = (app->mode == APP_MODE_CLOCK_HMS);
-        clocktext_format(buf, sizeof(buf), app->hh, app->mm, app->ss, sec, app->sep);
+        /* An die Feldbreite anpassen statt abzuschneiden (#40): Sekunden nur
+         * ab 6 Modulen (ab 8 mit Trennzeichen), hh.mm ab 5, hhmm bei 4,
+         * darunter nur die Minuten. */
+        const bool sec = (app->mode == APP_MODE_CLOCK_HMS) && w >= 6u;
+        const size_t full = sec ? 8u : 5u;
+        size_t n = clocktext_format(buf, sizeof(buf), app->hh, app->mm, app->ss, sec, app->sep);
+        if (n == full && w < full) {
+            /* Trennzeichen entfernen: "hh.mm.ss" -> "hhmmss", "hh.mm" -> "hhmm" */
+            size_t o = 0;
+            for (size_t i = 0; i < n; ++i) {
+                if (buf[i] >= '0' && buf[i] <= '9') {
+                    buf[o++] = buf[i];
+                }
+            }
+            buf[o] = '\0';
+            n = o;
+            if (!sec && w < 4u) {
+                memmove(buf, &buf[2], 3u);   /* nur Minuten, inkl. NUL */
+            }
+        }
         charmap_render(buf, out, w, app->align);
         return;
     }

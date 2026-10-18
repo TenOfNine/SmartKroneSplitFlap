@@ -227,7 +227,7 @@ static void test_led_sync_coalesced(void)
 static void test_unicast_ack_retries_with_payload_no_offline(void)
 {
     bm.mod[3].online = true;
-    busmaster_set_config(&bm, 4, 40, 5, 12, 0x03);
+    busmaster_set_config(&bm, 4, 40, 5, 12, 0x03, 0);
     busmaster_tick(&bm, 0);
     TEST_ASSERT_TRUE(bm.awaiting);
     tick_range(1, 40);                            /* kein ACK */
@@ -689,6 +689,67 @@ static void test_reconcile_not_while_moving_error_or_unknown(void)
     inject_status(1, 0, 9, 0, 0, 51);             /* Lage unbekannt */
     TEST_ASSERT_EQUAL_UINT8(0, bm.queue_count);
     TEST_ASSERT_EQUAL_UINT8(0, bm.mod[0].rc_tries);
+}
+
+/* 0x04 im Stillstand: Master fordert das Homing an (HOME, SET, GO), mit
+ * denselben Grenzen wie die Korrektur (#39). */
+static void test_reconcile_homes_unsynced_module(void)
+{
+    const uint8_t bl[1] = { 9 };
+    show_and_flush(bl, 1, 0);
+    busmaster_poll_status(&bm, 1, 10);
+    inject_status(1, 0, 9, 0, 0x04, 11);          /* Lage verloren */
+    TEST_ASSERT_EQUAL_UINT8(1, bm.mod[0].rc_tries);
+    TEST_ASSERT_EQUAL_UINT8(3, bm.queue_count);
+    busmaster_tick(&bm, 13);                      /* HOME(1) -> ACK */
+    TEST_ASSERT_EQUAL_HEX8(CMD_HOME, g_txf[g_ntxf - 1].cmd);
+    TEST_ASSERT_EQUAL_HEX8(1, g_txf[g_ntxf - 1].addr);
+    inject(CMD_HOME, 1, NULL, 0, 14);
+    busmaster_tick(&bm, 16);                      /* SET(1,9) */
+    TEST_ASSERT_EQUAL_HEX8(CMD_SET, g_txf[g_ntxf - 1].cmd);
+    TEST_ASSERT_EQUAL_UINT8(9, g_txf[g_ntxf - 1].pl[0]);
+    inject(CMD_SET, 1, NULL, 0, 17);
+    busmaster_tick(&bm, 19);                      /* GO */
+    TEST_ASSERT_EQUAL_HEX8(CMD_GO, g_txf[g_ntxf - 1].cmd);
+
+    /* waehrend des Homings nichts Neues */
+    busmaster_poll_status(&bm, 1, 30);
+    inject_status(1, 0, 9, 1, 0, 31);
+    TEST_ASSERT_EQUAL_UINT8(0, bm.queue_count);
+    TEST_ASSERT_EQUAL_UINT8(1, bm.mod[0].rc_tries);
+}
+
+/* Ohne Anzeigeinhalt oder nach STOP kein selbsttaetiges Homing. */
+static void test_unsynced_without_soll_not_homed(void)
+{
+    busmaster_poll_status(&bm, 1, 10);
+    inject_status(1, 0, 0, 0, 0x04, 11);
+    TEST_ASSERT_EQUAL_UINT8(0, bm.queue_count);
+    TEST_ASSERT_EQUAL_size_t(0, count_cmd(CMD_HOME, -1));
+}
+
+/* SET_CONFIG mit T_enum als fuenftem Byte, GET_CONFIG liest es zurueck. */
+static void test_config_t_enum_roundtrip(void)
+{
+    busmaster_set_config(&bm, 2, 40, 3, 0, 0x01, 25);
+    busmaster_tick(&bm, 0);
+    TEST_ASSERT_EQUAL_HEX8(CMD_SET_CONFIG, g_txf[0].cmd);
+    TEST_ASSERT_EQUAL_UINT8(5, g_txf[0].len);
+    TEST_ASSERT_EQUAL_UINT8(25, g_txf[0].pl[4]);
+    inject(CMD_SET_CONFIG, 2, NULL, 0, 1);
+
+    busmaster_poll_config(&bm, 2, 2);
+    busmaster_tick(&bm, 4);
+    const uint8_t c5[5] = { 40, 3, 0, 0x01, 25 };
+    inject(CMD_GET_CONFIG, 2, c5, 5, 5);
+    TEST_ASSERT_TRUE(bm.mod[1].cfg_known);
+    TEST_ASSERT_EQUAL_UINT8(25, bm.mod[1].cfg_t_enum);
+
+    busmaster_poll_config(&bm, 2, 10);
+    busmaster_tick(&bm, 12);
+    const uint8_t c4[4] = { 40, 3, 0, 0x01 };      /* Karte vor 1.19 */
+    inject(CMD_GET_CONFIG, 2, c4, 4, 13);
+    TEST_ASSERT_EQUAL_UINT8(0, bm.mod[1].cfg_t_enum);
 }
 
 static void test_reconcile_skipped_while_show_queued_and_after_stop(void)
@@ -1618,6 +1679,9 @@ int main(void)
     RUN_TEST(test_own_echo_does_not_swallow_response);
     RUN_TEST(test_status_timeout_retries_then_offline);
     RUN_TEST(test_per_module_diagnostics);
+    RUN_TEST(test_reconcile_homes_unsynced_module);
+    RUN_TEST(test_unsynced_without_soll_not_homed);
+    RUN_TEST(test_config_t_enum_roundtrip);
     RUN_TEST(test_rx_pending_defers_retry);
     RUN_TEST(test_rx_pending_blocks_new_requests);
     RUN_TEST(test_timeout_measured_from_tx_end_with_clock);

@@ -297,6 +297,33 @@ static void test_hms_auto_falls_back_to_hm(void)
     TEST_ASSERT_EQUAL(APP_MODE_CLOCK_HM, app.mode);
 }
 
+/* Uhr bei schmalem Feld: Trennzeichen entfallen statt abgeschnitten (#40). */
+static void expect_clock(uint8_t width, app_mode_t mode, const char *want)
+{
+    setUp();
+    app.module_count = width;
+    masterapp_set_mode(&app, mode, '.', CHARMAP_ALIGN_CENTER, 0);
+    masterapp_set_time(&app, 12, 34, 56);
+    uint8_t got[BUSMASTER_MAX_MODULES], exp[BUSMASTER_MAX_MODULES];
+    masterapp_current_blaetter(&app, got);
+    charmap_render(want, exp, width, CHARMAP_ALIGN_CENTER);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(exp, got, width);
+}
+
+static void test_clock_adapts_to_field_width(void)
+{
+    expect_clock(10, APP_MODE_CLOCK_HM, "12.34");
+    expect_clock(5, APP_MODE_CLOCK_HM, "12.34");
+    expect_clock(4, APP_MODE_CLOCK_HM, "1234");
+    expect_clock(3, APP_MODE_CLOCK_HM, "34");
+    expect_clock(2, APP_MODE_CLOCK_HM, "34");
+    expect_clock(8, APP_MODE_CLOCK_HMS, "12.34.56");
+    expect_clock(7, APP_MODE_CLOCK_HMS, "123456");
+    expect_clock(6, APP_MODE_CLOCK_HMS, "123456");
+    expect_clock(5, APP_MODE_CLOCK_HMS, "12.34");
+    expect_clock(4, APP_MODE_CLOCK_HMS, "1234");
+}
+
 /* --- Off ----------------------------------------------------- */
 
 static void test_off_mode_sends_nothing(void)
@@ -504,6 +531,7 @@ int main(void)
     RUN_TEST(test_set_text_trims_at_utf8_boundary);
     RUN_TEST(test_clock_hm_renders_time);
     RUN_TEST(test_clock_without_time_is_blank);
+    RUN_TEST(test_clock_adapts_to_field_width);
     RUN_TEST(test_hms_auto_falls_back_to_hm);
     RUN_TEST(test_off_mode_sends_nothing);
     RUN_TEST(test_off_clears_targets_and_blank_sends_again);

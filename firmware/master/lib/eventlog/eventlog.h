@@ -7,7 +7,8 @@
  * Auf dem Host getestet (test/test_eventlog).
  *
  * Es gibt keine gepufferte Uhr -- die Zeitstempel sind Millisekunden seit
- * Systemstart (der Aufrufer uebergibt millis()).
+ * Systemstart, 64 Bit (der Aufrufer uebergibt die Laufzeit, nicht millis(),
+ * das nach 49,7 Tagen ueberlaeuft, #40).
  */
 #ifndef KRONE_EVENTLOG_H
 #define KRONE_EVENTLOG_H
@@ -31,7 +32,7 @@ typedef enum {
 #define EVLOG_MSG_MAX  76u   /* inkl. NUL */
 
 typedef struct {
-    uint32_t    t_ms;
+    uint64_t    t_ms;
     evlog_sev_t sev;
     char        src[EVLOG_SRC_MAX];
     char        msg[EVLOG_MSG_MAX];
@@ -48,7 +49,7 @@ void evlog_init(evlog_t *lg);
 
 /* Meldung anhaengen. fmt/... wie printf; die Nachricht wird auf EVLOG_MSG_MAX
  * gekuerzt. Ist der Puffer voll, faellt der aelteste Eintrag heraus. */
-void evlog_push(evlog_t *lg, uint32_t t_ms, evlog_sev_t sev,
+void evlog_push(evlog_t *lg, uint64_t t_ms, evlog_sev_t sev,
                 const char *src, const char *fmt, ...)
 #if defined(__GNUC__)
     __attribute__((format(printf, 5, 6)))
@@ -62,8 +63,10 @@ void evlog_clear(evlog_t *lg);
  *   {"seq":<gesamtzahl>,"entries":[
  *      {"t":<ms>,"sev":0|1|2,"src":"..","msg":".."}, ... ]}
  * Neueste zuerst. min_sev filtert (EVLOG_INFO = alle, EVLOG_WARN = Warnungen +
- * Fehler, EVLOG_ERR = nur Fehler).
- * Rueckgabe: geschriebene Laenge ohne NUL, oder 0 bei Platzmangel.
+ * Fehler, EVLOG_ERR = nur Fehler). Passen nicht alle Eintraege, endet die
+ * Liste mit den neuesten und das Objekt traegt "more":true (#40).
+ * Rueckgabe: geschriebene Laenge ohne NUL, 0 nur wenn nicht einmal der
+ * Rahmen passt.
  */
 size_t evlog_json(const evlog_t *lg, evlog_sev_t min_sev,
                   char *out, size_t out_size);

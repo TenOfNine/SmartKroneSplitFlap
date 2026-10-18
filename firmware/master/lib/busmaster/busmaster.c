@@ -7,7 +7,8 @@
 #define BMQ_SHOW      0x01u   /* SET_ALL + GO (Anzeige), wird koalesziert   */
 #define BMQ_RECONCILE 0x02u   /* Soll/Ist-Korrektur (SET bzw. GO)           */
 
-/* Fehlercode 0x06 im Statusbyte 3 (Adresskollision, Spez. 6.4). */
+/* Fehlercodes im Statusbyte 3 (Spez. 6.4). */
+#define BM_ERR_UNSYNCED  0x04u   /* Lage verloren, Homing noetig */
 #define BM_ERR_COLLISION 0x06u
 
 /* --- Hilfen --------------------------------------------------------- */
@@ -279,8 +280,31 @@ static void reconcile_check(busmaster_t *bm, uint8_t addr, bm_module_t *m, uint3
     if (!m->soll_valid || m->rc_stopped) {
         return;
     }
-    if (m->zustand != 0u || m->fehler != 0u || m->ist_blatt == 0u) {
-        return;   /* nur im fehlerfreien Stillstand mit bekannter Lage */
+    if (m->zustand != 0u) {
+        return;   /* nur im Stillstand */
+    }
+    if (m->fehler == BM_ERR_UNSYNCED) {
+        /* Lage verloren (0x04, z. B. nach SET_CONFIG): "Homing anfordern"
+         * (Spez. 6.4). HOME, Ziel und GO; das GO waehrend des Homings fuehrt
+         * die Karte danach aus. Gleiche Grenzen wie die Korrektur (#39). */
+        if (q_has_flags(bm, BMQ_SHOW) || m->rc_tries >= BUSMASTER_RECONCILE_MAX_TRIES ||
+            (m->rc_tries > 0u && !elapsed_ge(now, m->rc_last_ms, BUSMASTER_RECONCILE_MIN_MS))) {
+            return;
+        }
+        const uint8_t pl[1] = { m->soll };
+        if (!q_push(bm, CMD_HOME, addr, NULL, 0, BMQ_RECONCILE) ||
+            !q_push(bm, CMD_SET, addr, pl, 1, BMQ_RECONCILE)) {
+            return;
+        }
+        q_remove(bm, BMQ_RECONCILE, CMD_GO, 0);
+        (void)q_push(bm, CMD_GO, PROTO_ADDR_BROADCAST, NULL, 0, BMQ_RECONCILE);
+        m->rc_tries++;
+        m->rc_last_ms = now;
+        bm->reconciles++;
+        return;
+    }
+    if (m->fehler != 0u || m->ist_blatt == 0u) {
+        return;   /* nur fehlerfrei und mit bekannter Lage */
     }
     if (m->ist_blatt == m->soll && m->ziel_blatt == m->soll) {
         m->rc_tries = 0;   /* am Soll: Versuche wieder frei */
@@ -636,6 +660,7 @@ static void complete(busmaster_t *bm, const proto_frame_t *f, uint32_t now)
             m->cfg_offset    = f->payload[1];
             m->cfg_vorhalt   = f->payload[2];
             m->cfg_flags     = f->payload[3];
+            m->cfg_t_enum    = f->payload_len >= 5u ? f->payload[4] : 0u;
             m->cfg_known     = true;
         }
         break;
@@ -1040,13 +1065,14 @@ void busmaster_identify(busmaster_t *bm, uint8_t addr, uint8_t seconds)
 }
 
 void busmaster_set_config(busmaster_t *bm, uint8_t addr, uint8_t blattzahl,
-                          uint8_t offset, uint8_t vorhalt, uint8_t flags)
+                          uint8_t offset, uint8_t vorhalt, uint8_t flags,
+                          uint8_t t_enum)
 {
     if (!valid_unicast(addr)) {
         return;
     }
-    const uint8_t pl[4] = { blattzahl, offset, vorhalt, flags };
-    (void)q_push(bm, CMD_SET_CONFIG, addr, pl, sizeof(pl), 0);
+    const uint8_t pl[5] = { blattzahl, offset, vorhalt, flags, t_enum };
+    (void)q_push(bm, CMD_SET_CONFIG, addr, pl, t_enum != 0u ? 5u : 4u, 0);
 }
 
 void busmaster_start_enumeration(busmaster_t *bm, uint32_t now_ms)

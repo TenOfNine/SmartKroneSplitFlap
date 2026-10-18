@@ -7,12 +7,25 @@
 #ifndef KRONE_HADISCOVERY_H
 #define KRONE_HADISCOVERY_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/* Hoechstlaengen (ohne NUL) wie die Puffer der Zentralsteuerung. */
+#define HADISC_TOPIC_MAX 47u
+#define HADISC_NODE_MAX  31u
+
+/* base_topic: 1..47 Zeichen aus [A-Za-z0-9_.-/], kein '/' am Anfang oder Ende,
+ * kein "//", keine MQTT-Platzhalter, nichts, was im JSON escapt werden muesste
+ * (#40). */
+bool hadiscovery_valid_base_topic(const char *s);
+
+/* node_id: 1..31 Zeichen aus [A-Za-z0-9_-] (Topic-Ebene, unique_id, Hostname). */
+bool hadiscovery_valid_node_id(const char *s);
 
 typedef enum {
     HA_ENT_TEXT,          /* Anzeigetext          text        */
@@ -32,7 +45,8 @@ typedef enum {
  * payload:       JSON mit name, unique_id, den passenden Topics,
  *                availability_topic (<base_topic>/status) und device{}
  *
- * Rueckgabe: 0 bei Erfolg, -1 bei zu kleinem Puffer.
+ * Rueckgabe: 0 bei Erfolg, -1 bei zu kleinem Puffer oder zu langem
+ * base_topic/node_id.
  */
 int hadiscovery_entity(char *config_topic, size_t topic_size,
                        char *payload, size_t payload_size,

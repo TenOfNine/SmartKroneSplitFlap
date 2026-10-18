@@ -96,6 +96,36 @@ static void test_clear_keeps_seq(void)
     TEST_ASSERT_NOT_NULL(strstr(json, "\"entries\":[]"));
 }
 
+/* Nachrichten nur aus Steuerzeichen (je \u00XX) und knapper Puffer: kein
+ * Abbruch mit 0 / HTTP 500, sondern die neuesten Eintraege plus "more" (#40). */
+static void test_json_worst_case_escaping_truncates_gracefully(void)
+{
+    char ctl[EVLOG_MSG_MAX];
+    memset(ctl, 0x01, sizeof(ctl) - 1u);
+    ctl[sizeof(ctl) - 1u] = '\0';
+    for (unsigned i = 0; i < EVLOG_CAPACITY; ++i) {
+        evlog_push(&lg, i, EVLOG_INFO, "sys", "%s", ctl);
+    }
+    evlog_push(&lg, 99, EVLOG_INFO, "sys", "neu");
+    static char json[3072];
+    const size_t n = evlog_json(&lg, EVLOG_INFO, json, sizeof(json));
+    TEST_ASSERT_TRUE(n > 0);
+    TEST_ASSERT_EQUAL_size_t(n, strlen(json));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"msg\":\"neu\""));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"more\":true}"));
+    TEST_ASSERT_EQUAL_CHAR('}', json[n - 1u]);
+}
+
+/* Zeitstempel ueber 2^32 ms (49,7 Tage) bleiben erhalten (#40). */
+static void test_timestamp_beyond_32_bit(void)
+{
+    const uint64_t t = 60ull * 24u * 3600u * 1000u + 5u;   /* 60 Tage */
+    evlog_push(&lg, t, EVLOG_INFO, "sys", "spaet");
+    char json[256];
+    evlog_json(&lg, EVLOG_INFO, json, sizeof(json));
+    TEST_ASSERT_NOT_NULL(strstr(json, "\"t\":5184000005,"));
+}
+
 int main(void)
 {
     UNITY_BEGIN();
@@ -105,5 +135,7 @@ int main(void)
     RUN_TEST(test_json_escapes_message);
     RUN_TEST(test_long_message_truncated_not_overrun);
     RUN_TEST(test_clear_keeps_seq);
+    RUN_TEST(test_json_worst_case_escaping_truncates_gracefully);
+    RUN_TEST(test_timestamp_beyond_32_bit);
     return UNITY_END();
 }

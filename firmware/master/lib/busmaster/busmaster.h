@@ -99,6 +99,7 @@ typedef struct {
     uint8_t  cfg_offset;
     uint8_t  cfg_vorhalt;
     uint8_t  cfg_flags;
+    uint8_t  cfg_t_enum;   /* T_enum in s, 0 = Karte meldet es nicht (vor 1.19) */
     bool     cfg_known;
     /* Soll/Ist-Abgleich (#26): Soll aus busmaster_show, getrennt vom Ziel */
     uint8_t  soll;
@@ -318,9 +319,11 @@ void busmaster_stop(busmaster_t *bm, uint8_t addr);
 /* IDENTIFY einreihen (Unicast, ACK, Spezifikation 5.4). */
 void busmaster_identify(busmaster_t *bm, uint8_t addr, uint8_t seconds);
 
-/* SET_CONFIG einreihen (4 Byte, ACK, Spezifikation 5.4 / 6.3). */
+/* SET_CONFIG einreihen (ACK, Spezifikation 5.4 / 6.3). t_enum 1..60 haengt
+ * T_enum als fuenftes Byte an (Karten ab 1.19), 0 sendet die 4-Byte-Form. */
 void busmaster_set_config(busmaster_t *bm, uint8_t addr, uint8_t blattzahl,
-                          uint8_t offset, uint8_t vorhalt, uint8_t flags);
+                          uint8_t offset, uint8_t vorhalt, uint8_t flags,
+                          uint8_t t_enum);
 
 /* Enumeration anfordern (Abschnitt 4.5.1). Beginnt bei freiem Bus in
  * busmaster_tick; eine laufende wird nicht neu gestartet. module_count und

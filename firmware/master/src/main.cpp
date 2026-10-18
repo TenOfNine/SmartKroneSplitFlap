@@ -37,6 +37,7 @@
 #include "driver/uart.h"
 #include "hal/uart_ll.h"
 #include "esp_freertos_hooks.h"
+#include "esp_task_wdt.h"
 #include "esp_timer.h"
 #include "lwip/apps/sntp.h"
 
@@ -94,10 +95,20 @@ static const char FW_BUILD[] = __DATE__ " " __TIME__;
 /* Gemeinsame Version mit der Modul-Firmware (APP_VERSION_* in
  * firmware/module/src/board.h) -- siehe firmware/CHANGELOG.md. Bei jeder
  * ausgelieferten Aenderung MINOR erhoehen und dort fortschreiben. */
+/* loop()-Watchdog (#40): haengt ein Durchlauf laenger, startet der Master neu.
+ * OTA (laengster legitimer Vorgang) fuettert ihn je Datenblock. */
+static constexpr uint32_t LOOP_WDT_TIMEOUT_S = 30;
+
 static constexpr uint8_t FW_VERSION_MAJOR = 1;
 static constexpr uint8_t FW_VERSION_MINOR = 18;
 
 /* --- Zustand -------------------------------------------------------- */
+
+/* Laufzeit in ms, 64 Bit: kein Ueberlauf nach 49,7 Tagen wie millis() (#40). */
+static uint64_t uptime_ms()
+{
+    return (uint64_t)(esp_timer_get_time() / 1000);
+}
 
 static Preferences   prefs;
 static WebServer     web(80);
@@ -323,11 +334,11 @@ static void module_fw_verify()
     }
     ota_header_t h;
     if (otaverify_parse_header(MODULE_FW_MOTA, MODULE_FW_LEN, 0x4000u, &h) != OTA_HDR_OK) {
-        evlog_push(&g_log, 0, EVLOG_WARN, "modfw", "Container ungueltig");
+        evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "modfw", "Container ungueltig");
         return;
     }
     if (!ota_sign_verify_header(MODULE_FW_MOTA, OTA_SIGNED_LEN, h.sig)) {
-        evlog_push(&g_log, 0, EVLOG_WARN, "modfw", "Signatur ungueltig");
+        evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "modfw", "Signatur ungueltig");
         return;
     }
     g_module_img     = MODULE_FW_MOTA + OTA_HEADER_LEN;
@@ -336,7 +347,7 @@ static void module_fw_verify()
     g_module_fw_ok   = true;
     moduleupdate_init(&g_mu, bus_tx, nullptr, g_module_img, g_module_img_len,
                       g_module_img_crc, MODULE_FW_VER);
-    evlog_push(&g_log, 0, EVLOG_INFO, "modfw", "Modul-Firmware v%u.%u gebundelt (%u B)",
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "modfw", "Modul-Firmware v%u.%u gebundelt (%u B)",
                (unsigned)(MODULE_FW_VER >> 8), (unsigned)(MODULE_FW_VER & 0xFF),
                (unsigned)g_module_img_len);
 }
@@ -457,13 +468,14 @@ static void settings_load()
     prefs.getString("node_id", cfg.node_id, sizeof(cfg.node_id));
     cfg.module_count  = prefs.getUChar("modules", cfg.module_count);
     cfg.hms_timeout_s = prefs.getULong("hms_to", cfg.hms_timeout_s);
+    if (cfg.hms_timeout_s < 60 || cfg.hms_timeout_s > 14400) cfg.hms_timeout_s = 600;   /* 7.7 */
 
     prefs.getString("ntp_server", cfg.ntp_server, sizeof(cfg.ntp_server));
     prefs.getString("tz", cfg.tz, sizeof(cfg.tz));
     cfg.ntp_enabled = prefs.getBool("ntp_en", cfg.ntp_enabled);
 
     { char s[2]; s[0] = cfg.sep; s[1] = 0;
-      prefs.getString("sep", s, sizeof(s)); cfg.sep = s[0] ? s[0] : '.'; }
+      prefs.getString("sep", s, sizeof(s)); cfg.sep = (s[0] == '-') ? '-' : '.'; }
     cfg.align = prefs.getUChar("align", cfg.align);
 
     cfg.use_static = prefs.getBool("ip_static", cfg.use_static);
@@ -809,8 +821,8 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=tx><b>Modulzahl automatisch erkennen</b><span id=modcnthint>Über die Enumeration.</span></div></div>
 <div class=field id=modcntf style="max-width:220px;margin-top:10px" hidden><span class=lbl>Feste Feldbreite</span><input type=number id=cf_modules min=1 max=32></div>
 <div class="grid c2" style=margin-top:12px>
-<div class=field><span class=lbl>Uhr-Trennzeichen</span><select id=cf_sep><option>.</option><option>:</option><option>-</option></select></div>
-<div class=field><span class=lbl>hh:mm:ss Auto-Rückfall (min)</span><input type=number id=cf_hms></div></div>
+<div class=field><span class=lbl>Uhr-Trennzeichen</span><select id=cf_sep><option>.</option><option>-</option></select></div>
+<div class=field><span class=lbl>hh:mm:ss Auto-Rückfall (min)</span><input type=number id=cf_hms min=1 max=240></div></div>
 <p class=hint>hh:mm:ss lässt ein Modul rund alle 10 s eine volle Umdrehung fahren (≈173 Tage bis zur MTBF) — daher der automatische Rückfall auf hh:mm.</p>
 <div class="row mt"><button class="btn primary" data-save=disp>Speichern</button></div></div>
 </div></details>
@@ -843,7 +855,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 
 <details class=grp><summary>Modul-Konfiguration</summary><div class=grpbody>
 <div class=sect><h3>Modul-Konfiguration</h3>
-<p class=hint>Blattzahl, Blatt-Offset (Ausrichtung zum Leerbildimpuls, Spez. 6.3 / O-6) und Abschaltvorhalt je Modul. Erst „Lesen", damit die Felder vom aktuellen Stand der Karte ausgehen. Änderungen wirken sofort; nach geänderter Blattzahl oder geändertem Offset meldet das Modul 0x04 und braucht ein Homing.</p>
+<p class=hint>Blattzahl, Blatt-Offset (Ausrichtung zum Leerbildimpuls, Spez. 6.3 / O-6), Abschaltvorhalt und T_enum je Modul. Erst „Lesen", damit die Felder vom aktuellen Stand der Karte ausgehen. Änderungen wirken sofort; nach geänderter Blattzahl oder geändertem Offset meldet das Modul 0x04 und braucht ein Homing – liegt ein Anzeigeinhalt vor, fordert die Zentralsteuerung es selbst an. Werte außerhalb des zulässigen Bereichs übernimmt die Karte nicht.</p>
 <div class="row mt"><div class=field style=width:90px><span class=lbl>Adresse</span><input type=number id=cfgaddr min=1 max=250 value=1></div>
 <button class=btn id=cfgread style=align-self:flex-end>Lesen</button>
 <span id=cfghint class=hint style=margin:0 0 2px;align-self:flex-end></span></div>
@@ -851,7 +863,9 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=field><span class=lbl>Blattzahl</span><select id=cfgblattzahl><option value=40>40</option><option value=64>64</option><option value=80>80</option></select></div>
 <div class=field><span class=lbl>Offset</span><input type=number id=cfgoffset min=0 max=79></div>
 <div class=field><span class=lbl>Abschaltvorhalt (ms)</span><input type=number id=cfgvorhalt min=0 max=60></div>
+<div class=field id=cfgtenumf><span class=lbl>T_enum (s)</span><input type=number id=cfgtenum min=1 max=60></div>
 </div>
+<p class=hint id=cfgbzhint hidden>Die Zeichenzuordnung der Zentralsteuerung kennt nur den 40-Blatt-Satz der Palettenmodulreihe A. 64 und 80 Blatt nur für Module mit anderem Blattsatz einstellen; Text und Uhrzeit zeigen dort falsche Blätter.</p>
 <div id=cfgflags hidden style=margin-top:12px>
 <div class=trow><label class=switch><input type=checkbox id=cfgf0><span class=t></span></label>
 <div class=tx><b>Positionsspeicherung</b><span>Position nach jedem Stillstand ins EEPROM schreiben (Ringpuffer über 16 Zellen). Nur wirksam, wenn Autohoming aus ist.</span></div></div>
@@ -882,7 +896,7 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const NAMES={dash:"Übersicht",mods:"Module",log:"Log",set:"Einstellungen"};
 const STATE=["Idle","Homing","Moving","Fehler"];
-const ERRTXT={1:"kein Blattimpuls",2:"kein Leerbildimpuls",3:"Blattzahl unplausibel",4:"Position verloren",5:"Laufzeitüberwachung",6:"Adresskollision"};
+const ERRTXT={1:"kein Blattimpuls",2:"kein Leerbildimpuls",3:"Blattzahl passt nicht",4:"Position verloren",5:"Laufzeitüberwachung",6:"Adresskollision",7:"Motor läuft ohne Ansteuerung"};
 let VIEW="dash",cfg={},sys={},st={};
 
 function blattChar(n){if(n<=2||n>40)return"";if(n<=12)return""+(n-3);if(n<=38)return String.fromCharCode(65+(n-13));return n===39?"-":"."}
@@ -890,7 +904,7 @@ function bars(r){const q=r>=-55?4:r>=-65?3:r>=-75?2:r>=-85?1:0;let s="";for(let 
 function dur(s){s=s|0;const d=s/86400|0,h=(s%86400)/3600|0,m=(s%3600)/60|0;return(d?d+" d ":"")+String(h).padStart(2,"0")+":"+String(m).padStart(2,"0")}
 function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]))}
 const XH={"X-Krone-Request":"1"};
-async function J(u,o){const r=await fetch(u,o);if(!r.ok)throw r.status;const t=await r.text();return t?JSON.parse(t):{}}
+async function J(u,o){const r=await fetch(u,o);if(!r.ok){let e=r.status;try{const j=await r.json();if(j.error)e+=" ("+j.error+")"}catch(_){}throw e}const t=await r.text();return t?JSON.parse(t):{}}
 async function P(u,b){try{await J(u,{method:"POST",headers:{"Content-Type":"application/json","X-Krone-Request":"1"},body:JSON.stringify(b||{})});return 1}catch(e){toast("Fehler "+e);return 0}}
 let tT;function toast(m){const t=$("#toast");t.textContent=m;t.style.opacity=1;t.style.transform="translateX(-50%) translateY(0)";clearTimeout(tT);tT=setTimeout(()=>{t.style.opacity=0;t.style.transform="translateX(-50%) translateY(20px)"},2400)}
 
@@ -908,7 +922,7 @@ textPending=b.dataset.m==="text";
 if(!textPending)sendMode(b.dataset.m)};
 $("#alignseg").onclick=e=>{const b=e.target.closest("button");if(!b)return;
 $$("#alignseg button").forEach(x=>x.classList.toggle("on",x===b))};
-$("#sendbtn").onclick=()=>{P("/api/text",{text:$("#txt").value});textPending=false;toast("Text gesendet")};
+$("#sendbtn").onclick=async()=>{if(await P("/api/text",{text:$("#txt").value,align:+($("#alignseg .on")?.dataset.a||1)}))toast("Text gesendet");textPending=false};
 function sendMode(m){P("/api/mode",{mode:m,sep:cfg.sep||".",align:+($("#alignseg .on")?.dataset.a||1)});toast("Modus: "+m)}
 $("#quick").onclick=e=>{const b=e.target.closest("button");if(!b)return;const q=b.dataset.q;
 if(q==="home"){P("/api/home",{});toast("HOME an alle")}
@@ -1023,7 +1037,7 @@ modCntHint();
 $("#cf_mqtt_port").value=cfg.mqtt_port;
 ["mqtt_host","mqtt_user","mqtt_pass","base_topic","node_id","ntp_server","tz","ip","mask","gw","dns"].forEach(k=>{const el=$("#cf_"+k);if(el)el.value=cfg[k]??""});
 $("#cf_mqtt_pass").placeholder=cfg.mqtt_set?"gesetzt – leer lassen = unverändert":"";
-$("#cf_sep").value=cfg.sep||".";
+$("#cf_sep").value=cfg.sep==="-"?"-":".";
 tzLoad(cfg.tz||"CET-1CEST,M3.5.0,M10.5.0/3");
 $("#cf_net_scope").value=String(cfg.net_scope??1);
 $("#cf_admin_user").value=cfg.admin_user||"admin";
@@ -1056,7 +1070,7 @@ function collectCfg(){const o={
 mqtt_host:$("#cf_mqtt_host").value,mqtt_port:+$("#cf_mqtt_port").value,mqtt_user:$("#cf_mqtt_user").value,
 mqtt_pass:$("#cf_mqtt_pass").value,base_topic:$("#cf_base_topic").value,node_id:$("#cf_node_id")?.value||cfg.node_id,
 module_count:$("#cf_auto_modules").checked?0:Math.max(1,Math.min(32,+$("#cf_modules").value||1)),
-hms_timeout_s:(+$("#cf_hms").value||10)*60,
+hms_timeout_s:Math.max(1,Math.min(240,+$("#cf_hms").value||10))*60,
 ntp_server:$("#cf_ntp_server").value,tz:tzString(),ntp_enabled:$("#cf_ntp_enabled").checked,
 sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
@@ -1068,7 +1082,7 @@ if($("#cf_admin_clear").checked)o.admin_pass="";
 else if($("#cf_admin_pass").value)o.admin_pass=$("#cf_admin_pass").value;
 return o}
 $$("[data-save]").forEach(b=>b.onclick=async()=>{
-await P("/api/config",collectCfg());
+if(!await P("/api/config",collectCfg()))return;
 toast(b.dataset.save==="access"?"Zugriffsschutz gespeichert":"Gespeichert");setTimeout(loadCfg,400);
 if((b.dataset.save==="host"||b.dataset.save==="iface")&&confirm("Für Hostname/Schnittstellen jetzt neu starten?")){
 await P("/api/reboot",{});toast("Neustart …")}});
@@ -1177,6 +1191,7 @@ if(s.busy){setTimeout(pollModFw,700)}else{_modfwBusy=false;setTimeout(()=>{$("#m
 }
 
 // ── Modul-Konfiguration ──
+$("#cfgblattzahl").onchange=()=>{$("#cfgbzhint").hidden=$("#cfgblattzahl").value=="40"};
 $("#cfgread").onclick=async()=>{
 const addr=+$("#cfgaddr").value;
 $("#cfghint").textContent="liest …";
@@ -1188,6 +1203,7 @@ let c;try{c=await J("/api/module/config?addr="+addr)}catch(e){return}
 if(!c.known){if((pollCfg.n=(pollCfg.n||0)+1)<8){setTimeout(()=>pollCfg(addr),250);return}pollCfg.n=0;$("#cfghint").textContent="keine Antwort von Adr "+addr;return}
 pollCfg.n=0;
 $("#cfgblattzahl").value=c.blattzahl;$("#cfgoffset").value=c.offset;$("#cfgvorhalt").value=c.vorhalt;
+$("#cfgtenumf").hidden=!c.t_enum;$("#cfgtenum").value=c.t_enum||10;$("#cfgbzhint").hidden=c.blattzahl==40;
 $("#cfgf0").checked=!!(c.flags&1);$("#cfgf1").checked=!!(c.flags&2);
 $("#cfgform").hidden=false;$("#cfgflags").hidden=false;$("#cfgwrite").disabled=false;
 $("#cfghint").textContent="Adr "+addr+" gelesen · Flags 0x"+(c.flags|0).toString(16).padStart(2,"0");
@@ -1197,7 +1213,8 @@ const addr=+$("#cfgaddr").value;
 const flags=(+$("#cfgf0").checked)|(+$("#cfgf1").checked<<1);
 const body={addr,action:"set_config",blattzahl:+$("#cfgblattzahl").value,
   offset:+$("#cfgoffset").value,vorhalt:+$("#cfgvorhalt").value,flags};
-try{await P("/api/module",body)}catch(e){return toast("Speichern fehlgeschlagen")}
+if(!$("#cfgtenumf").hidden)body.t_enum=+$("#cfgtenum").value;
+if(!await P("/api/module",body))return;
 toast("Konfiguration an Adr "+addr+" gesendet");
 $("#cfghint").textContent="prüfe …";$("#cfgwrite").disabled=true;
 setTimeout(()=>pollCfg(addr),400);
@@ -1478,6 +1495,14 @@ static void handle_text()
         send_json(400, "{\"error\":\"text\"}");
         return;
     }
+    /* Ausrichtung aus der Oberflaeche (#40); ohne Angabe bleibt die bisherige. */
+    if (!doc["align"].isNull()) {
+        if (!doc["align"].is<unsigned>() || (unsigned)doc["align"] > 2) {
+            send_json(400, "{\"error\":\"align\"}");
+            return;
+        }
+        g_app.align = align_from(doc["align"]);
+    }
     masterapp_set_text(&g_app, doc["text"], millis());
     ok_json();
 }
@@ -1561,16 +1586,19 @@ static void handle_module()
     } else if (!strcmp(a, "set_config")) {
         /* Alle vier Felder sind Pflicht (kein stilles Ueberschreiben mit 0);
          * Flags nur Bit 0/1, Bit 2 ist reserviert (#18, #23). */
-        unsigned bz = 0, off = 0, vh = 0, fl = 0;
+        unsigned bz = 0, off = 0, vh = 0, fl = 0, te = 0;
         if (!json_uint(doc, "blattzahl", 40, 80, &bz) || (bz != 40 && bz != 64 && bz != 80) ||
             !json_uint(doc, "offset", 0, bz - 1, &off) ||
             !json_uint(doc, "vorhalt", 0, 60, &vh) ||
-            !json_uint(doc, "flags", 0, 3, &fl)) {
+            !json_uint(doc, "flags", 0, 3, &fl) ||
+            (!doc["t_enum"].isNull() && !json_uint(doc, "t_enum", 1, 60, &te))) {
             send_json(400, "{\"error\":\"config\"}");
             return;
         }
+        /* T_enum (fuenftes Byte) nur an Karten, die es per GET_CONFIG melden. */
+        if (addr > BUSMASTER_MAX_MODULES || g_bus.mod[addr - 1].cfg_t_enum == 0u) te = 0;
         busmaster_set_config(&g_bus, (uint8_t)addr, (uint8_t)bz, (uint8_t)off, (uint8_t)vh,
-                             (uint8_t)fl);
+                             (uint8_t)fl, (uint8_t)te);
         if (addr <= BUSMASTER_MAX_MODULES) g_bus.mod[addr - 1].cfg_known = false;
         busmaster_poll_config(&g_bus, (uint8_t)addr, millis());
     } else {
@@ -1595,6 +1623,7 @@ static void handle_module_config()
         d["offset"]    = m.cfg_offset;
         d["vorhalt"]   = m.cfg_vorhalt;
         d["flags"]     = m.cfg_flags;
+        d["t_enum"]    = m.cfg_t_enum;
     }
     char out[128];
     serializeJson(d, out, sizeof(out));
@@ -1606,7 +1635,7 @@ static void handle_enumerate()
     if (!write_allowed() || !mu_free()) return;
     dbg_log("[bus] === Enumeration gestartet ===");
     busmaster_start_enumeration(&g_bus, millis());
-    evlog_push(&g_log, millis(), EVLOG_INFO, "bus", "Enumeration (Web) gestartet");
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "bus", "Enumeration (Web) gestartet");
     ok_json();
 }
 
@@ -1682,7 +1711,7 @@ static void handle_module_update()
      * daher "offline"), nie wieder erreicht werden: online=false verhindert
      * genau den Update-Versuch, der sie zurueckholen wuerde. */
     moduleupdate_enqueue(&g_mu, mask, explicit_addr ? (online | mask) : online);
-    evlog_push(&g_log, millis(), EVLOG_WARN, "modfw",
+    evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "modfw",
                "Update angestossen (Maske 0x%lx)", (unsigned long)mask);
     ok_json();
 }
@@ -1783,7 +1812,7 @@ static void handle_time()
     struct timeval tv = { tt, 0 };
     settimeofday(&tv, nullptr);
     masterapp_set_time(&g_app, (uint8_t)h, (uint8_t)mi, (uint8_t)s);
-    evlog_push(&g_log, millis(), EVLOG_INFO, "sys", "Uhr manuell gestellt: %02d:%02d", h, mi);
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "sys", "Uhr manuell gestellt: %02d:%02d", h, mi);
     ok_json();
 }
 
@@ -1816,7 +1845,7 @@ static void handle_wifi_connect()
     wifi_switching = true;
     wifi_switch_ms = millis();
     const char *psk = doc["psk"] | "";
-    evlog_push(&g_log, millis(), EVLOG_INFO, "wifi", "Wechsel zu \"%s\"", (const char *)doc["ssid"]);
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "wifi", "Wechsel zu \"%s\"", (const char *)doc["ssid"]);
     WiFi.begin((const char *)doc["ssid"], psk);
     send_json(200, "{\"ok\":true,\"note\":\"connecting\"}");
 }
@@ -1838,8 +1867,57 @@ static void handle_reboot()
 
 static String topic(const char *suffix);   /* Definition im MQTT-Abschnitt */
 
+/* Prueft ein Konfigurationsobjekt vor der Uebernahme (#40): Zeichenketten
+ * passen ungekuerzt in ihren Puffer, Topic/Node-ID/IP sind gueltig, Zahlen
+ * liegen im Bereich. Fehlende Felder bleiben unveraendert und sind erlaubt.
+ * Rueckgabe: Name des ersten ungueltigen Felds oder nullptr. */
+static const char *config_doc_invalid(JsonDocument &doc)
+{
+    auto str_bad = [&](const char *k, size_t cap, bool (*check)(const char *)) {
+        if (doc[k].isNull()) return false;
+        if (!doc[k].is<const char *>()) return true;
+        const char *v = doc[k];
+        return strlen(v) >= cap || (check != nullptr && !check(v));
+    };
+    auto ip_ok = [](const char *v) { IPAddress a; return v[0] == 0 || a.fromString(v); };
+    auto uint_bad = [&](const char *k, unsigned lo, unsigned hi) {
+        if (doc[k].isNull()) return false;
+        if (!doc[k].is<unsigned>()) return true;
+        const unsigned v = doc[k];
+        return v < lo || v > hi;
+    };
+    if (str_bad("mqtt_host", sizeof(cfg.mqtt_host), nullptr))   return "mqtt_host";
+    if (str_bad("mqtt_user", sizeof(cfg.mqtt_user), nullptr))   return "mqtt_user";
+    if (str_bad("mqtt_pass", sizeof(cfg.mqtt_pass), nullptr))   return "mqtt_pass";
+    if (str_bad("base_topic", sizeof(cfg.base_topic), hadiscovery_valid_base_topic))
+        return "base_topic";
+    if (str_bad("node_id", sizeof(cfg.node_id), hadiscovery_valid_node_id)) return "node_id";
+    if (str_bad("ntp_server", sizeof(cfg.ntp_server), nullptr)) return "ntp_server";
+    if (str_bad("tz", sizeof(cfg.tz), nullptr))                 return "tz";
+    if (str_bad("ip", sizeof(cfg.ip), ip_ok))                   return "ip";
+    if (str_bad("mask", sizeof(cfg.mask), ip_ok))               return "mask";
+    if (str_bad("gw", sizeof(cfg.gw), ip_ok))                   return "gw";
+    if (str_bad("dns", sizeof(cfg.dns), ip_ok))                 return "dns";
+    if (str_bad("admin_user", sizeof(cfg.admin_user), nullptr)) return "admin_user";
+    if (str_bad("admin_pass", sizeof(cfg.admin_pass), nullptr)) return "admin_pass";
+    if (uint_bad("mqtt_port", 1, 65535))                        return "mqtt_port";
+    if (uint_bad("module_count", 0, BUSMASTER_MAX_MODULES))     return "module_count";
+    /* 7.7: Rueckfall der Sekundenanzeige ist Pflicht, 1 min .. 4 h */
+    if (uint_bad("hms_timeout_s", 60, 14400))                   return "hms_timeout_s";
+    if (uint_bad("align", 0, 2))                                return "align";
+    if (uint_bad("net_scope", 0, 2))                            return "net_scope";
+    if (!doc["sep"].isNull()) {
+        /* ':' kennt der Blattsatz nicht; aeltere Sicherungen tragen es noch
+         * und werden beim Uebernehmen auf '.' gesetzt. */
+        const char *v = doc["sep"] | "";
+        if (strcmp(v, ".") != 0 && strcmp(v, "-") != 0 && strcmp(v, ":") != 0) return "sep";
+    }
+    return nullptr;
+}
+
 /* Konfiguration aus einem JSON-Objekt uebernehmen, in NVS sichern und -- wo
- * gefahrlos -- sofort anwenden. Von /api/config und /api/backup genutzt. */
+ * gefahrlos -- sofort anwenden. Von /api/config und /api/backup genutzt; vorher
+ * mit config_doc_invalid() pruefen. */
 static void apply_config_doc(JsonDocument &doc)
 {
     auto cpS = [&](const char *k, char *dst, size_t n) {
@@ -1874,7 +1952,10 @@ static void apply_config_doc(JsonDocument &doc)
         cfg.module_count = v > BUSMASTER_MAX_MODULES ? BUSMASTER_MAX_MODULES : (uint8_t)v;
     }
     if (doc["hms_timeout_s"].is<unsigned>()) cfg.hms_timeout_s = doc["hms_timeout_s"];
-    if (doc["sep"].is<const char *>()) { const char *s = doc["sep"]; if (s[0]) cfg.sep = s[0]; }
+    if (doc["sep"].is<const char *>()) {
+        const char *s = doc["sep"];
+        cfg.sep = (s[0] == '-') ? '-' : '.';
+    }
     if (doc["align"].is<unsigned>())          cfg.align = doc["align"];
     if (doc["ntp_enabled"].is<bool>())        cfg.ntp_enabled = doc["ntp_enabled"];
     if (doc["use_static"].is<bool>())         cfg.use_static = doc["use_static"];
@@ -1934,6 +2015,10 @@ static void handle_config()
     if (web.method() == HTTP_POST) {
         JsonDocument doc;
         if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
+        if (const char *bad = config_doc_invalid(doc)) {
+            send_json(400, (String("{\"error\":\"") + bad + "\"}").c_str());
+            return;
+        }
         apply_config_doc(doc);
         ok_json();
         return;
@@ -1956,17 +2041,21 @@ static void handle_backup()
         if (!mu_free()) return;
         JsonDocument doc;
         if (!body_json(doc)) { send_json(400, "{\"error\":\"json\"}"); return; }
+        if (const char *bad = config_doc_invalid(doc)) {
+            send_json(400, (String("{\"error\":\"") + bad + "\"}").c_str());
+            return;
+        }
         apply_config_doc(doc);
         if (doc["wifi_ssid"].is<const char *>()) {
             const char *ssid = doc["wifi_ssid"];
             const char *psk  = doc["wifi_psk"] | "";
             if (strlen(ssid) > 0) {
                 WiFi.begin(ssid, psk);
-                evlog_push(&g_log, millis(), EVLOG_INFO, "wifi",
+                evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "wifi",
                            "Wiederherstellung: verbinde mit \"%s\"", ssid);
             }
         }
-        evlog_push(&g_log, millis(), EVLOG_INFO, "sys", "Einstellungen wiederhergestellt");
+        evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "sys", "Einstellungen wiederhergestellt");
         want_reboot = true;
         reboot_at = millis() + 600;
         send_json(200, "{\"ok\":true,\"note\":\"reboot\"}");
@@ -2015,7 +2104,7 @@ static void ota_fail(const char *why)
     if (g_ota_begun) Update.abort();
     g_ota_ok = false;
     g_ota_begun = false;
-    evlog_push(&g_log, millis(), EVLOG_ERR, "ota", "abgelehnt: %s", why);
+    evlog_push(&g_log, uptime_ms(), EVLOG_ERR, "ota", "abgelehnt: %s", why);
 }
 
 /* Setzt den OTA-Zustand fuer eine neue Uebertragung zurueck. Aufrufer prueft
@@ -2035,6 +2124,7 @@ static void ota_reset()
  * pruefen, dann streamend an Update.write() + SHA-256. */
 static void ota_feed(const uint8_t *p, size_t n)
 {
+    feedLoopWDT();   /* lange Uebertragung in einem loop()-Durchlauf (#40) */
     if (g_ota_err[0]) return;
 
     /* 1) Header vervollstaendigen */
@@ -2087,7 +2177,7 @@ static bool ota_finish(const char *source)
         return false;
     }
     g_ota_begun = false;
-    evlog_push(&g_log, millis(), EVLOG_INFO, "ota",
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "ota",
                "Update geschrieben (%u B, %s), Neustart", (unsigned)g_ota_img_seen, source);
     return true;
 }
@@ -2104,7 +2194,7 @@ static void handle_update_upload()
         }
         if (moduleupdate_busy(&g_mu)) { strlcpy(g_ota_err, "module_update_busy", sizeof(g_ota_err)); return; }
         if (!cfg.ota_enabled)                 { strlcpy(g_ota_err, "ota_disabled", sizeof(g_ota_err)); return; }
-        evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "Upload: %s", up.filename.c_str());
+        evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "ota", "Upload: %s", up.filename.c_str());
         return;
     }
 
@@ -2161,7 +2251,7 @@ static void handle_update_github()
     if (!WiFi.isConnected()) { send_json(503, "{\"error\":\"kein WLAN\"}"); return; }
 
     ota_reset();
-    evlog_push(&g_log, millis(), EVLOG_WARN, "ota", "GitHub-Abruf gestartet");
+    evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "ota", "GitHub-Abruf gestartet");
 
     WiFiClientSecure client;
     client.setInsecure();
@@ -2370,10 +2460,10 @@ static void mqtt_ensure()
         mqtt.subscribe(topic("selftest/press").c_str());
         mqtt_publish_discovery();
         g_mqtt_backoff_ms = 5000;
-        evlog_push(&g_log, millis(), EVLOG_INFO, "mqtt", "verbunden, Auto-Discovery gesendet");
+        evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "mqtt", "verbunden, Auto-Discovery gesendet");
     } else {
         if (g_mqtt_backoff_ms < 60000) g_mqtt_backoff_ms *= 2;
-        evlog_push(&g_log, millis(), EVLOG_WARN, "mqtt", "Broker %s nicht erreichbar", cfg.mqtt_host);
+        evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "mqtt", "Broker %s nicht erreichbar", cfg.mqtt_host);
     }
 }
 
@@ -2465,18 +2555,18 @@ static void poll_events(uint32_t now)
     const wl_status_t wl = WiFi.status();
     if (wl != wl_prev) {
         if (wl == WL_CONNECTED) {
-            evlog_push(&g_log, now, EVLOG_INFO, "wifi", "verbunden mit \"%s\" (%d dBm), %s",
+            evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "wifi", "verbunden mit \"%s\" (%d dBm), %s",
                        WiFi.SSID().c_str(), (int)WiFi.RSSI(), WiFi.localIP().toString().c_str());
             wifi_switching = false;
         } else if (wl_prev == WL_CONNECTED) {
-            evlog_push(&g_log, now, EVLOG_WARN, "wifi", "Verbindung verloren (Status %d)", (int)wl);
+            evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "wifi", "Verbindung verloren (Status %d)", (int)wl);
         }
         wl_prev = wl;
     }
     if (wifi_switching && (now - wifi_switch_ms) > 25000UL && wl != WL_CONNECTED) {
         wifi_switching = false;
         if (wifi_old_ssid.length()) {
-            evlog_push(&g_log, now, EVLOG_WARN, "wifi", "Wechsel fehlgeschlagen, zurück zu \"%s\"",
+            evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "wifi", "Wechsel fehlgeschlagen, zurück zu \"%s\"",
                        wifi_old_ssid.c_str());
             WiFi.begin(wifi_old_ssid.c_str(), wifi_old_psk.c_str());
         }
@@ -2486,7 +2576,7 @@ static void poll_events(uint32_t now)
     if (!ntp_logged && cfg.ntp_enabled) {
         struct tm tmv;
         if (getLocalTime(&tmv, 0) && tmv.tm_year > 120) {
-            evlog_push(&g_log, now, EVLOG_INFO, "ntp", "Zeit synchronisiert");
+            evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "ntp", "Zeit synchronisiert");
             ntp_logged = true;
         }
     }
@@ -2494,14 +2584,14 @@ static void poll_events(uint32_t now)
     /* MQTT-Verbindungsabriss */
     const bool mq = mqtt.connected();
     if (mq_prev && !mq && cfg.mqtt_enabled) {
-        evlog_push(&g_log, now, EVLOG_WARN, "mqtt", "Verbindung verloren, Reconnect");
+        evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "mqtt", "Verbindung verloren, Reconnect");
     }
     mq_prev = mq;
 
     /* Enumeration abgeschlossen */
     const bool eb = busmaster_enum_busy(&g_bus);
     if (enum_prev && !eb) {
-        evlog_push(&g_log, now, EVLOG_INFO, "bus", "Enumeration: %u Karten adressiert",
+        evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "bus", "Enumeration: %u Karten adressiert",
                    (unsigned)g_bus.module_count);
     }
     enum_prev = eb;
@@ -2511,15 +2601,15 @@ static void poll_events(uint32_t now)
         const bm_module_t *m = &g_bus.mod[i];
         if (m->online != m_online[i]) {
             if (m->online) {
-                evlog_push(&g_log, now, EVLOG_INFO, "bus", "Adr %u online", i + 1u);
+                evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "bus", "Adr %u online", i + 1u);
             } else {
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Adr %u offline (keine Antwort)", i + 1u);
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Adr %u offline (keine Antwort)", i + 1u);
             }
             m_online[i] = m->online;
         }
         if (m->fehler != m_err[i]) {
             if (m->fehler) {
-                evlog_push(&g_log, now, EVLOG_ERR, "bus", "Adr %u: Fehler 0x%02X", i + 1u, m->fehler);
+                evlog_push(&g_log, uptime_ms(), EVLOG_ERR, "bus", "Adr %u: Fehler 0x%02X", i + 1u, m->fehler);
             }
             m_err[i] = m->fehler;
         }
@@ -2566,7 +2656,7 @@ static void portal_start(uint16_t timeout_s)
     g_wm->setConfigPortalTimeout(timeout_s);
     g_wm->startConfigPortal(cfg.node_id);
     g_portal = true;
-    evlog_push(&g_log, millis(), EVLOG_INFO, "wifi", "Konfigurationsportal geöffnet (AP \"%s\")",
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "wifi", "Konfigurationsportal geöffnet (AP \"%s\")",
                cfg.node_id);
 }
 
@@ -2588,7 +2678,7 @@ static void wifi_service(uint32_t now)
                 g_wm->stopConfigPortal();
             }
             g_portal = false;
-            evlog_push(&g_log, now, EVLOG_INFO, "wifi", "Portal beendet");
+            evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "wifi", "Portal beendet");
             if (WiFi.status() != WL_CONNECTED && g_wm->getWiFiIsSaved()) {
                 WiFi.mode(WIFI_STA);
                 WiFi.begin();
@@ -2626,6 +2716,7 @@ static void wifi_service(uint32_t now)
 static Preferences g_app_prefs;
 static char     g_saved_mode[16] = "";
 static char     g_saved_text[APP_TEXT_MAX + 1] = "";
+static uint8_t  g_saved_align = (uint8_t)CHARMAP_ALIGN_CENTER;   /* Ausrichtung der Betriebsart (#40) */
 static uint32_t g_app_change_ms = 0;
 static bool     g_app_dirty = false;
 #define APP_SAVE_DELAY_MS 30000UL   /* NVS erst nach 30 s ohne Aenderung */
@@ -2635,11 +2726,13 @@ static void app_state_restore()
     g_app_prefs.begin("kapp", true);
     g_app_prefs.getString("mode", g_saved_mode, sizeof(g_saved_mode));
     g_app_prefs.getString("text", g_saved_text, sizeof(g_saved_text));
+    g_saved_align = g_app_prefs.getUChar("align", cfg.align);
     g_app_prefs.end();
     if (!g_saved_mode[0]) {
         return;
     }
     if (!strcmp(g_saved_mode, "text")) {
+        g_app.align = align_from(g_saved_align);   /* beim Senden gewaehlt (#40) */
         masterapp_set_text(&g_app, g_saved_text, millis());
     } else {
         masterapp_set_mode(&g_app, mode_from_string(g_saved_mode), cfg.sep,
@@ -2650,7 +2743,8 @@ static void app_state_restore()
 static void app_state_tick(uint32_t now)
 {
     const char *mode = masterapp_mode_name(g_app.mode);
-    const bool changed = strcmp(mode, g_saved_mode) != 0 ||
+    const uint8_t align = (uint8_t)g_app.align;
+    const bool changed = strcmp(mode, g_saved_mode) != 0 || align != g_saved_align ||
                          (g_app.mode == APP_MODE_TEXT && strcmp(g_app.text, g_saved_text) != 0);
     if (!changed) {
         g_app_dirty = false;
@@ -2671,6 +2765,8 @@ static void app_state_tick(uint32_t now)
     g_app_prefs.begin("kapp", false);
     g_app_prefs.putString("mode", g_saved_mode);
     g_app_prefs.putString("text", g_saved_text);
+    g_saved_align = align;
+    g_app_prefs.putUChar("align", g_saved_align);
     g_app_prefs.end();
     g_app_dirty = false;
 }
@@ -2684,7 +2780,7 @@ void setup()
     Serial.begin(115200);
     settings_load();
     evlog_init(&g_log);
-    evlog_push(&g_log, 0, EVLOG_INFO, "sys", "Start, Firmware %s", FW_BUILD);
+    evlog_push(&g_log, uptime_ms(), EVLOG_INFO, "sys", "Start, Firmware %s", FW_BUILD);
     esp_register_freertos_idle_hook(idle_hook);
 
     WiFi.mode(WIFI_STA);
@@ -2726,6 +2822,12 @@ void setup()
     }
     /* Die erste Enumeration startet in loop(), wenn das 2,5-s-Startfenster
      * des Modul-Bootloaders vorbei ist (Karten ignorieren dort Broadcasts). */
+
+    /* Task-Watchdog des Kerns (Vorgabe 5 s, Panik = Neustart) auf die
+     * loop()-Grenze setzen und den loop-Task anmelden; der Arduino-Kern
+     * fuettert ihn nach jedem Durchlauf. */
+    esp_task_wdt_init(LOOP_WDT_TIMEOUT_S, true);
+    enableLoopWDT();
 }
 
 void loop()
@@ -2826,17 +2928,17 @@ void loop()
             s_warn_seq = g_bus.warn_seq;
             const uint8_t w = busmaster_warnings(&g_bus);
             if (w & BM_WARN_UID_DUP)
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Gleiche Seriennummer auf zwei Adressen – Enumeration wiederholen");
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Gleiche Seriennummer auf zwei Adressen – Enumeration wiederholen");
             if (w & BM_WARN_UID_CHANGED)
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Seriennummer einer Adresse hat sich seit der letzten Enumeration geändert");
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Seriennummer einer Adresse hat sich seit der letzten Enumeration geändert");
             if (w & BM_WARN_SERVICE_ADDR)
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Karte auf Serviceadresse 250 – nie enumerierte Karte am Bus");
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Karte auf Serviceadresse 250 – nie enumerierte Karte am Bus");
             if (w & BM_WARN_COLLISION)
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Adresskollision (0x06) gemeldet");
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Adresskollision (0x06) gemeldet");
             if (w & BM_WARN_ENUM_LIMIT)
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Mehr als %u Karten in der Kette", (unsigned)BUSMASTER_MAX_MODULES);
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Mehr als %u Karten in der Kette", (unsigned)BUSMASTER_MAX_MODULES);
             if (w & BM_WARN_ENUM_GAP)
-                evlog_push(&g_log, now, EVLOG_WARN, "bus", "Kette vorzeitig zu Ende – Karten dahinter über ihre gespeicherte Adresse erreicht");
+                evlog_push(&g_log, uptime_ms(), EVLOG_WARN, "bus", "Kette vorzeitig zu Ende – Karten dahinter über ihre gespeicherte Adresse erreicht");
         }
     }
 
