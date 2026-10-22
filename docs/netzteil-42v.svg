@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Anschlussplan 42-V~-Netzteil (Ringkerntrafo RSO 825028) nach Spezifikation 8.1.
+     Handgezeichnet; Werte und Farben nur aus docs/spezifikation.md 8.1/8.4, 10.1
+     und docs/schaltplan-daughtercard.md 4.3. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="820" viewBox="0 0 1280 820"
+     font-family="Helvetica, Arial, 'DejaVu Sans', sans-serif">
+  <title>42-V~-Netzteil: Anschluss des Ringkerntrafos</title>
+  <style>
+    .ink   { fill: #1f2328; }
+    .muted { fill: #57606a; }
+    .mains { fill: #8f1d21; }
+    .sec   { fill: #8a4a00; }
+    .w230  { stroke: #a3262a; stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .w42   { stroke: #b8650a; stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .pe    { stroke: #2e7d32; stroke-width: 2.2; fill: none; stroke-dasharray: 9 4; }
+    .sym   { stroke: #1f2328; stroke-width: 2; fill: #ffffff; }
+    .symd  { stroke: #1f2328; stroke-width: 2; fill: #ffffff; stroke-dasharray: 5 3; }
+    .line  { stroke: #1f2328; stroke-width: 2; fill: none; }
+    .core  { stroke: #1f2328; stroke-width: 3; }
+    .thin  { stroke: #57606a; stroke-width: 1.4; fill: none; }
+    .nolink{ stroke: #57606a; stroke-width: 1.6; fill: none; stroke-dasharray: 4 4; }
+    .cross { stroke: #c62828; stroke-width: 3; stroke-linecap: round; }
+    .h1 { font-size: 24px; font-weight: 700; }
+    .h2 { font-size: 15px; font-weight: 700; }
+    .zone { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; }
+    .lbl { font-size: 14px; font-weight: 700; }
+    .val { font-size: 13px; }
+    .sm  { font-size: 12px; }
+    .note{ font-size: 13px; }
+  </style>
+
+  <rect width="1280" height="820" fill="#ffffff"/>
+
+  <!-- Kopf -->
+  <text x="40" y="48" class="ink h1">42-V~-Netzteil: Anschluss des Ringkerntrafos</text>
+  <text x="40" y="74" class="muted val">Sedlbauer RSO 825028 · 100 VA · 230 V → 2 × 18 V / 2,78 A · Reihenschaltung · nach Spezifikation 8.1 (v0.32)</text>
+
+  <!-- Zonen -->
+  <rect x="30" y="100" width="526" height="350" rx="6" fill="#fbf2f1"/>
+  <rect x="582" y="100" width="676" height="350" rx="6" fill="#fdf5ea"/>
+  <text x="44" y="122" class="mains zone">NETZSEITE · 230 V~</text>
+  <text x="596" y="122" class="sec zone">SEKUNDÄRSEITE · 42 V~ · POTENZIALFREI</text>
+
+  <!-- Netzanschluss -->
+  <text x="75" y="160" class="ink lbl" text-anchor="middle">Netz</text>
+  <rect x="40" y="170" width="70" height="270" rx="4" class="sym"/>
+  <text x="62" y="205" class="ink lbl">L</text>
+  <text x="62" y="365" class="ink lbl">N</text>
+  <text x="56" y="425" class="ink lbl">PE</text>
+  <circle cx="110" cy="200" r="4" fill="#1f2328"/>
+  <circle cx="110" cy="360" r="4" fill="#1f2328"/>
+  <circle cx="110" cy="420" r="4" fill="#1f2328"/>
+
+  <!-- L: F1 → Knoten A → NTC → Primär -->
+  <path class="w230" d="M110,200 H150"/>
+  <rect x="150" y="190" width="60" height="20" class="sym"/>
+  <line x1="150" y1="200" x2="210" y2="200" class="line"/>
+  <text x="180" y="182" class="ink lbl" text-anchor="middle">F1</text>
+  <text x="180" y="228" class="ink val" text-anchor="middle">0,8 A T</text>
+  <path class="w230" d="M210,200 H330"/>
+  <circle cx="290" cy="200" r="4.5" fill="#a3262a"/>
+  <rect x="330" y="190" width="70" height="20" class="sym"/>
+  <path class="line" d="M318,220 H330 L410,178"/>
+  <text x="389" y="230" class="ink sm">−ϑ</text>
+  <text x="365" y="182" class="ink lbl" text-anchor="middle">NTC</text>
+  <text x="352" y="246" class="ink val" text-anchor="middle">≈ 10 Ω kalt</text>
+  <path class="w230" d="M400,200 H540 V220"/>
+
+  <!-- N: F2 (nur Schuko) → Knoten B → Primär -->
+  <path class="w230" d="M110,360 H150"/>
+  <rect x="150" y="350" width="60" height="20" class="symd"/>
+  <line x1="150" y1="360" x2="210" y2="360" class="line"/>
+  <text x="180" y="342" class="ink lbl" text-anchor="middle">F2*</text>
+  <text x="180" y="388" class="ink val" text-anchor="middle">0,8 A T</text>
+  <path class="w230" d="M210,360 H540 V340"/>
+  <circle cx="290" cy="360" r="4.5" fill="#a3262a"/>
+
+  <!-- Varistor zwischen A und B, hinter der Sicherung -->
+  <path class="w230" d="M290,200 V250 M290,310 V360"/>
+  <rect x="280" y="250" width="20" height="60" class="sym"/>
+  <path class="line" d="M276,322 V314 L304,246"/>
+  <text x="310" y="276" class="ink lbl">RV</text>
+  <text x="310" y="294" class="ink val">275 V~</text>
+  <text x="270" y="300" class="ink sm" text-anchor="end">U</text>
+
+  <!-- Primärwicklung -->
+  <path class="line" d="M540,220 a15,15 0 0 1 0,30 a15,15 0 0 1 0,30 a15,15 0 0 1 0,30 a15,15 0 0 1 0,30"/>
+  <text x="528" y="264" class="ink val" text-anchor="end">Primär</text>
+  <text x="528" y="281" class="ink val" text-anchor="end">230 V~</text>
+  <text x="528" y="298" class="muted sm" text-anchor="end">Farben lt. Aufkleber</text>
+
+  <!-- Kern -->
+  <line x1="566" y1="160" x2="566" y2="410" class="core"/>
+  <line x1="572" y1="160" x2="572" y2="410" class="core"/>
+  <text x="556" y="166" class="ink lbl" text-anchor="end">RSO 825028</text>
+  <text x="569" y="432" class="muted sm" text-anchor="middle">Sicherheitstrafo EN 61558-2-6</text>
+
+  <!-- Sekundärwicklungen -->
+  <path class="line" d="M596,170 a12.5,12.5 0 0 0 0,25 a12.5,12.5 0 0 0 0,25 a12.5,12.5 0 0 0 0,25 a12.5,12.5 0 0 0 0,25"/>
+  <path class="line" d="M596,300 a12.5,12.5 0 0 0 0,25 a12.5,12.5 0 0 0 0,25 a12.5,12.5 0 0 0 0,25 a12.5,12.5 0 0 0 0,25"/>
+  <text x="608" y="226" class="ink sm">≈ 20,3 V</text>
+  <text x="608" y="356" class="ink sm">≈ 20,3 V</text>
+
+  <!-- Leitungen mit Aderfarben -->
+  <rect x="612" y="153" width="10" height="10" fill="#1b1b1b" stroke="#1f2328"/>
+  <text x="627" y="162" class="ink sm">schwarz</text>
+  <rect x="612" y="253" width="10" height="10" fill="#d32f2f" stroke="#1f2328"/>
+  <text x="627" y="262" class="ink sm">rot</text>
+  <rect x="612" y="307" width="10" height="10" fill="#7b1fa2" stroke="#1f2328"/>
+  <text x="627" y="316" class="ink sm">violett</text>
+  <rect x="612" y="383" width="10" height="10" fill="#ffffff" stroke="#1f2328"/>
+  <text x="627" y="392" class="ink sm">weiß</text>
+
+  <!-- rot + violett verbunden -->
+  <path class="w42" d="M596,270 H650 V300 H596"/>
+  <rect x="644" y="276" width="12" height="18" rx="2" class="sym"/>
+  <text x="664" y="282" class="ink sm">verbinden, isolieren</text>
+  <text x="664" y="298" class="muted sm">sonst nirgends anschließen</text>
+
+  <!-- schwarz → F3 → Karte 1 J4.1 -->
+  <path class="w42" d="M596,170 H720"/>
+  <rect x="720" y="160" width="60" height="20" class="sym"/>
+  <line x1="720" y1="170" x2="780" y2="170" class="line"/>
+  <text x="750" y="152" class="ink lbl" text-anchor="middle">F3</text>
+  <text x="750" y="198" class="ink val" text-anchor="middle">3,15 A T</text>
+  <path class="w42" d="M780,170 H840 V295 H893"/>
+
+  <!-- weiß → Karte 1 J4.2 -->
+  <path class="w42" d="M596,400 H860 V325 H893"/>
+
+  <!-- Messhinweis -->
+  <text x="676" y="338" class="ink sm" font-weight="700">Leerlauf schwarz–weiß</text>
+  <text x="676" y="355" class="ink sm">≈ 40,6 V~ (≈ 0 V = gegenphasig)</text>
+
+  <!-- Karte 1 -->
+  <rect x="900" y="230" width="150" height="150" rx="6" class="sym"/>
+  <text x="975" y="254" class="ink lbl" text-anchor="middle">Karte 1</text>
+  <text x="912" y="276" class="muted sm">J4</text>
+  <text x="1038" y="276" class="muted sm" text-anchor="end">J5</text>
+  <path class="w42" d="M907,295 H1043 M907,325 H1043"/>
+  <text x="975" y="289" class="ink sm" text-anchor="middle">AC1 · J1.2</text>
+  <text x="975" y="343" class="ink sm" text-anchor="middle">AC2 · J1.4</text>
+  <g class="sym">
+    <rect x="893" y="288" width="14" height="14"/><rect x="893" y="318" width="14" height="14"/>
+    <rect x="1043" y="288" width="14" height="14"/><rect x="1043" y="318" width="14" height="14"/>
+  </g>
+  <g fill="none" stroke="#1f2328" stroke-width="1.4">
+    <circle cx="900" cy="295" r="3.5"/><circle cx="900" cy="325" r="3.5"/>
+    <circle cx="1050" cy="295" r="3.5"/><circle cx="1050" cy="325" r="3.5"/>
+  </g>
+  <text x="884" y="290" class="ink sm" text-anchor="end">1</text>
+  <text x="884" y="320" class="ink sm" text-anchor="end">2</text>
+
+  <!-- Kette Karte 1 → Karte 2 -->
+  <path class="w42" d="M1057,295 H1093 M1057,325 H1093"/>
+  <text x="1075" y="214" class="ink sm" text-anchor="middle">Kette: J5.1 → J4.1, J5.2 → J4.2 (gleiche Polung)</text>
+
+  <!-- Karte 2 -->
+  <rect x="1100" y="230" width="150" height="150" rx="6" class="sym"/>
+  <text x="1175" y="254" class="ink lbl" text-anchor="middle">Karte 2</text>
+  <text x="1112" y="276" class="muted sm">J4</text>
+  <text x="1238" y="276" class="muted sm" text-anchor="end">J5</text>
+  <path class="w42" d="M1107,295 H1243 M1107,325 H1243"/>
+  <text x="1175" y="289" class="ink sm" text-anchor="middle">AC1 · J1.2</text>
+  <text x="1175" y="343" class="ink sm" text-anchor="middle">AC2 · J1.4</text>
+  <g class="sym">
+    <rect x="1093" y="288" width="14" height="14"/><rect x="1093" y="318" width="14" height="14"/>
+    <rect x="1243" y="288" width="14" height="14"/><rect x="1243" y="318" width="14" height="14"/>
+  </g>
+  <g fill="none" stroke="#1f2328" stroke-width="1.4">
+    <circle cx="1100" cy="295" r="3.5"/><circle cx="1100" cy="325" r="3.5"/>
+    <circle cx="1250" cy="295" r="3.5"/><circle cx="1250" cy="325" r="3.5"/>
+  </g>
+  <path class="w42" d="M1257,295 H1266 M1257,325 H1266" stroke-dasharray="3 3"/>
+  <text x="1250" y="402" class="ink sm" text-anchor="end">→ Karte 3 … 10</text>
+
+  <!-- PE nur ans Gehäuse -->
+  <path class="pe" d="M110,420 H200 V462"/>
+  <path class="line" d="M184,464 H216 M190,464 L183,476 M200,464 L193,476 M210,464 L203,476"/>
+  <text x="228" y="470" class="ink val">Metallgehäuse (falls vorhanden)</text>
+  <text x="228" y="488" class="mains sm" font-weight="700">nie an Logik-GND oder an die 42 V~</text>
+
+  <!-- Keine Verbindung zur Logik -->
+  <path class="nolink" d="M975,380 V466"/>
+  <path class="cross" d="M966,414 L984,432 M984,414 L966,432"/>
+  <text x="994" y="428" class="mains sm" font-weight="700">keine Verbindung (Spez. 8.4)</text>
+  <rect x="900" y="466" width="350" height="44" rx="6" fill="#eef2f6" stroke="#57606a" stroke-width="1.4"/>
+  <text x="1075" y="493" class="ink val" text-anchor="middle">Logik: 5-V-Netzteil · GND · Buskabel · Master</text>
+
+  <!-- Hinweise -->
+  <line x1="40" y1="534" x2="1240" y2="534" stroke="#d0d7de" stroke-width="1"/>
+  <text x="40" y="562" class="ink h2">Bauteile</text>
+  <g class="ink note">
+    <text x="40" y="588"><tspan font-weight="700">F1</tspan><tspan x="88">0,8 A träge, 5 × 20 mm (IEC 60127-2/5), Bauform vor dem Kauf bestätigen</tspan></text>
+    <text x="40" y="612"><tspan font-weight="700">F2*</tspan><tspan x="88">wie F1, nur bei Schuko-Stecker (verpolbar): dann je Pol eine</tspan></text>
+    <text x="40" y="636"><tspan font-weight="700">NTC</tspan><tspan x="88">in Reihe zur Primärwicklung, ≈ 10 Ω kalt, ≥ 1 A, netzfest (Richtwert)</tspan></text>
+    <text x="40" y="660"><tspan font-weight="700">RV</tspan><tspan x="88">Varistor 275 V~, Scheibe 14 mm, parallel L–N hinter der Sicherung</tspan></text>
+    <text x="40" y="684"><tspan font-weight="700">F3</tspan><tspan x="88">3,15 A träge im Reihenkreis, eine genügt</tspan></text>
+    <text x="40" y="708"><tspan font-weight="700">PE</tspan><tspan x="88">nur an ein Metallgehäuse; Trafo ist IP 00, berührsicher einbauen</tspan></text>
+  </g>
+
+  <text x="680" y="562" class="ink h2">Vor dem Anschluss der Karten</text>
+  <g class="ink note">
+    <text x="680" y="588"><tspan font-weight="700">1</tspan><tspan x="700">Trafo allein: je Wicklung ≈ 20,3 V, schwarz–weiß ≈ 40,6 V.</tspan></text>
+    <text x="700" y="610">≈ 0 V: nicht anschließen, Farbzuordnung gegen Datenblatt prüfen.</text>
+    <text x="680" y="636"><tspan font-weight="700">2</tspan><tspan x="700">Sekundär gegen PE/Gehäuse und AC1 gegen Logik-GND: hochohmig.</tspan></text>
+    <text x="680" y="660"><tspan font-weight="700">3</tspan><tspan x="700">Gate (#49): Karten auf 1.19, Flags 0x03, PA7/TP4 low.</tspan></text>
+    <text x="680" y="684"><tspan font-weight="700">4</tspan><tspan x="700">Erste Karte nur mit Glühlampe 40 W / 230 V in Reihe (Teststufe 3).</tspan></text>
+    <text x="680" y="708"><tspan font-weight="700">5</tspan><tspan x="700">Not-Halt: Netzstecker ziehen.</tspan></text>
+  </g>
+
+  <g class="muted sm">
+    <text x="40" y="758">Nicht im Repo belegt, gegen Aufkleber/Datenblatt prüfen: Farben der Primärleitungen und welche Sekundärfarben zu welcher Wicklung gehören.</text>
+    <text x="40" y="776">Der Temperaturschalter 120 °C (primär, im Trafo) stellt sich selbst zurück und ersetzt keine Sicherung. NTC-Wert und Sicherungsbauform: Issue #44.</text>
+  </g>
+</svg>
