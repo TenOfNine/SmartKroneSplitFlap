@@ -48,6 +48,7 @@ typedef struct {
     app_mode_t      mode;
     char            sep;            /* Uhr-Trennzeichen ('.' oder '-') */
     charmap_align_t align;
+    bool            master_right;   /* von vorne gesehen rechts: Adresse 1 = rechte Stelle */
     char            text[APP_TEXT_MAX + 1];
 
     uint32_t hms_timeout_ms;
@@ -90,7 +91,8 @@ void masterapp_time_invalid(masterapp_t *app);
  */
 void masterapp_tick(masterapp_t *app, uint32_t now_ms);
 
-/* Zielblaetter der aktuellen Anzeige (module_count Werte). Fuer Tests / UI. */
+/* Zielblaetter der aktuellen Anzeige (module_count Werte), Index i = Adresse
+ * i + 1. Mit master_right in umgekehrter Leserichtung. Fuer Tests / UI. */
 void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out);
 
 /*

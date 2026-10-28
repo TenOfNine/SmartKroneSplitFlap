@@ -7,8 +7,8 @@
 | Feld | Wert |
 |---|---|
 | Titel | Steuerung für KRONE REW Fallblattanzeige (Palettenmodulreihe A, 40 Blatt) |
-| Version | 0.32 |
-| Datum | 19.10.2026 |
+| Version | 0.33 |
+| Datum | 28.10.2026 |
 | Status | Entwurf — enthält offene Punkte, siehe Kapitel 11. Änderungen seit v0.8 in Anhang D. |
 | Dokumenttyp | Technische Spezifikation (TSD) |
 
@@ -602,6 +602,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 - `Ä` → `AE`, `Ö` → `OE`, `Ü` → `UE`, `ß` → `SS`. Reicht der Platz nicht, wird auf den Grundbuchstaben reduziert.
 - Nicht darstellbare Zeichen werden auf Leerbild abgebildet.
 - Ausrichtung wählbar: linksbündig, zentriert, rechtsbündig.
+- Leserichtung: Die Stellen werden von vorne gesehen von links nach rechts belegt. Adresse 1 ist die Karte am Master (Enumeration, 4.5.1). Sitzt die Zentralsteuerung von vorne gesehen **rechts** (`master_right`, Vorgabe), ist Adresse 1 die rechte Stelle und die Zentralsteuerung kehrt die Zuordnung um: bei N Stellen geht das i-te Zeichen von links an Adresse N + 1 − i. Bezugsgröße ist die Feldbreite (7.3).
 
 ### 7.5 REST-Schnittstelle
 
@@ -625,7 +626,7 @@ Für zehn Module und die einfache UI genügt der synchrone Server. Details in
 | POST | `/api/wifi` | `{"ssid":"…","psk":"…"}` — Netz wechseln (Rückfall aufs alte Netz nach ~25 s) |
 | POST | `/api/wifi/portal` | WiFiManager-Konfigurationsportal öffnen (5 min, nicht blockierend; die Web-UI ist so lange nur über das Portal erreichbar) |
 | POST | `/api/reboot` | Neustart |
-| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Modulzahl (`0` = automatisch), hh:mm:ss-Timeout, `net_scope`, `admin_user`, `admin_pass` (nur schreibend), sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS. `admin_pass` wird nie ausgeliefert (`/api/config` GET meldet nur `admin_set`) |
+| GET/POST | `/api/config` | vollständige Konfiguration lesen/schreiben: Hostname, MQTT, NTP-Server, Zeitzone, feste IP, Ausrichtung, Trennzeichen, Einbaulage `master_right`, Modulzahl (`0` = automatisch), hh:mm:ss-Timeout, `net_scope`, `admin_user`, `admin_pass` (nur schreibend), sowie die Schalter MQTT / REST-Schreib-API / OTA / mDNS. `admin_pass` wird nie ausgeliefert (`/api/config` GET meldet nur `admin_set`) |
 
 **Zugriffsschutz.** Ein Handler-Wrapper prüft vor *jedem* Endpunkt zwei Dinge:
 
@@ -944,3 +945,4 @@ Wegstrecke von Blatt a nach Blatt b: `(b − a) mod 40` Blätter zu je 60 ms. L�
 | 0.30 | 18.10.2026 | **Verbindungsstabilität, Firmware v1.17** (Issues #50–#54, #21). 4.5.1: CHAIN_OUT wird bei `ENUM_DONE` abgeschaltet; eine Echo-Abweichung auf dem `ENUM_ASSIGN`-ACK führt zurück nach ENUMERATING (Teilnahme an der Wiederholung). 4.5.3/6.4: Eine einzelne Echo-Abweichung beim Antworten (Störimpuls) verwirft die Adresse nicht mehr, erst die zweite ohne fehlerfreie Antwort dazwischen innerhalb von 5 s; 0x06 wird in jedem Fall gemeldet. 5.6: Antwortverzug min. 500 µs (Master schaltet DE per Software in einer nicht im IRAM liegenden ISR ab), Master gibt Empfangsbytes sofort weiter (FIFO-Schwelle 2 Byte, Timeout 1 Zeichen) und gleicht das eigene Echo ab statt den Empfang zu löschen. 5.7: Bootloader-Version 3 (500 µs Antwortverzug). 7.5/7.6: Busdiagnose je Modul in `/api/status`, `tx_coll` in `/api/system`, MQTT `bus/stats`. |
 | 0.31 | 18.10.2026 | **Korrektur Echo-Annahme, Firmware v1.18** (Issue #50). 5.1/5.6: Der Master-UART empfängt im RS485-Halbduplexmodus während der eigenen Sendung nicht (IDF-HAL `rs485_conf.tx_rx_en = 0`) und beginnt keine Sendung, solange ein Byte eintrifft (`rx_busy_tx_en = 0`); am Master gibt es daher kein Echo. Der Echo-Abgleich aus v0.30 verwarf stattdessen den Anfang von Modulantworten, wenn die Firmware nach dem Senden verdrängt war (Wiederholungen, scheinbare Sendekollisionen); er entfällt. Neu: gesendet und wiederholt wird nur, wenn der Treiber keine unverarbeiteten Empfangsbytes hält. 7.5/7.6: `txc`/`tx_coll` entfallen; `/api/status` liefert je Modul `ver` (App-Version aus GET_VERSION). |
 | 0.32 | 19.10.2026 | **Offene Software-Issues, Firmware v1.19** (#16, #17, #38–#41, #43, #47, #48, #56). 4.5.2/6.3: T_enum per `SET_CONFIG` (fünftes Byte) setzbar, `GET_CONFIG` liefert es mit. 5.3: Parser setzt nach CRC-/Längenfehlern in den schon gelesenen Bytes neu auf; Rahmenfehler im Modul verworfen. 5.4: neue Kommandos `SELFTEST` (0x21) und `GET_TEST` (0x22); ungültiges `SET`/`SET_CONFIG` wird nicht bestätigt. 5.7: Bootloader-Version 4; Busverteilung am Gerät bestätigt. 6.2/6.4: Homing-Timeout und Laufzeitgrenze skalieren mit der Blattzahl, 0x05 deckt das Homing ab, erkannte Blattzahl muss zur Konfiguration passen, Lage läuft während der Erkennung mit, Sperrzeit ab der letzten Flanke, nach Motorfehlern unsynchronisiert, neu 0x07 (Motorlauf ohne Ansteuerung), 0x04 fordert über den Master ein Homing an. 7.3: Selbsttest mit Auswertung; Uhr passt sich der Feldbreite an. 7.5/7.6: `GET /api/selftest`, OTA mit Ziel/Version und Anti-Rollback (`?downgrade=1`), Eingabeprüfung `/api/config`, Log ohne 500 und mit 64-Bit-Zeit, Sicherung gibt Geheimnisse nur angemeldet heraus, MQTT `selftest/result`. 7.7: Rückfall der Sekundenanzeige 1 min bis 4 h, nicht abschaltbar. |
+| 0.33 | 28.10.2026 | Kapitel 7.4/7.5: **Einbaulage der Zentralsteuerung.** Neue Einstellung `master_right` (Vorgabe an): sitzt die Zentralsteuerung von vorne gesehen rechts, ist Adresse 1 die rechte Stelle; die Zentralsteuerung kehrt die Zuordnung Zeichen → Adresse um, damit Text und Uhr von vorne richtig lesbar sind. Enumeration, Busprotokoll und Modul-Firmware unverändert. `/api/config` und `/api/system` führen das Feld; Übersicht und Modultabelle zeigen die Module in Leserichtung von vorne. |

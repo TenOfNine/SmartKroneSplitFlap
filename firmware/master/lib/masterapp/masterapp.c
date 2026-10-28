@@ -23,6 +23,7 @@ void masterapp_init(masterapp_t *app, busmaster_t *bus, uint8_t module_count)
     app->mode = APP_MODE_BLANK;
     app->sep = '.';
     app->align = CHARMAP_ALIGN_CENTER;
+    app->master_right = false;
     app->hms_timeout_ms = APP_HMS_TIMEOUT_DEFAULT_MS;
     app->text[0] = '\0';
 }
@@ -97,8 +98,8 @@ void masterapp_time_invalid(masterapp_t *app)
     app->time_valid = false;
 }
 
-/* Zielanzeige der aktuellen Betriebsart berechnen. */
-void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out)
+/* Zielanzeige in Leserichtung von vorne (out[0] = linke Stelle). */
+static void render_front(const masterapp_t *app, uint8_t *out)
 {
     const size_t w = field_width(app);
 
@@ -147,6 +148,22 @@ void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out)
             out[i] = CHARMAP_LEERBILD;
         }
         return;
+    }
+}
+
+/* Zielanzeige der aktuellen Betriebsart berechnen; out[i] geht an Adresse
+ * i + 1. Sitzt die Zentralsteuerung von vorne gesehen rechts, ist Adresse 1
+ * die rechte Stelle und die Leserichtung wird umgedreht. */
+void masterapp_current_blaetter(const masterapp_t *app, uint8_t *out)
+{
+    const size_t w = field_width(app);
+    render_front(app, out);
+    if (app->master_right) {
+        for (size_t i = 0; i < w / 2u; ++i) {
+            const uint8_t t = out[i];
+            out[i] = out[w - 1u - i];
+            out[w - 1u - i] = t;
+        }
     }
 }
 

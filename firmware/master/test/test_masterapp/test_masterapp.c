@@ -324,6 +324,38 @@ static void test_clock_adapts_to_field_width(void)
     expect_clock(4, APP_MODE_CLOCK_HMS, "1234");
 }
 
+/* Zentralsteuerung rechts: Adresse 1 ist die rechte Stelle, die
+ * Leserichtung von vorne bleibt links nach rechts. */
+static void test_master_right_reverses_addresses(void)
+{
+    uint8_t got[BUSMASTER_MAX_MODULES], exp[BUSMASTER_MAX_MODULES];
+
+    app.master_right = true;
+    masterapp_set_mode(&app, APP_MODE_TEXT, '.', CHARMAP_ALIGN_LEFT, 0);
+    masterapp_set_text(&app, "AB", 0);
+    masterapp_current_blaetter(&app, got);
+    charmap_render("BA", exp, 5, CHARMAP_ALIGN_RIGHT);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(exp, got, 5);   /* Adr 5 = 'A', Adr 4 = 'B' */
+
+    /* gerade Feldbreite, Uhr */
+    setUp();
+    app.master_right = true;
+    app.module_count = 4;
+    masterapp_set_mode(&app, APP_MODE_CLOCK_HM, '.', CHARMAP_ALIGN_CENTER, 0);
+    masterapp_set_time(&app, 12, 34, 0);
+    masterapp_current_blaetter(&app, got);
+    charmap_render("4321", exp, 4, CHARMAP_ALIGN_CENTER);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(exp, got, 4);
+
+    /* auch der gesendete SET_ALL-Rahmen ist gespiegelt */
+    masterapp_tick(&app, 0);
+    flush(0);
+    uint8_t sent[BUSMASTER_MAX_MODULES], len = 0;
+    TEST_ASSERT_TRUE(last_set_all(sent, &len));
+    TEST_ASSERT_EQUAL_UINT8(4, len);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(exp, sent, 4);
+}
+
 /* --- Off ----------------------------------------------------- */
 
 static void test_off_mode_sends_nothing(void)
@@ -538,6 +570,7 @@ int main(void)
     RUN_TEST(test_zero_field_width_sends_nothing);
     RUN_TEST(test_field_width_over_32_is_clamped);
     RUN_TEST(test_show_held_back_during_enumeration);
+    RUN_TEST(test_master_right_reverses_addresses);
     RUN_TEST(test_status_json_reflects_module_state);
     RUN_TEST(test_status_json_escapes_text_and_sep);
     RUN_TEST(test_status_json_overflow_is_terminated);

@@ -123,6 +123,7 @@ struct Settings {
 
     char     sep            = '.';
     uint8_t  align          = CHARMAP_ALIGN_CENTER;
+    bool     master_right   = true;   /* von vorne gesehen rechts: Adresse 1 = rechte Stelle */
 
     bool     use_static     = false;
     char     ip[16]   = "";
@@ -481,6 +482,7 @@ static void settings_load()
     { char s[2]; s[0] = cfg.sep; s[1] = 0;
       prefs.getString("sep", s, sizeof(s)); cfg.sep = (s[0] == '-') ? '-' : '.'; }
     cfg.align = prefs.getUChar("align", cfg.align);
+    cfg.master_right = prefs.getBool("master_r", cfg.master_right);
 
     cfg.use_static = prefs.getBool("ip_static", cfg.use_static);
     prefs.getString("ip", cfg.ip, sizeof(cfg.ip));
@@ -517,6 +519,7 @@ static void settings_save()
     prefs.putBool("ntp_en", cfg.ntp_enabled);
     { char s[2] = { cfg.sep, 0 }; prefs.putString("sep", s); }
     prefs.putUChar("align", cfg.align);
+    prefs.putBool("master_r", cfg.master_right);
     prefs.putBool("ip_static", cfg.use_static);
     prefs.putString("ip", cfg.ip);
     prefs.putString("mask", cfg.mask);
@@ -829,6 +832,8 @@ code{font:.88em var(--mono);background:var(--p2);border:1px solid var(--line);bo
 <div class=trow><label class=switch><input type=checkbox id=cf_auto_modules checked><span class=t></span></label>
 <div class=tx><b>Modulzahl automatisch erkennen</b><span id=modcnthint>Über die Enumeration.</span></div></div>
 <div class=field id=modcntf style="max-width:220px;margin-top:10px" hidden><span class=lbl>Feste Feldbreite</span><input type=number id=cf_modules min=1 max=32></div>
+<div class=trow><label class=switch><input type=checkbox id=cf_master_right checked><span class=t></span></label>
+<div class=tx><b>Zentralsteuerung rechts</b><span>Von vorne gesehen sitzt die Zentralsteuerung rechts: Adresse 1 ist die rechte Stelle, Text wird entsprechend zugeordnet.</span></div></div>
 <div class="grid c2" style=margin-top:12px>
 <div class=field><span class=lbl>Uhr-Trennzeichen</span><select id=cf_sep><option>.</option><option>-</option></select></div>
 <div class=field><span class=lbl>hh:mm:ss Auto-Rückfall (min)</span><input type=number id=cf_hms min=1 max=240></div></div>
@@ -955,10 +960,12 @@ const pill=run?`<span class="pill warn"><i></i>läuft</span>`:`<span class="pill
 return `<tr><td class=mono>${m.addr}</td><td>${pill}</td><td class=mono>${m.blatt||"–"}</td><td class=mono>${m.rot||"–"}</td><td class=mono>${m.max?m.min+" / "+m.max:"–"}</td><td>${m.err?"0x0"+m.err+" · "+esc(ERRTXT[m.err]||""):"–"}</td></tr>`}).join("");
 if(d.running)setTimeout(pollSelftest,1000)}
 
+// Module in Leserichtung von vorne (Zentralsteuerung rechts: Adresse 1 rechts)
+function front(M){return sys.master_right?M.slice().reverse():M}
 function flapCls(m){if(!m.online)return"of";if(m.state===3)return"er";if(m.state===2)return"mv";if(m.state===1)return"hm";return""}
 function renderDash(){
 const mode=$("#modeseg .on").dataset.m;
-const M=st.modules||[];
+const M=front(st.modules||[]);
 $("#flaps").innerHTML=M.length?M.map(m=>{let c="flap "+flapCls(m),ch=blattChar(m.ist);
 if(!m.online)ch="–";else if(m.state===3)ch="!";if(mode==="blank"||mode==="off")ch="";
 return `<div class="${c}"><div class=cell><span class=ch>${ch||"&nbsp;"}</span></div><div class=tag><span>${m.addr}</span><i></i></div></div>`}).join("")
@@ -979,7 +986,7 @@ $("#tiles").innerHTML=t.map(x=>`<div class="card tile"><span class=lbl>${x[0]}</
 
 // ── Module ──
 function renderMods(){
-const M=st.modules||[];
+const M=front(st.modules||[]);
 const on=M.filter(m=>m.online).length,er=M.filter(m=>m.error||m.state===3).length;
 $("#modsum").innerHTML=`${st.detected??M.length} erkannt · <span class="pill ok"><i></i>${on} online</span> `+(er?`<span class="pill err"><i></i>${er} Fehler</span>`:"")+(st.warn?` <span class="pill warn"><i></i>Bus-Warnung (${(st.warn&3?"Seriennummer ":"")+(st.warn&4?"Serviceadresse 250 ":"")+(st.warn&8?"Kollision 0x06 ":"")+(st.warn&48?"Kette ":"")}) – siehe Log</span>`:"");
 $("#modtb").innerHTML=M.length?M.map(m=>{
@@ -1013,7 +1020,7 @@ return `<div class=e><time>+${dur(e.t/1000)}</time>${pill}<div><span class=who>$
 
 // ── Einstellungen ──
 const CF=["mqtt_host","mqtt_port","mqtt_user","mqtt_pass","base_topic","node_id","modules","hms","ntp_server","tz","ip","mask","gw","dns"];
-const CB=["use_static","ntp_enabled","mqtt_enabled","api_write","ota_enabled","mdns_enabled","debug_enabled"];
+const CB=["use_static","ntp_enabled","master_right","mqtt_enabled","api_write","ota_enabled","mdns_enabled","debug_enabled"];
 // Zeitzonen: [Anzeige, Normalzeit-TZ, TZ mit Sommerzeitregel ("" = Zone ohne DST)]
 const TZ=[
 ["Berlin · Paris · Madrid · Rom · Wien","CET-1","CET-1CEST,M3.5.0,M10.5.0/3"],
@@ -1097,7 +1104,7 @@ mqtt_pass:$("#cf_mqtt_pass").value,base_topic:$("#cf_base_topic").value,node_id:
 module_count:$("#cf_auto_modules").checked?0:Math.max(1,Math.min(32,+$("#cf_modules").value||1)),
 hms_timeout_s:Math.max(1,Math.min(240,+$("#cf_hms").value||10))*60,
 ntp_server:$("#cf_ntp_server").value,tz:tzString(),ntp_enabled:$("#cf_ntp_enabled").checked,
-sep:$("#cf_sep").value,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
+sep:$("#cf_sep").value,master_right:$("#cf_master_right").checked,use_static:$("#cf_use_static").checked,ip:$("#cf_ip").value,mask:$("#cf_mask").value,
 gw:$("#cf_gw").value,dns:$("#cf_dns").value,mqtt_enabled:$("#cf_mqtt_enabled").checked,
 api_write:$("#cf_api_write").checked,ota_enabled:$("#cf_ota_enabled").checked,mdns_enabled:$("#cf_mdns_enabled").checked,
 debug_enabled:$("#cf_debug_enabled").checked,
@@ -1476,6 +1483,7 @@ static void handle_system()
     d["ota_signed"]     = true;
     d["detected"]       = g_bus.module_count;             /* Enumeration */
     d["field_width"]    = effective_module_count();       /* effektiv genutzt */
+    d["master_right"]   = cfg.master_right;
     d["auto_modules"]   = (cfg.module_count == 0);
     d["enum_busy"]      = busmaster_enum_busy(&g_bus);
     d["crc_err"]        = g_bus.crc_errors;
@@ -1999,6 +2007,7 @@ static const char *config_doc_invalid(JsonDocument &doc)
     if (uint_bad("hms_timeout_s", 60, 14400))                   return "hms_timeout_s";
     if (uint_bad("align", 0, 2))                                return "align";
     if (uint_bad("net_scope", 0, 2))                            return "net_scope";
+    if (!doc["master_right"].isNull() && !doc["master_right"].is<bool>()) return "master_right";
     if (!doc["sep"].isNull()) {
         /* ':' kennt der Blattsatz nicht; aeltere Sicherungen tragen es noch
          * und werden beim Uebernehmen auf '.' gesetzt. */
@@ -2051,6 +2060,7 @@ static void apply_config_doc(JsonDocument &doc)
     }
     if (doc["align"].is<unsigned>())          cfg.align = doc["align"];
     if (doc["ntp_enabled"].is<bool>())        cfg.ntp_enabled = doc["ntp_enabled"];
+    if (doc["master_right"].is<bool>())       cfg.master_right = doc["master_right"];
     if (doc["use_static"].is<bool>())         cfg.use_static = doc["use_static"];
     if (doc["mqtt_enabled"].is<bool>())       cfg.mqtt_enabled = doc["mqtt_enabled"];
     if (doc["api_write"].is<bool>())          cfg.api_write = doc["api_write"];
@@ -2064,6 +2074,7 @@ static void apply_config_doc(JsonDocument &doc)
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
     g_app.sep = cfg.sep;
     g_app.align = align_from(cfg.align);
+    g_app.master_right = cfg.master_right;
     g_app.have_shown = false;   /* Anzeige mit neuer Ausrichtung neu setzen */
     apply_time_config();
     if (!cfg.mqtt_enabled && mqtt.connected()) {
@@ -2088,6 +2099,7 @@ static void config_to_json(JsonDocument &d)
     d["ntp_enabled"]   = cfg.ntp_enabled;
     { char s[2] = { cfg.sep, 0 }; d["sep"] = s; }
     d["align"]         = cfg.align;
+    d["master_right"]  = cfg.master_right;
     d["use_static"]    = cfg.use_static;
     d["ip"]            = cfg.ip;
     d["mask"]          = cfg.mask;
@@ -2923,6 +2935,7 @@ void setup()
     busmaster_set_enum_hint(&g_bus, cfg.module_count);
     masterapp_init(&g_app, &g_bus, effective_module_count());
     g_app.sep = cfg.sep;
+    g_app.master_right = cfg.master_right;
     g_app.align = align_from(cfg.align);
     g_app.hms_timeout_ms = cfg.hms_timeout_s * 1000UL;
     app_state_restore();
